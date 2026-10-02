@@ -41,7 +41,11 @@ services:
       Sms__FakeAllowedMobiles__0: ${SMS_FAKE_MOBILE_1:-}
       Sms__FakeAllowedMobiles__1: ${SMS_FAKE_MOBILE_2:-}
     # No internet egress yet. When a real SMS provider is added, attach an egress network here.
-    networks: [internal]
+    # Unique alias: the web container also sits on the edge network, where plain "api"
+    # resolves to the PersonalWallet API.
+    networks:
+      internal:
+        aliases: [arte-api]
     read_only: true
     tmpfs: ["/tmp"]
     cap_drop: [ALL]
@@ -63,6 +67,8 @@ services:
     read_only: true
     tmpfs: ["/tmp", "/data", "/config"]
     cap_drop: [ALL]
+    # The caddy binary carries a file capability for low ports; exec fails without it.
+    cap_add: [NET_BIND_SERVICE]
     security_opt: ["no-new-privileges:true"]
 
 networks:

@@ -28,7 +28,7 @@
 	}
 
 	handle /api/* {
-		reverse_proxy api:8080 {
+		reverse_proxy arte-api:8080 {
 			# One value: the real client IP as resolved through the trusted edge proxy.
 			header_up X-Forwarded-For {client_ip}
 			header_up X-Forwarded-Proto https
