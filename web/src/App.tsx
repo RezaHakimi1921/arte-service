@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
+import { CaseDetail, CasesView, DashboardView, NewCaseView, type CaseFilter } from "./cases";
 import { Customers } from "./customers";
 import { Field, MobileInput } from "./ui";
 
@@ -10,7 +11,7 @@ type Me = {
   openMode: boolean;
   business: { tenantId: string; name: string; role: string; permissions: string[] } | null;
 };
-type Tab = "home" | "customers" | "staff" | "more";
+type Tab = "home" | "cases" | "customers" | "staff" | "more";
 
 const ROLE_NAMES: Record<string, string> = { owner: "استاد (مالک)", supervisor: "مدیر داخلی", technician: "شاگرد" };
 
@@ -215,7 +216,47 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
 
 function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const [newCase, setNewCase] = useState(false);
+  const [caseFilter, setCaseFilter] = useState<CaseFilter>({});
+  const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
   const can = (p: string) => me.business!.permissions.includes(p);
+
+  // A new page starts at the top, not at the previous page's scroll position.
+  useEffect(() => { window.scrollTo(0, 0); }, [tab, caseId, newCase]);
+
+  function go(next: Tab) {
+    setTab(next);
+    setCaseId(null);
+    setNewCase(false);
+  }
+  function openCases(filter: CaseFilter) {
+    setCaseFilter(filter);
+    go("cases");
+  }
+  function startNewCase() {
+    setTab("cases");
+    setCaseId(null);
+    setNewCase(true);
+  }
+  async function restoreCase() {
+    if (!undoCase) return;
+    await api(`/api/v1/cases/${undoCase.id}/restore`, { method: "POST" }).catch(() => {});
+    setCaseId(undoCase.id);
+    setUndoCase(null);
+  }
+
+  let page;
+  if (tab === "cases" && newCase)
+    page = <NewCaseView canAssign={can("cases.assign")} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)} />;
+  else if (tab === "cases" && caseId)
+    page = <CaseDetail id={caseId} onBack={() => setCaseId(null)} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
+  else if (tab === "cases")
+    page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={can("cases.create")} />;
+  else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
+  else if (tab === "staff") page = <StaffList />;
+  else if (tab === "more") page = <More me={me} onSignOut={onSignOut} />;
+  else page = <DashboardView onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
 
   return (
     <div className="shell">
@@ -229,20 +270,24 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
         <span className="muted small">{me.displayName ?? me.mobile}</span>
       </header>
       <main className="content">
-        {tab === "home" && <Home me={me} />}
-        {tab === "customers" && <Customers canEdit={can("cases.create")} />}
-        {tab === "staff" && <StaffList />}
-        {tab === "more" && <More me={me} onSignOut={onSignOut} />}
+        {undoCase && tab === "cases" && !caseId && (
+          <div className="toast" role="status">
+            <span>پرونده <span className="font-num">#{undoCase.number}</span> حذف شد.</span>
+            <button className="link" onClick={restoreCase}>بازگردانی</button>
+          </div>
+        )}
+        {page}
       </main>
       <nav className="bottom-nav" aria-label="بخش‌ها">
-        <NavButton active={tab === "home"} onClick={() => setTab("home")} label="خانه" icon="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
+        <NavButton active={tab === "home"} onClick={() => go("home")} label="خانه" icon="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
+        <NavButton active={tab === "cases"} onClick={() => { setCaseFilter({}); go("cases"); }} label="پرونده‌ها" icon="M9 3h6l1 2h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3zM8 11h8M8 15h5" />
         {(can("cases.create") || can("cases.view_all")) && (
-          <NavButton active={tab === "customers"} onClick={() => setTab("customers")} label="مشتریان" icon="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 9v-1a4 4 0 0 0-3-3.9M16 2.1a4 4 0 0 1 0 7.8" />
+          <NavButton active={tab === "customers"} onClick={() => go("customers")} label="مشتریان" icon="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 9v-1a4 4 0 0 0-3-3.9M16 2.1a4 4 0 0 1 0 7.8" />
         )}
         {can("staff.manage") && (
-          <NavButton active={tab === "staff"} onClick={() => setTab("staff")} label="کارکنان" icon="M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1zM10 5h4v2h-4z" />
+          <NavButton active={tab === "staff"} onClick={() => go("staff")} label="کارکنان" icon="M20 7h-4V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1zM10 5h4v2h-4z" />
         )}
-        <NavButton active={tab === "more"} onClick={() => setTab("more")} label="بیشتر" icon="M5 12h.01M12 12h.01M19 12h.01" />
+        <NavButton active={tab === "more"} onClick={() => go("more")} label="بیشتر" icon="M5 12h.01M12 12h.01M19 12h.01" />
       </nav>
     </div>
   );
@@ -257,17 +302,6 @@ function NavButton({ active, onClick, label, icon }: { active: boolean; onClick:
   );
 }
 
-function Home({ me }: { me: Me }) {
-  return (
-    <section>
-      <h2>سلام {me.displayName ?? ""}</h2>
-      <div className="card">
-        <p>نقش شما: <strong>{ROLE_NAMES[me.business!.role] ?? me.business!.role}</strong></p>
-        <p className="muted">ثبت پرونده و تخصیص به شاگرد در نسخه بعدی (اسپرینت ۲) اضافه می‌شود. فعلاً مشتریان، موتورها و کارکنان را ثبت کنید.</p>
-      </div>
-    </section>
-  );
-}
 
 /* ───────── Staff ───────── */
 

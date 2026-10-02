@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Arte.Core.Cases;
 using Arte.Core.Common;
 using Arte.Core.Customers;
 using Arte.Core.Identity;
@@ -27,6 +28,8 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<Workflow> Workflows => Set<Workflow>();
     public DbSet<Stage> Stages => Set<Stage>();
     public DbSet<Transition> Transitions => Set<Transition>();
+    public DbSet<Case> Cases => Set<Case>();
+    public DbSet<CaseEvent> CaseEvents => Set<CaseEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -133,6 +136,34 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasIndex(x => new { x.WorkflowId, x.FromStageId });
             e.HasOne<Stage>().WithMany().HasForeignKey(x => x.FromStageId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Stage>().WithMany().HasForeignKey(x => x.ToStageId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<Case>(e =>
+        {
+            e.HasIndex(x => new { x.TenantId, x.Number }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.StageId });
+            e.HasIndex(x => new { x.TenantId, x.AssigneeId });
+            e.HasIndex(x => new { x.TenantId, x.CustomerId });
+            e.HasIndex(x => new { x.TenantId, x.AssetId });
+            e.Property(x => x.Request).HasMaxLength(2000);
+            e.Property(x => x.Diagnosis).HasMaxLength(4000);
+            e.Property(x => x.CustodyStatus).HasMaxLength(20);
+            e.Property(x => x.Relation).HasMaxLength(20);
+            e.Property(x => x.Version).IsRowVersion();
+            e.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Asset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Stage>().WithMany().HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Workflow>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.AssigneeId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.ParentCaseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<CaseEvent>(e =>
+        {
+            e.Property(x => x.Type).HasMaxLength(60);
+            e.HasIndex(x => new { x.TenantId, x.CaseId, x.Id });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
         });
 
         ApplyTenantFilters(b);

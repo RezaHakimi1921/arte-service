@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arte-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/Arte.Api", "--urls", "http://localhost:5080"],
+      "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
+      "port": 5080
+    },
+    {
+      "name": "arte-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "web"],
+      "port": 5173
+    }
+  ]
+}

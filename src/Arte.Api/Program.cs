@@ -1,6 +1,7 @@
 using System.Threading.RateLimiting;
 using Arte.Api.Account;
 using Arte.Api.Auth;
+using Arte.Api.Cases;
 using Arte.Api.Customers;
 using Arte.Api.Options;
 using Arte.Api.Security;
@@ -132,6 +133,7 @@ app.MapTenants();
 app.MapStaff();
 app.MapCustomers();
 app.MapWorkflows();
+app.MapCases();
 
 if (config.GetValue("Database:MigrateOnStartup", false))
 {
