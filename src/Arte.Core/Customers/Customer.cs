@@ -1,9 +1,10 @@
 using System.Text.Json;
+using Arte.Core.Common;
 using Arte.Core.Tenancy;
 
 namespace Arte.Core.Customers;
 
-public sealed class Customer : ITenantOwned
+public sealed class Customer : ITenantOwned, ISoftDeletable
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
     public Guid TenantId { get; set; }
@@ -12,11 +13,13 @@ public sealed class Customer : ITenantOwned
     public string? Notes { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
     public List<Asset> Assets { get; set; } = [];
 }
 
 /// <summary>What the customer brings in: a motorcycle today, any device later.</summary>
-public sealed class Asset : ITenantOwned, IDisposable
+public sealed class Asset : ITenantOwned, ISoftDeletable, IDisposable
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
     public Guid TenantId { get; set; }
@@ -27,6 +30,8 @@ public sealed class Asset : ITenantOwned, IDisposable
     /// <summary>Vertical-specific fields (brand, model, year, color, engine number…).</summary>
     public JsonDocument? Attributes { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public Guid? DeletedBy { get; set; }
 
     public void Dispose() => Attributes?.Dispose();
 }

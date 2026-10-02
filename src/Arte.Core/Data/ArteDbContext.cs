@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Arte.Core.Common;
 using Arte.Core.Customers;
 using Arte.Core.Identity;
 using Arte.Core.Tenancy;
@@ -9,6 +10,9 @@ namespace Arte.Core.Data;
 
 public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITenantContext tenant) : DbContext(options)
 {
+    public const string TenantFilter = "tenant";
+    public const string SoftDeleteFilter = "soft_delete";
+
     /// <summary>Read by the global query filters on every query, so it must stay a member of the context.</summary>
     public Guid? CurrentTenantId => tenant.TenantId;
 
@@ -88,7 +92,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Mobile).HasMaxLength(11);
             e.Property(x => x.FullName).HasMaxLength(120);
             e.Property(x => x.Notes).HasMaxLength(2000);
-            e.HasIndex(x => new { x.TenantId, x.Mobile }).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.Mobile }).IsUnique().HasFilter("\"DeletedAt\" IS NULL");
             e.HasIndex(x => new { x.TenantId, x.CreatedAt });
             e.HasMany(x => x.Assets).WithOne().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
@@ -146,7 +150,15 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             var rowTenant = Expression.Convert(Expression.Property(p, nameof(ITenantOwned.TenantId)), typeof(Guid?));
             var current = Expression.Property(Expression.Constant(this), nameof(CurrentTenantId));
             var body = Expression.Equal(rowTenant, current);
-            b.Entity(entity.ClrType).HasQueryFilter(Expression.Lambda(body, p));
+            b.Entity(entity.ClrType).HasQueryFilter(TenantFilter, Expression.Lambda(body, p));
+        }
+
+        foreach (var entity in b.Model.GetEntityTypes().Where(t => typeof(ISoftDeletable).IsAssignableFrom(t.ClrType)))
+        {
+            var p = Expression.Parameter(entity.ClrType, "e");
+            var deletedAt = Expression.Property(p, nameof(ISoftDeletable.DeletedAt));
+            var body = Expression.Equal(deletedAt, Expression.Constant(null, typeof(DateTimeOffset?)));
+            b.Entity(entity.ClrType).HasQueryFilter(SoftDeleteFilter, Expression.Lambda(body, p));
         }
     }
 

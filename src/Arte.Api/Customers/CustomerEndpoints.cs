@@ -121,7 +121,78 @@ public static class CustomerEndpoints
             return Results.Created($"/api/v1/assets/{asset.Id}", AssetView(asset));
         });
 
-        write.MapPatch("/assets/{id:guid}", async (Guid id, AssetInput req, ArteDbContext db, CancellationToken ct) =>
+        // Soft delete: the customer and their motorcycles disappear from lists and search, and can be restored from the trash.
+        write.MapDelete("/customers/{id:guid}", async (Guid id, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct) =>
+        {
+            var c = await db.Customers.Include(x => x.Assets).SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (c is null) return Results.NotFound();
+            var now = clock.UtcNow;
+            c.DeletedAt = now;
+            c.DeletedBy = me.RequiredUserId;
+            foreach (var a in c.Assets)
+            {
+                a.DeletedAt = now;
+                a.DeletedBy = me.RequiredUserId;
+            }
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+
+        write.MapPost("/customers/{id:guid}/restore", async (Guid id, ArteDbContext db, IClock clock, CancellationToken ct) =>
+        {
+            var c = await db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter])
+                .SingleOrDefaultAsync(x => x.Id == id && x.DeletedAt != null, ct);
+            if (c is null) return Results.NotFound();
+            if (await db.Customers.AnyAsync(x => x.Mobile == c.Mobile, ct))
+                return Results.Problem(statusCode: 409, title: "مشتری فعال دیگری با همین شماره وجود دارد.");
+
+            // Bring back the motorcycles that were deleted together with the customer, not ones deleted earlier on their own.
+            var assets = await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter])
+                .Where(a => a.CustomerId == id && a.DeletedAt == c.DeletedAt).ToListAsync(ct);
+            foreach (var a in assets)
+            {
+                a.DeletedAt = null;
+                a.DeletedBy = null;
+            }
+            c.DeletedAt = null;
+            c.DeletedBy = null;
+            c.UpdatedAt = clock.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(ToView(c));
+        });
+
+        write.MapGet("/customers/trash", async (ArteDbContext db, CancellationToken ct) =>
+            Results.Ok(await db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking()
+                .Where(c => c.DeletedAt != null)
+                .OrderByDescending(c => c.DeletedAt)
+                .Take(100)
+                .Select(c => new { c.Id, c.Mobile, c.FullName, c.DeletedAt })
+                .ToListAsync(ct)));
+
+        write.MapDelete("/assets/{id:guid}", async (Guid id, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct) =>
+        {
+            var asset = await db.Assets.SingleOrDefaultAsync(a => a.Id == id, ct);
+            if (asset is null) return Results.NotFound();
+            asset.DeletedAt = clock.UtcNow;
+            asset.DeletedBy = me.RequiredUserId;
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        });
+
+        write.MapPost("/assets/{id:guid}/restore", async (Guid id, ArteDbContext db, CancellationToken ct) =>
+        {
+            var asset = await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter])
+                .SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt != null, ct);
+            if (asset is null) return Results.NotFound();
+            if (!await db.Customers.AnyAsync(c => c.Id == asset.CustomerId, ct))
+                return Results.Problem(statusCode: 409, title: "ابتدا مشتری این موتور را بازگردانید.");
+            asset.DeletedAt = null;
+            asset.DeletedBy = null;
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(AssetView(asset));
+        });
+
+        write.MapPatch("/assets/{id:guid}",async (Guid id, AssetInput req, ArteDbContext db, CancellationToken ct) =>
         {
             var errors = ValidateAsset(req, isNew: false);
             if (errors.Count > 0) return Results.ValidationProblem(errors);

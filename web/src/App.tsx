@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
+import { Customers } from "./customers";
+import { Field, MobileInput } from "./ui";
 
 type Me = {
   id: string;
@@ -132,10 +134,7 @@ function OtpLogin({ onDone, onPassword }: { onDone: (s: Session) => void; onPass
       <form className="card" onSubmit={submit} noValidate>
         {step === "mobile" ? (
           <Field label="شماره موبایل" error={error}>
-            <input
-              type="tel" inputMode="numeric" autoComplete="tel" dir="ltr" className="font-num"
-              placeholder="09xxxxxxxxx" value={mobile} onChange={(e) => setMobile(e.target.value)} required autoFocus
-            />
+            <MobileInput value={mobile} onChange={setMobile} autoFocus />
           </Field>
         ) : (
           <Field label={`کد ارسال‌شده به ${mobile}`} error={error}>
@@ -270,137 +269,6 @@ function Home({ me }: { me: Me }) {
   );
 }
 
-/* ───────── Customers ───────── */
-
-type CustomerRow = { id: string; mobile: string; fullName: string | null; assetCount: number };
-type AssetView = { id: string; title: string; identifier: string | null; attributes: Record<string, string> | null };
-type CustomerView = { id: string; mobile: string; fullName: string | null; notes: string | null; assets: AssetView[] };
-
-function Customers({ canEdit }: { canEdit: boolean }) {
-  const [q, setQ] = useState("");
-  const [rows, setRows] = useState<CustomerRow[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-
-  const load = useCallback(async (term: string) => {
-    setRows(await api<CustomerRow[]>(`/api/v1/customers?q=${encodeURIComponent(term)}`));
-  }, []);
-
-  useEffect(() => {
-    const t = setTimeout(() => load(q).catch(() => {}), 250);
-    return () => clearTimeout(t);
-  }, [q, load]);
-
-  if (openId) return <CustomerDetail id={openId} canEdit={canEdit} onBack={() => { setOpenId(null); load(q); }} />;
-
-  return (
-    <section>
-      <div className="toolbar">
-        <input type="search" placeholder="جستجو با نام یا شماره" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جستجوی مشتری" />
-        {canEdit && <button className="primary" onClick={() => setAdding(true)}>+ مشتری</button>}
-      </div>
-      {adding && <AddCustomer onDone={(id) => { setAdding(false); if (id) setOpenId(id); }} />}
-      <ul className="list">
-        {rows.map((c) => (
-          <li key={c.id}>
-            <button className="row-button" onClick={() => setOpenId(c.id)}>
-              <span>{c.fullName ?? "بدون نام"}</span>
-              <span className="font-num muted" dir="ltr">{c.mobile}</span>
-            </button>
-          </li>
-        ))}
-        {rows.length === 0 && <li className="empty muted">مشتری‌ای پیدا نشد.</li>}
-      </ul>
-    </section>
-  );
-}
-
-function AddCustomer({ onDone }: { onDone: (id: string | null) => void }) {
-  const [mobile, setMobile] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    try {
-      const c = await api<{ id: string }>("/api/v1/customers", { body: { mobile, fullName } });
-      onDone(c.id);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "خطا");
-    }
-  }
-
-  return (
-    <form className="card" onSubmit={submit}>
-      <Field label="شماره موبایل" error={error}>
-        <input type="tel" inputMode="numeric" dir="ltr" className="font-num" value={mobile} onChange={(e) => setMobile(e.target.value)} required autoFocus />
-      </Field>
-      <Field label="نام و نام خانوادگی">
-        <input value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={120} />
-      </Field>
-      <div className="actions">
-        <button className="primary">ثبت</button>
-        <button type="button" onClick={() => onDone(null)}>انصراف</button>
-      </div>
-    </form>
-  );
-}
-
-function CustomerDetail({ id, canEdit, onBack }: { id: string; canEdit: boolean; onBack: () => void }) {
-  const [c, setC] = useState<CustomerView | null>(null);
-  const [title, setTitle] = useState("");
-  const [plate, setPlate] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => setC(await api<CustomerView>(`/api/v1/customers/${id}`)), [id]);
-  useEffect(() => { load().catch(() => {}); }, [load]);
-
-  async function addAsset(e: FormEvent) {
-    e.preventDefault();
-    try {
-      await api(`/api/v1/customers/${id}/assets`, { body: { title, identifier: plate || null } });
-      setTitle("");
-      setPlate("");
-      setError(null);
-      await load();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "خطا");
-    }
-  }
-
-  if (!c) return <div className="splash" aria-busy="true" />;
-  return (
-    <section>
-      <button className="link back" onClick={onBack}>← مشتریان</button>
-      <div className="card">
-        <h2>{c.fullName ?? "بدون نام"}</h2>
-        <p className="font-num" dir="ltr">{c.mobile}</p>
-      </div>
-      <h3>موتورها</h3>
-      <ul className="list">
-        {c.assets.map((a) => (
-          <li key={a.id} className="row-static">
-            <span>{a.title}</span>
-            <span className="muted font-num">{a.identifier ?? ""}</span>
-          </li>
-        ))}
-        {c.assets.length === 0 && <li className="empty muted">هنوز موتوری ثبت نشده.</li>}
-      </ul>
-      {canEdit && (
-        <form className="card" onSubmit={addAsset}>
-          <Field label="مدل موتور" error={error}>
-            <input placeholder="مثلاً هوندا CG 125" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required />
-          </Field>
-          <Field label="پلاک یا شماره موتور">
-            <input value={plate} onChange={(e) => setPlate(e.target.value)} maxLength={60} />
-          </Field>
-          <button className="primary">افزودن موتور</button>
-        </form>
-      )}
-    </section>
-  );
-}
-
 /* ───────── Staff ───────── */
 
 type StaffRow = { id: string; mobile: string; displayName: string | null; role: string; isActive: boolean; payModel: string; commissionPercent: number | null };
@@ -454,7 +322,7 @@ function StaffList() {
       <form className="card" onSubmit={add}>
         <h3>افزودن همکار</h3>
         <Field label="شماره موبایل" error={error}>
-          <input type="tel" inputMode="numeric" dir="ltr" className="font-num" value={mobile} onChange={(e) => setMobile(e.target.value)} required />
+          <MobileInput value={mobile} onChange={setMobile} />
         </Field>
         <Field label="نام">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
@@ -593,12 +461,3 @@ export function applyTheme(theme: string) {
   }
 }
 
-function Field({ label, error, children }: { label: string; error?: string | null; children: ReactNode }) {
-  return (
-    <label className="field">
-      <span className="label">{label}</span>
-      {children}
-      {error && <span className="error" role="alert">{error}</span>}
-    </label>
-  );
-}

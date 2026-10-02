@@ -69,7 +69,7 @@ p { margin: 0.25rem 0; }
 .font-num { font-family: "IRANSans", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
 
 button, input, select { font: inherit; color: inherit; }
-input, select {
+input, select, textarea {
   width: 100%;
   font-size: 1rem;
   padding: 0.7rem 0.85rem;
@@ -78,7 +78,7 @@ input, select {
   background: var(--surface-2);
   min-height: 48px;
 }
-input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 input.code { letter-spacing: 0.4em; text-align: center; font-size: 1.4rem; }
 
 button {
@@ -215,4 +215,21 @@ button.danger { color: var(--danger); }
 @media (prefers-contrast: more) {
   :root { --border: #6b7280; }
   .bottom-nav { background: var(--surface); backdrop-filter: none; }
+}
+
+textarea { resize: vertical; line-height: 1.7; }
+button.block { width: 100%; }
+.row-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+.row-actions button { min-height: 40px; padding-inline: 0.75rem; }
+.trash-link { margin-top: 1rem; }
+.toast {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
