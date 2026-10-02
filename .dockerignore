@@ -6,3 +6,4 @@ web/dist/
 tests/
 docs/
 deploy/.env
+**/appsettings.Development.json
