@@ -84,6 +84,13 @@ builder.Services.AddRateLimiter(o =>
         {
             PermitLimit = config.GetValue("RateLimits:AuthPerMinute", 10), Window = TimeSpan.FromMinutes(1),
         }));
+    // Token refresh, switching business, logout: not credential guessing, so a looser limit;
+    // reloads and several open tabs must not log people out.
+    o.AddPolicy("session", http =>
+        RateLimitPartition.GetFixedWindowLimiter(ClientIp(http), _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = config.GetValue("RateLimits:SessionPerMinute", 60), Window = TimeSpan.FromMinutes(1),
+        }));
 });
 
 // The API is only reachable through the reverse proxy on the internal Docker network.

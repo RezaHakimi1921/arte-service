@@ -31,6 +31,9 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 - Vehicle intake order: type (سواری / شاسی‌بلند / ون / وانت / موتورسیکلت) → brand → model → model year
   (from `web/src/vehicles.ts`; "سایر" allows free text). Production years there are approximate.
 - Fuel level colours run red (empty) → green (full) via `--fuel-0…4`.
+- **Every calendar and date is Persian (Jalali)**: display with `Intl.DateTimeFormat("fa-IR-u-ca-persian", …)`,
+  pick dates with Jalali day chips (امروز / فردا / weekday + Jalali date), never a browser `<input type="date">`
+  or a Gregorian calendar. Store UTC on the server. The only Gregorian exception is a vehicle's model year, when the user chooses «میلادی».
 - Validate on the server, always; show the Persian error next to the field.
 - Text fields have explicit max lengths in both the EF model and the validator.
 
@@ -67,6 +70,25 @@ build → test → commit → push → deploy → health check → summary
   Arte publishes **no** host ports. On the shared network use unique aliases (`arte-api`, `arte-web`) — plain `api` is PersonalWallet's.
 - Editing PersonalWallet's Caddyfile: back up, append **in place** (bind-mounted single file), `caddy validate`, then `caddy reload`.
 - SSH: `ssh -i ~/.ssh/arte_service_deploy -p 2238 cluadai@78.39.51.105`. No sudo.
+
+## UX principles (from the product consultation, ۱۴۰۵/۰۷)
+
+- "Every time I open the app I immediately know what to do now, and no vehicle or money is forgotten."
+- **Home is a work queue, not statistics**: needs-action (each with a plain reason), ready for delivery,
+  what is blocking work (`WaitReason`), due today; numbers last. Technicians land on «کارهای من».
+- **Say why, not only the stage**: `statusText()` — «منتظر تأیید هزینه توسط مشتری»، «در حال عیب‌یابی توسط محمد».
+  Colour is never the only signal; always text (and an icon for alerts).
+- **Intake in three levels**: essentials (mobile or plate, vehicle, service) with «ثبت سریع» in under a minute;
+  «تکمیل پذیرش» reveals mileage, fuel, body, items, assignee; vehicle details last. Anything can be completed later on the case.
+- **Case page = command centre**: decision facts on top (customer + call, vehicle + plate, status + time, assignee,
+  promise, later money), one big next action, the rest in collapsible sections.
+- **Frequent quick actions use a bottom sheet** (`BottomSheet`/`SheetOption`, rows ≥ 48px): other stage moves, assign,
+  wait reason, parts supplier, note, promise, later labor and payment.
+- **Visual**: light neutral background by default, navy brand (`--accent`), green only for ready/success, orange for
+  waiting/warning, red only for errors, serious delay or cancel. Plain cards, clear borders, large numbers. Dark mode for readability, not decoration.
+- **Empty states teach** what the screen is for and offer the first action.
+- **Unreliable internet**: offline banner, clear Persian network errors, «در حال ذخیره…», disabled buttons while busy,
+  and a visible confirmation (toast) after every important action (stage change, assign, payment).
 
 ## UI rules
 

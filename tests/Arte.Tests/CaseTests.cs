@@ -183,6 +183,70 @@ public sealed class CaseTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Waiting_for_parts_says_who_brings_them()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var c = await Open(owner);
+        c = await Run(owner, c, Primary(c)); // عیب‌یابی
+        var parts = TransitionTo(c, "منتظر قطعه");
+
+        var missing = await owner.PostAsJsonAsync($"/api/v1/cases/{c.GetProperty("id")}/transitions/{parts}", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.Contains("wait_reason_required", await missing.Content.ReadAsStringAsync());
+
+        c = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{c.GetProperty("id")}/transitions/{parts}", new { waitReason = "customer_parts" }));
+        Assert.Equal("customer_parts", c.GetProperty("waitReason").GetString());
+
+        // Leaving the waiting stage clears the reason.
+        c = await Run(owner, c, Primary(c)); // قطعه رسید
+        Assert.Equal(JsonValueKind.Null, c.GetProperty("waitReason").ValueKind);
+
+        var inbox = await Json(await owner.GetAsync("/api/v1/inbox"));
+        Assert.Contains(inbox.GetProperty("needsAction").EnumerateArray(),
+            x => x.GetProperty("reasons").EnumerateArray().Any(r => r.GetProperty("code").GetString() == "unassigned"));
+    }
+
+    [Fact]
+    public async Task Job_can_be_marked_stopped_and_shows_in_blocked_and_technician_inbox_is_their_own()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var techMobile = ArteApiFactory.NewMobile();
+        var techId = (await Json(await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, role = "technician" }))).GetProperty("id").GetGuid();
+        var mine = await Open(owner, new { assigneeId = techId });
+        await Open(owner);
+        var (tech, _) = await api.LoginAsync(techMobile);
+
+        var stopped = await Json(await tech.PostAsJsonAsync($"/api/v1/cases/{mine.GetProperty("id")}/wait", new { waitReason = "owner_decision" }));
+        Assert.Equal("owner_decision", stopped.GetProperty("waitReason").GetString());
+
+        var ownerInbox = await Json(await owner.GetAsync("/api/v1/inbox"));
+        Assert.Contains(ownerInbox.GetProperty("blocked").EnumerateArray(), g => g.GetProperty("reason").GetString() == "owner_decision");
+
+        var techInbox = await Json(await tech.GetAsync("/api/v1/inbox"));
+        Assert.Single(techInbox.GetProperty("mine").EnumerateArray());
+        Assert.Empty(techInbox.GetProperty("needsAction").EnumerateArray());
+        Assert.Equal(HttpStatusCode.BadRequest, (await tech.PostAsJsonAsync($"/api/v1/cases/{mine.GetProperty("id")}/wait", new { waitReason = "nonsense" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Plate_lookup_finds_the_vehicle_and_owner_within_the_business_only()
+    {
+        var (a, _) = await api.NewBusinessAsync();
+        var (b, _) = await api.NewBusinessAsync();
+        var plate = $"{Random.Shared.Next(10, 99)}ب{Random.Shared.Next(100, 999)}-{Random.Shared.Next(10, 99)}";
+        var c = await Json(await a.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(), customerName = "صاحب", request = "x",
+            newAsset = new { title = "پژو ۲۰۶", identifier = plate, kind = "car" },
+        }));
+        Assert.NotEqual(Guid.Empty, c.GetProperty("id").GetGuid());
+
+        var hit = await Json(await a.GetAsync($"/api/v1/assets/lookup?identifier={Uri.EscapeDataString(plate)}"));
+        Assert.Equal("صاحب", hit.GetProperty("customer").GetProperty("fullName").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync($"/api/v1/assets/lookup?identifier={Uri.EscapeDataString(plate)}")).StatusCode);
+    }
+
+    [Fact]
     public async Task Intake_needs_a_service_or_a_description()
     {
         var (owner, _) = await api.NewBusinessAsync();

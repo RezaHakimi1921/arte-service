@@ -48,6 +48,7 @@ public class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Auth:PasswordLoginEnabled", "true");
         // Tests log in many users from one IP; the per-IP limits have their own test.
         builder.UseSetting("RateLimits:AuthPerMinute", "100000");
+        builder.UseSetting("RateLimits:SessionPerMinute", "100000");
         builder.UseSetting("RateLimits:GlobalPerMinute", "100000");
         builder.UseSetting("Otp:MaxPerIpPerHour", "100000");
         Configure(builder);

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
-import { CaseDetail, CasesView, DashboardView, type CaseFilter } from "./cases";
+import { CaseDetail, CasesView, type CaseFilter } from "./cases";
+import { FeedbackProvider } from "./feedback";
+import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { Customers } from "./customers";
 import { Field, MobileInput } from "./ui";
@@ -18,6 +20,7 @@ const ROLE_NAMES: Record<string, string> = { owner: "استاد (مالک)", sup
 
 export default function App() {
   const [booting, setBooting] = useState(true);
+  const [bootError, setBootError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [me, setMe] = useState<Me | null>(null);
 
@@ -32,17 +35,37 @@ export default function App() {
       setSession(null);
       setMe(null);
     });
+    boot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signIn]);
+
+  function boot() {
+    setBooting(true);
+    setBootError(null);
     refresh()
       .then(async (s) => s ?? (await openModeSession()))
       .then((s) => signIn(s))
-      .catch(() => signIn(null))
+      .catch((err) => setBootError(err instanceof ApiError ? err.message : "خطا در ارتباط با سرور"))
       .finally(() => setBooting(false));
-  }, [signIn]);
+  }
 
   if (booting) return <div className="splash" aria-busy="true" />;
+  if (bootError)
+    return (
+      <main className="auth">
+        <div className="card">
+          <p>{bootError}</p>
+          <button className="primary" onClick={boot}>تلاش دوباره</button>
+        </div>
+      </main>
+    );
   if (!session || !me) return <Login onDone={signIn} />;
   if (!me.business) return <ChooseBusiness session={session} onDone={signIn} />;
-  return <Shell me={me} onSignOut={() => signIn(null)} />;
+  return (
+    <FeedbackProvider>
+      <Shell me={me} onSignOut={() => signIn(null)} />
+    </FeedbackProvider>
+  );
 }
 
 /** While sign-in is switched off on the server, everyone enters as the owner. Null when it is on. */
@@ -258,7 +281,7 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
   else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
   else if (tab === "staff") page = <StaffList />;
   else if (tab === "more") page = <More me={me} onSignOut={onSignOut} />;
-  else page = <DashboardView onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
+  else page = <HomeView key={String(caseId)} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
 
   return (
     <div className="shell">
@@ -378,7 +401,7 @@ function StaffList() {
 /* ───────── More ───────── */
 
 function More({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "dark");
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "light");
 
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
@@ -489,7 +512,7 @@ function AccountSettings() {
 
 export function applyTheme(theme: string) {
   document.documentElement.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f6f7f9" : "#0f1115");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f3f5f8" : "#0f1115");
   try {
     localStorage.setItem("theme", theme);
   } catch {

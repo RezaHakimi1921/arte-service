@@ -25,7 +25,8 @@ public static class CaseEndpoints
         DateTimeOffset? PromisedAt, string? CustodyStatus, Dictionary<string, string>? Intake,
         string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes);
 
-    public sealed record RunTransition(string? Reason);
+    public sealed record RunTransition(string? Reason, string? WaitReason);
+    public sealed record SetWait(string? WaitReason);
     public sealed record Assign(Guid? AssigneeId);
     public sealed record Note(string? Text);
 
@@ -41,6 +42,7 @@ public static class CaseEndpoints
         g.MapPatch("/{id:guid}", UpdateAsync);
         g.MapPost("/{id:guid}/transitions/{transitionId:guid}", TransitionAsync);
         g.MapPost("/{id:guid}/assign", AssignAsync).RequirePermission(Permissions.CasesAssign);
+        g.MapPost("/{id:guid}/wait", SetWaitAsync);
         g.MapPost("/{id:guid}/notes", NoteAsync);
         g.MapDelete("/{id:guid}", DeleteAsync).RequirePermission(Permissions.CasesCreate);
         g.MapPost("/{id:guid}/restore", RestoreAsync).RequirePermission(Permissions.CasesCreate);
@@ -48,6 +50,18 @@ public static class CaseEndpoints
         g.MapGet("/suggest-parent", SuggestParentAsync).RequirePermission(Permissions.CasesCreate);
 
         app.MapGet("/api/v1/dashboard", DashboardAsync).RequireTenant();
+        app.MapGet("/api/v1/inbox", InboxAsync).RequireTenant();
+        app.MapGet("/api/v1/assets/lookup", async (string identifier, ArteDbContext db, CancellationToken ct) =>
+        {
+            var id = identifier.Trim();
+            if (id.Length is 0 or > 60) return Results.NotFound();
+            var hit = await (from a in db.Assets.AsNoTracking()
+                             where a.Identifier == id
+                             join c in db.Customers on a.CustomerId equals c.Id
+                             select new { Asset = new { a.Id, a.Title, a.Identifier, a.Kind }, Customer = new { c.Id, c.FullName, c.Mobile } })
+                .FirstOrDefaultAsync(ct);
+            return hit is null ? Results.NotFound() : Results.Ok(hit);
+        }).RequirePermission(Permissions.CasesCreate);
         app.MapGet("/api/v1/staff/assignable", async (ArteDbContext db, CancellationToken ct) =>
             Results.Ok(await db.Memberships.AsNoTracking()
                 .Where(m => m.IsActive && (m.Role == Roles.Owner || m.Permissions.Contains(Permissions.CasesWork)))
@@ -108,10 +122,17 @@ public static class CaseEndpoints
                 AssetTitle = r.a == null ? null : r.a.Title,
                 Stage = new { r.s.Id, r.s.Key, r.s.Name, r.s.Category, r.s.Color, r.s.IsTerminal },
                 AssetIdentifier = r.a == null ? null : r.a.Identifier,
-                r.AssigneeName, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices,
+                r.AssigneeName, r.c.AssigneeId, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices,
+                r.c.WaitReason,
             })
             .ToListAsync(ct);
-        return Results.Ok(items);
+        var now = DateTimeOffset.UtcNow;
+        return Results.Ok(items.Select(i => new
+        {
+            i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
+            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.OpenedAt, i.Request, i.RequestedServices, i.WaitReason,
+            Alert = CaseAlerts.Primary(i.Stage.IsTerminal, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
+        }));
     }
 
     private static async Task<IResult> DetailAsync(Guid id, RequestUser me, ArteDbContext db, CancellationToken ct)
@@ -159,7 +180,7 @@ public static class CaseEndpoints
         {
             c.Id, c.Number, c.Request, c.RequestedServices, c.FuelLevel, c.BodyStatus, c.BodyNotes,
             c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
-            c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation,
+            c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation, c.WaitReason,
             c.OpenedAt, c.StageEnteredAt, c.ClosedAt,
             Stage = new { stage.Id, stage.Key, stage.Name, stage.Category, stage.Color, stage.IsTerminal },
             Customer = customer,
@@ -404,12 +425,25 @@ public static class CaseEndpoints
             return Results.Problem(statusCode: 409, title: "قبل از شروع کار، پلاک وسیله را ثبت کنید.",
                 extensions: new Dictionary<string, object?> { ["code"] = "plate_required", ["assetId"] = assetId });
 
+        // Waiting stages say why. Approval is implied; for parts, who brings them must be chosen.
+        string? waitReason = null;
+        if (to.Category == StageCategories.Waiting)
+        {
+            waitReason = req.WaitReason ?? (to.Key == "awaiting_approval" ? WaitReasons.CustomerApproval : null);
+            if (to.Key == "awaiting_parts" && (waitReason is null || !WaitReasons.Parts.Contains(waitReason)))
+                return Results.Problem(statusCode: 400, title: "مشخص کنید قطعه را چه کسی تهیه می‌کند.",
+                    extensions: new Dictionary<string, object?> { ["code"] = "wait_reason_required", ["options"] = WaitReasons.Parts });
+            if (waitReason is not null && !WaitReasons.All.Contains(waitReason))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["waitReason"] = ["علت انتظار نامعتبر است."] });
+        }
+
         var now = clock.UtcNow;
         var userId = me.RequiredUserId;
         c.StageId = to.Id;
         c.StageEnteredAt = now;
+        c.WaitReason = waitReason;
         AddEvent(db, c, CaseEventTypes.StageChanged, userId, now,
-            new { From = from.Name, To = to.Name, to.Category, Action = t.Label, Reason = reason });
+            new { From = from.Name, To = to.Name, to.Category, Action = t.Label, Reason = reason, WaitReason = waitReason });
 
         if (from.IsTerminal && !to.IsTerminal)
         {
@@ -477,6 +511,84 @@ public static class CaseEndpoints
         c.DeletedBy = null;
         AddEvent(db, c, CaseEventTypes.Restored, me.RequiredUserId, clock.UtcNow, new { });
         return await SaveOr409(db, ct, async () => Results.Ok(await BuildDetail(c, me.RequiredMembership, db, ct)));
+    }
+
+    /// <summary>Mark a job as stopped (or moving again) without changing its stage, e.g. "منتظر تصمیم استاد".</summary>
+    private static async Task<IResult> SetWaitAsync(Guid id, SetWait req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
+    {
+        var m = me.RequiredMembership;
+        var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
+        if (!CaseAccess.CanWorkOn(m, c) && !m.Has(Permissions.CasesCreate)) return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
+        if (req.WaitReason is not null && !WaitReasons.All.Contains(req.WaitReason))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["waitReason"] = ["علت انتظار نامعتبر است."] });
+        if (c.WaitReason == req.WaitReason) return Results.Ok(await BuildDetail(c, m, db, ct));
+
+        c.WaitReason = req.WaitReason;
+        AddEvent(db, c, CaseEventTypes.WaitChanged, me.RequiredUserId, clock.UtcNow, new { c.WaitReason });
+        return await SaveOr409(db, ct, async () => Results.Ok(await BuildDetail(c, m, db, ct)));
+    }
+
+    /// <summary>
+    /// Operational inbox for the home screen: what needs attention now and why, instead of bare counts.
+    /// Technicians get their own jobs; managers get the whole shop.
+    /// </summary>
+    private static async Task<IResult> InboxAsync(RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
+    {
+        var m = me.RequiredMembership;
+        var now = clock.UtcNow;
+        var cases = db.Cases.AsNoTracking();
+        var seeAll = CaseAccess.CanSeeAll(m);
+        if (!seeAll) cases = cases.Where(c => c.AssigneeId == m.Id);
+
+        var open = await (
+            from c in cases
+            join s in db.Stages on c.StageId equals s.Id
+            where !s.IsTerminal
+            join cu in db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.CustomerId equals cu.Id
+            join a in db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.AssetId equals a.Id into aj
+            from a in aj.DefaultIfEmpty()
+            join mem in db.Memberships on c.AssigneeId equals mem.Id into mj
+            from mem in mj.DefaultIfEmpty()
+            orderby c.StageEnteredAt
+            select new
+            {
+                c.Id, c.Number, CustomerName = cu.FullName, CustomerMobile = cu.Mobile,
+                AssetTitle = a == null ? null : a.Title, AssetIdentifier = a == null ? null : a.Identifier,
+                Stage = new { s.Id, s.Key, s.Name, s.Category, s.Color, s.IsTerminal },
+                AssigneeName = mem == null ? null : mem.User!.DisplayName ?? mem.User.Mobile,
+                c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.WaitReason, c.OpenedAt,
+            })
+            .Take(500).ToListAsync(ct);
+
+        var cards = open.Select(i => new
+        {
+            i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
+            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.WaitReason, i.OpenedAt,
+            Mine = i.AssigneeId == m.Id,
+            Reasons = CaseAlerts.All(i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now, seeAll),
+            Alert = CaseAlerts.Primary(false, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
+        }).ToList();
+
+        var today = CaseAlerts.TehranDay(now);
+        return Results.Ok(new
+        {
+            Role = m.Role,
+            NeedsAction = seeAll ? cards.Where(c => c.Reasons.Count > 0 && c.Stage.Category != StageCategories.Done).ToList() : [],
+            Mine = cards.Where(c => c.Mine).ToList(),
+            Ready = cards.Where(c => c.Stage.Category == StageCategories.Done).ToList(),
+            Blocked = cards.Where(c => c.WaitReason is not null)
+                .GroupBy(c => c.WaitReason!).Select(g => new { Reason = g.Key, Cases = g.ToList() }).ToList(),
+            DueToday = cards.Where(c => c.PromisedAt is { } p && CaseAlerts.TehranDay(p) <= today).ToList(),
+            Stats = new
+            {
+                Open = cards.Count,
+                Active = cards.Count(c => c.Stage.Category is StageCategories.Active or StageCategories.Open),
+                Waiting = cards.Count(c => c.WaitReason is not null || c.Stage.Category == StageCategories.Waiting),
+                Ready = cards.Count(c => c.Stage.Category == StageCategories.Done),
+                OpenedToday = await cases.CountAsync(c => c.OpenedAt >= CaseAlerts.TehranMidnightUtc(now), ct),
+            },
+        });
     }
 
     // ───────── helpers ─────────

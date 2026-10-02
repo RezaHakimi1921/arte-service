@@ -49,7 +49,7 @@ public static class OpenModeEndpoints
                 membership!.TenantId,
                 Memberships = Array.Empty<object>(),
             });
-        }).RequireRateLimiting("auth");
+        }).RequireRateLimiting("session");
     }
 
     private static Task<Membership?> FindOwnerMembership(ArteDbContext db, Guid userId, CancellationToken ct) =>

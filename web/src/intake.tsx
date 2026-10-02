@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
-import { PlateInput, emptyPlate } from "./plate";
-import { Field, MobileInput, NumberInput } from "./ui";
+import { PlateInput, PlateView, emptyPlate } from "./plate";
+import { Field, MobileInput, NumberInput, formatNumber } from "./ui";
 import {
   ACCOMPANYING, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, SERVICES, VEHICLE_CATALOG, VEHICLE_KINDS,
   formatPlate, modelYears, type PlateParts, type VehicleKind,
@@ -14,6 +14,7 @@ type AssetOption = { id: string; title: string; identifier: string | null };
 type CustomerFull = { id: string; fullName: string | null; assets: AssetOption[] };
 type ParentSuggestion = { id: string; number: number; closedAt: string; request: string } | null;
 type Assignable = { id: string; name: string; role: string };
+type PlateHit = { asset: { id: string; title: string; identifier: string }; customer: { id: string; fullName: string | null; mobile: string } };
 
 const faNumber = new Intl.NumberFormat("fa-IR");
 
@@ -79,6 +80,15 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
   const [parent, setParent] = useState<ParentSuggestion>(null);
   const [linkParent, setLinkParent] = useState(true);
 
+  // staged intake: essentials first, the rest on demand
+  const [full, setFull] = useState(false);
+  // lookup by plate instead of mobile
+  const [byPlate, setByPlate] = useState(false);
+  const [lookupPlate, setLookupPlate] = useState<PlateParts>(emptyPlate());
+  const [lookupMiss, setLookupMiss] = useState(false);
+  const [wantAssetId, setWantAssetId] = useState<string | null>(null);
+  const [plateOwner, setPlateOwner] = useState<PlateHit | null>(null);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -97,12 +107,32 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
         if (hit) {
           const full = await api<CustomerFull>(`/api/v1/customers/${hit.id}`);
           setCustomer(full);
-          if (full.assets.length > 0) setAssetId(full.assets[full.assets.length - 1].id);
+          const wanted = full.assets.find((a) => a.id === wantAssetId);
+          if (wanted) setAssetId(wanted.id);
+          else if (full.assets.length > 0) setAssetId(full.assets[full.assets.length - 1].id);
         }
       })
       .catch(() => {})
       .finally(() => setLookedUp(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mobile]);
+
+  // Lookup by plate: find the vehicle and its owner, then continue as if the owner's mobile was typed.
+  const lookupId = formatPlate(lookupPlate);
+  useEffect(() => {
+    setLookupMiss(false);
+    if (!byPlate || !lookupId) return;
+    api<PlateHit>(`/api/v1/assets/lookup?identifier=${encodeURIComponent(lookupId)}`)
+      .then((hit) => {
+        setWantAssetId(hit.asset.id);
+        setMobile(hit.customer.mobile);
+        setByPlate(false);
+      })
+      .catch(() => {
+        setLookupMiss(true);
+        setPlate(lookupPlate);
+      });
+  }, [byPlate, lookupId, lookupPlate]);
 
   useEffect(() => {
     setParent(null);
@@ -126,9 +156,15 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
   }
 
   const plateParts = formatPlate(plate);
+
+  // A new vehicle's plate may already exist: same customer → pick it; another customer → warn.
+  useEffect(() => {
+    setPlateOwner(null);
+    if (assetId !== "new" || !plateParts) return;
+    api<PlateHit>(`/api/v1/assets/lookup?identifier=${encodeURIComponent(plateParts)}`).then(setPlateOwner).catch(() => {});
+  }, [assetId, plateParts]);
   const plateStarted = plate.two || plate.letter || plate.three || plate.region;
   const newVehicle = assetId === "new";
-  const showExtra = newVehicle && model.trim().length > 0;
 
   const toggle = (list: string[], set: (v: string[]) => void, v: string) =>
     set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -140,6 +176,7 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
     if (newVehicle && (kind || brand.trim() || model.trim() || plateStarted) && !(brand.trim() && model.trim())) local.vehicle = "نوع، برند و مدل را انتخاب کنید.";
     if (plateStarted && !plateParts) local.plate = "پلاک کامل نیست.";
     if (services.length === 0 && !notes.trim()) local.services = "حداقل یک سرویس انتخاب کنید یا توضیحی بنویسید.";
+    if (plateOwner && plateOwner.customer.mobile !== mobile) local.plate = "این پلاک برای مشتری دیگری ثبت شده است.";
     if (Object.keys(local).length) {
       setErrors(local);
       return;
@@ -190,6 +227,8 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
     }
   }
 
+  const sameOwner = plateOwner && plateOwner.customer.mobile === mobile;
+
   return (
     <form className="intake" onSubmit={submit} noValidate>
       <div className="intake-title">
@@ -197,14 +236,27 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
         <button type="button" className="icon-button" onClick={onCancel} aria-label="بستن">✕</button>
       </div>
 
-      <Section icon="phone" title="شماره همراه">
-        <Field label="" error={errors.mobile}>
-          <MobileInput value={mobile} onChange={setMobile} autoFocus />
-        </Field>
+      {/* ── 1. essentials ── */}
+      <Section icon="phone" title={byPlate ? "جستجو با پلاک" : "شماره همراه مشتری"}>
+        {byPlate ? (
+          <>
+            <PlateInput value={lookupPlate} onChange={setLookupPlate} />
+            {lookupMiss && <p className="hint">این پلاک قبلاً ثبت نشده؛ شماره همراه مشتری را وارد کنید.</p>}
+            <button type="button" className="link" onClick={() => setByPlate(false)}>جستجو با شماره همراه</button>
+          </>
+        ) : (
+          <>
+            <Field label="" error={errors.mobile}>
+              <MobileInput value={mobile} onChange={(v) => { setWantAssetId(null); setMobile(v); }} autoFocus />
+            </Field>
+            {!mobile && <button type="button" className="link" onClick={() => setByPlate(true)}>یا جستجو با پلاک</button>}
+          </>
+        )}
         {customer && (
           <p className="customer-found">
             <span className="badge good">مشتری قبلی</span>
             <strong>{customer.fullName ?? "بدون نام"}</strong>
+            <span className="muted small">{customer.assets.length > 0 ? `${formatNumber(customer.assets.length)} وسیله ثبت‌شده` : ""}</span>
           </p>
         )}
         {!customer && lookedUp && (
@@ -220,7 +272,7 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
           <div className="chips">
             {customer.assets.map((a) => (
               <button type="button" key={a.id} className={`chip-button${assetId === a.id ? " active" : ""}`} onClick={() => setAssetId(a.id)}>
-                {a.title}{a.identifier ? ` · ${a.identifier}` : ""}
+                {a.title}{a.identifier ? <> · <PlateView identifier={a.identifier} /></> : ""}
               </button>
             ))}
             <button type="button" className={`chip-button${newVehicle ? " active" : ""}`} onClick={() => setAssetId("new")}>+ وسیله دیگر</button>
@@ -294,20 +346,30 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
               <PlateInput value={plate} onChange={setPlate} invalid={!!errors.plate} />
               {errors.plate ? <span className="error">{errors.plate}</span>
                 : <span className="hint">پلاک را می‌توانید بعداً هم وارد کنید، ولی قبل از شروع کار لازم است.</span>}
+              {plateOwner && (sameOwner ? (
+                <div className="notice good">
+                  این وسیله قبلاً برای همین مشتری ثبت شده.
+                  <button type="button" className="link" onClick={() => setAssetId(plateOwner.asset.id)}>انتخاب «{plateOwner.asset.title}»</button>
+                </div>
+              ) : (
+                <div className="notice warn">
+                  این پلاک برای «{plateOwner.customer.fullName ?? plateOwner.customer.mobile}» ثبت شده است.
+                  <button type="button" className="link" onClick={() => { setWantAssetId(plateOwner.asset.id); setMobile(plateOwner.customer.mobile); }}>
+                    پذیرش برای همان مشتری
+                  </button>
+                </div>
+              ))}
             </div>
 
-            {showExtra && (
-              <details className="extra" open>
-                <summary>اطلاعات تکمیلی (اختیاری)</summary>
+            {full && model.trim() && (
+              <details className="extra">
+                <summary>اطلاعات تکمیلی وسیله (اختیاری)</summary>
                 <div className="grid-2">
                   <Field label="رنگ">
                     <select value={color} onChange={(e) => setColor(e.target.value)}>
                       <option value="">—</option>
                       {COLORS.map((c) => <option key={c}>{c}</option>)}
                     </select>
-                  </Field>
-                  <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
-                    <NumberInput value={odometer} onChange={setOdometer} max={7} />
                   </Field>
                   <Field label="نوع سوخت">
                     <select value={fuelType} onChange={(e) => setFuelType(e.target.value)}>
@@ -331,12 +393,6 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
           </>
         )}
 
-        {!newVehicle && (
-          <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
-            <NumberInput value={odometer} onChange={setOdometer} max={7} />
-          </Field>
-        )}
-
         {parent && (
           <label className="check">
             <input type="checkbox" checked={linkParent} onChange={(e) => setLinkParent(e.target.checked)} />
@@ -345,71 +401,84 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
         )}
       </Section>
 
-      <Section icon="gauge" title="میزان سوخت" badge={fuel === null && <span className="badge warn">مشخص نشده</span>}>
-        <div className="fuel" role="radiogroup" aria-label="میزان سوخت">
-          {FUEL_LEVELS.map((label, i) => (
-            <button type="button" key={label} role="radio" aria-checked={fuel === i}
-              className={fuel !== null && i <= fuel ? `filled level-${fuel}` : ""} onClick={() => setFuel(i)}>
-              <span className="fuel-bar" />
-              <span className="fuel-label">{label}</span>
-            </button>
-          ))}
-        </div>
-      </Section>
-
-      <Section icon="body" title="وضعیت بدنه" tone="warn" badge={body === null && <span className="badge warn">بررسی نشده</span>}>
-        <div className="actions">
-          <button type="button" className={`toggle good${body === "ok" ? " on" : ""}`} onClick={() => setBody("ok")}>بدنه سالم است</button>
-          <button type="button" className={`toggle bad${body === "damaged" ? " on" : ""}`} onClick={() => setBody("damaged")}>ثبت آسیب</button>
-        </div>
-        {body === "damaged" && (
-          <Field label="شرح آسیب (محل، نوع)" error={errors.bodyNotes}>
-            <textarea rows={2} value={bodyNotes} onChange={(e) => setBodyNotes(e.target.value)} maxLength={500} placeholder="مثلاً خط روی درب جلو راست" />
-          </Field>
-        )}
-        <div className="field">
-          <span className="label">همراه وسیله</span>
-          <div className="chips">
-            {ACCOMPANYING.map((i) => (
-              <button type="button" key={i} aria-pressed={items.includes(i)} className={`chip-button${items.includes(i) ? " active" : ""}`}
-                onClick={() => toggle(items, setItems, i)}>{i}</button>
-            ))}
-          </div>
-        </div>
-      </Section>
-
-      <Section icon="list" title="سرویس‌های درخواستی / ایرادات اعلامی مشتری">
+      <Section icon="list" title="مشکل یا سرویس درخواستی">
         <div className="chips">
           {SERVICES.map((s) => (
             <button type="button" key={s} aria-pressed={services.includes(s)} className={`chip-button${services.includes(s) ? " active" : ""}`}
               onClick={() => toggle(services, setServices, s)}>{s}</button>
           ))}
         </div>
+        <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000}
+          placeholder="توضیح کوتاه مشتری (اختیاری)" aria-label="توضیحات" />
         {errors.services && <span className="error">{errors.services}</span>}
         {errors.requestedServices && <span className="error">{errors.requestedServices}</span>}
-      </Section>
-
-      {canAssign && (
-        <Section icon="user" title="همکار این پذیرش">
-          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} aria-label="همکار">
-            <option value="">همکار را انتخاب کنید</option>
-            {staff?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          {staff && staff.filter((s) => s.role !== "owner").length === 0 && (
-            <p className="hint">هیچ همکاری ثبت نشده است. <button type="button" className="link" onClick={onOpenStaff}>رفتن به صفحه همکاران</button></p>
-          )}
-        </Section>
-      )}
-
-      <Section icon="note" title="توضیحات اضافی">
-        <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000}
-          placeholder="هر نکته یا درخواست خاصی را وارد کنید." aria-label="توضیحات اضافی" />
         {errors.request && <span className="error">{errors.request}</span>}
       </Section>
 
+      {/* ── 2. recommended, on demand ── */}
+      {full && (
+        <>
+          <Section icon="gauge" title="وضعیت هنگام پذیرش" badge={fuel === null && <span className="badge warn">سوخت مشخص نشده</span>}>
+            <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
+              <NumberInput value={odometer} onChange={setOdometer} max={7} suffix="کیلومتر" />
+            </Field>
+            <div className="field">
+              <span className="label">میزان سوخت</span>
+              <div className="fuel" role="radiogroup" aria-label="میزان سوخت">
+                {FUEL_LEVELS.map((label, i) => (
+                  <button type="button" key={label} role="radio" aria-checked={fuel === i}
+                    className={fuel !== null && i <= fuel ? `filled level-${fuel}` : ""} onClick={() => setFuel(i)}>
+                    <span className="fuel-bar" />
+                    <span className="fuel-label">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Section>
+
+          <Section icon="body" title="وضعیت بدنه" tone="warn" badge={body === null && <span className="badge warn">بررسی نشده</span>}>
+            <div className="actions">
+              <button type="button" className={`toggle good${body === "ok" ? " on" : ""}`} onClick={() => setBody("ok")}>بدنه سالم است</button>
+              <button type="button" className={`toggle bad${body === "damaged" ? " on" : ""}`} onClick={() => setBody("damaged")}>ثبت آسیب</button>
+            </div>
+            {body === "damaged" && (
+              <Field label="شرح آسیب (محل، نوع)" error={errors.bodyNotes}>
+                <textarea rows={2} value={bodyNotes} onChange={(e) => setBodyNotes(e.target.value)} maxLength={500} placeholder="مثلاً خط روی درب جلو راست" />
+              </Field>
+            )}
+            <div className="field">
+              <span className="label">همراه وسیله</span>
+              <div className="chips">
+                {ACCOMPANYING.map((i) => (
+                  <button type="button" key={i} aria-pressed={items.includes(i)} className={`chip-button${items.includes(i) ? " active" : ""}`}
+                    onClick={() => toggle(items, setItems, i)}>{i}</button>
+                ))}
+              </div>
+            </div>
+          </Section>
+
+          {canAssign && (
+            <Section icon="user" title="مسئول پرونده">
+              <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} aria-label="مسئول پرونده">
+                <option value="">بعداً تعیین می‌کنم</option>
+                {staff?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              {staff && staff.filter((s) => s.role !== "owner").length === 0 && (
+                <p className="hint">هیچ همکاری ثبت نشده است. <button type="button" className="link" onClick={onOpenStaff}>رفتن به صفحه همکاران</button></p>
+              )}
+            </Section>
+          )}
+        </>
+      )}
+
       {errors.form && <p className="error" role="alert">{errors.form}</p>}
       <div className="intake-submit">
-        <button className="primary block big" disabled={busy}>ثبت پذیرش</button>
+        <button className="primary block big" disabled={busy}>{busy ? "در حال ثبت…" : full ? "ثبت پذیرش" : "ثبت سریع"}</button>
+        {!full && (
+          <button type="button" className="block secondary" onClick={() => setFull(true)}>
+            تکمیل پذیرش: کیلومتر، سوخت، بدنه، مسئول…
+          </button>
+        )}
       </div>
     </form>
   );

@@ -34,24 +34,39 @@ async function parse(res: Response) {
   return body;
 }
 
+/**
+ * Null only when the session is really gone (401). Rate limiting or a dropped connection throws instead,
+ * so a busy moment or bad signal never looks like being logged out.
+ */
 export function refresh(): Promise<Session | null> {
-  refreshing ??= fetch("/api/v1/auth/refresh", { method: "POST", credentials: "same-origin" })
+  refreshing ??= fetchOrOffline("/api/v1/auth/refresh", { method: "POST", credentials: "same-origin" })
     .then(async (res) => {
-      if (!res.ok) return null;
+      if (res.status === 401) return null;
+      if (!res.ok) throw new ApiError(res.status, res.status === 429 ? "درخواست‌ها زیاد است؛ چند ثانیه بعد دوباره تلاش کنید." : "خطا در ارتباط با سرور");
       const s = (await res.json()) as Session;
       applySession(s);
       return s;
     })
-    .catch(() => null)
     .finally(() => {
       refreshing = null;
     });
   return refreshing;
 }
 
+/** A dropped connection becomes a clear Persian error instead of a raw TypeError. */
+async function fetchOrOffline(input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiError(0, navigator.onLine
+      ? "ارتباط با سرور برقرار نشد. دوباره تلاش کنید."
+      : "اینترنت قطع است. تغییرات ذخیره نشد؛ بعد از وصل شدن دوباره تلاش کنید.");
+  }
+}
+
 export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const send = () =>
-    fetch(path, {
+    fetchOrOffline(path, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       credentials: "same-origin",
       headers: {
@@ -63,7 +78,7 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
 
   let res = await send();
   if (res.status === 401 && !path.startsWith("/api/v1/auth/")) {
-    const s = await refresh();
+    const s = await refresh(); // throws on network/rate-limit: the caller shows the error, the user stays signed in
     if (!s) {
       applySession(null);
       onSignedOut();

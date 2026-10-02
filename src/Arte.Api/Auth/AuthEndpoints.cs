@@ -19,7 +19,7 @@ public static class AuthEndpoints
 
     public static void MapAuth(this IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/api/v1/auth").RequireRateLimiting("auth");
+        var g = app.MapGroup("/api/v1/auth");
 
         g.MapPost("/otp/request", async (OtpRequest req, OtpService otp, HttpContext http, CancellationToken ct) =>
         {
@@ -32,7 +32,7 @@ public static class AuthEndpoints
                 OtpRequestResult.TooSoon => Results.Problem(statusCode: 429, title: "کمی صبر کنید و دوباره درخواست دهید."),
                 _ => Results.Problem(statusCode: 429, title: "تعداد درخواست‌ها زیاد است. بعداً تلاش کنید."),
             };
-        });
+        }).RequireRateLimiting("auth");
 
         g.MapPost("/otp/verify", async (OtpVerify req, OtpService otp, ArteDbContext db, TokenService tokens,
             Audit audit, IClock clock, HttpContext http, IOptions<JwtOptions> jwt, CancellationToken ct) =>
@@ -56,7 +56,7 @@ public static class AuthEndpoints
             var issued = await tokens.IssueAsync(user.Id, selected, ct);
             SetRefreshCookie(http, issued, jwt.Value);
             return Results.Ok(ToSession(issued, selected, memberships));
-        });
+        }).RequireRateLimiting("auth");
 
         g.MapPost("/password", async (PasswordLogin req, ArteDbContext db, TokenService tokens, Audit audit, IClock clock,
             HttpContext http, IOptions<JwtOptions> jwt, IConfiguration config, CancellationToken ct) =>
@@ -101,7 +101,7 @@ public static class AuthEndpoints
             var issued = await tokens.IssueAsync(user.Id, selected, ct);
             SetRefreshCookie(http, issued, jwt.Value);
             return Results.Ok(ToSession(issued, selected, memberships));
-        });
+        }).RequireRateLimiting("auth");
 
         g.MapPost("/refresh", async (ArteDbContext db, TokenService tokens, HttpContext http,
             IOptions<JwtOptions> jwt, IConfiguration config, CancellationToken ct) =>
@@ -126,7 +126,7 @@ public static class AuthEndpoints
 
             SetRefreshCookie(http, issued, jwt.Value);
             return Results.Ok(ToSession(issued, selected, await ActiveMemberships(db, issued.UserId, ct)));
-        });
+        }).RequireRateLimiting("session");
 
         g.MapPost("/select-tenant", async (SelectTenant req, RequestUser me, ArteDbContext db, TokenService tokens,
             HttpContext http, IOptions<JwtOptions> jwt, CancellationToken ct) =>
@@ -141,7 +141,7 @@ public static class AuthEndpoints
             var issued = await tokens.IssueAsync(me.RequiredUserId, membership, ct);
             SetRefreshCookie(http, issued, jwt.Value);
             return Results.Ok(ToSession(issued, membership, await ActiveMemberships(db, me.RequiredUserId, ct)));
-        }).RequireAuthorization();
+        }).RequireAuthorization().RequireRateLimiting("session");
 
         g.MapPost("/logout", async (TokenService tokens, HttpContext http, CancellationToken ct) =>
         {
@@ -149,7 +149,7 @@ public static class AuthEndpoints
                 await tokens.RevokeFamilyByTokenAsync(presented, ct);
             ClearRefreshCookie(http);
             return Results.NoContent();
-        });
+        }).RequireRateLimiting("session");
     }
 
     private sealed record ActiveMembership(Membership Membership, string TenantName);

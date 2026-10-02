@@ -13,6 +13,22 @@ public static class CaseRelations
     public static readonly IReadOnlySet<string> All = new HashSet<string> { Comeback, FollowUp };
 }
 
+/// <summary>Why work on a case is stopped. Shown to people instead of a bare "waiting".</summary>
+public static class WaitReasons
+{
+    public const string CustomerApproval = "customer_approval";   // منتظر تأیید هزینه توسط مشتری
+    public const string CustomerParts = "customer_parts";         // منتظر قطعه‌ای که مشتری می‌آورد
+    public const string ShopParts = "shop_parts";                 // منتظر تأمین قطعه توسط تعمیرگاه
+    public const string OwnerDecision = "owner_decision";         // منتظر تصمیم استاد
+    public const string Payment = "payment";                      // منتظر پرداخت
+    public const string Customer = "customer";                    // منتظر مشتری (پاسخ، آوردن وسیله…)
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>
+        { CustomerApproval, CustomerParts, ShopParts, OwnerDecision, Payment, Customer };
+
+    public static readonly IReadOnlySet<string> Parts = new HashSet<string> { CustomerParts, ShopParts };
+}
+
 public static class BodyStatuses
 {
     public const string Ok = "ok";
@@ -52,6 +68,9 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     /// <summary>ok | damaged, null = not checked.</summary>
     public string? BodyStatus { get; set; }
     public string? BodyNotes { get; set; }
+
+    /// <summary>Why the job is stopped (any stage), null when it is moving. See WaitReasons.</summary>
+    public string? WaitReason { get; set; }
 
     public string CustodyStatus { get; set; } = CustodyStatuses.InShop;
     /// <summary>What came in with the motorcycle: helmet, key, papers, visible damage…</summary>
@@ -98,4 +117,5 @@ public static class CaseEventTypes
     public const string Deleted = "case.deleted";
     public const string Restored = "case.restored";
     public const string CustodyChanged = "case.custody_changed";
+    public const string WaitChanged = "case.wait_changed";
 }

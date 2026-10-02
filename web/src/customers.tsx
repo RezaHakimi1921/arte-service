@@ -77,7 +77,9 @@ export function Customers({ canEdit }: { canEdit: boolean }) {
             </button>
           </li>
         ))}
-        {rows.length === 0 && <li className="empty muted">مشتری‌ای پیدا نشد.</li>}
+        {rows.length === 0 && (q.trim()
+          ? <li className="empty muted">مشتری‌ای با این مشخصات پیدا نشد.</li>
+          : <li className="empty-state"><h3>هنوز مشتری‌ای ثبت نشده</h3><p className="muted">مشتری‌ها هنگام پذیرش خودکار ثبت می‌شوند؛ این‌جا سابقه هر مشتری و وسایلش را می‌بینید.</p></li>)}
       </ul>
       {canEdit && (
         <button className="link trash-link" onClick={() => setShowTrash(true)}>سطل بازیافت مشتریان</button>
