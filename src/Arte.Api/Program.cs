@@ -5,6 +5,7 @@ using Arte.Api.Billing;
 using Arte.Api.Cases;
 using Arte.Api.Customers;
 using Arte.Api.Options;
+using Arte.Api.Reports;
 using Arte.Api.Security;
 using Arte.Api.Sms;
 using Arte.Api.Staff;
@@ -143,6 +144,8 @@ app.MapCustomers();
 app.MapWorkflows();
 app.MapCases();
 app.MapBilling();
+app.MapAttachments();
+app.MapReports();
 
 if (config.GetValue("Database:MigrateOnStartup", false))
 {

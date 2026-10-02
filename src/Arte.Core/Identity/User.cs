@@ -29,6 +29,11 @@ public sealed class Membership : ITenantOwned
     public string PayModel { get; set; } = PayModels.None;
     public decimal? CommissionPercent { get; set; }
     public long? FixedMonthlyRials { get; set; }
+    /// <summary>none | percent | fixed_per_case (see Billing.CommissionTypes).</summary>
+    public string CommissionType { get; set; } = "none";
+    public long? CommissionFixedRials { get; set; }
+    /// <summary>case_total | labor | labor_plus_parts_profit (see Billing.CommissionBases).</summary>
+    public string CommissionBase { get; set; } = "case_total";
     public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
 

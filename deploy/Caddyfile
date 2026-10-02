@@ -23,8 +23,9 @@
 		-Server
 	}
 
+	# Photos are up to 6 MB (compressed on the phone first); everything else stays small at the API.
 	request_body {
-		max_size 2MB
+		max_size 8MB
 	}
 
 	handle /api/* {

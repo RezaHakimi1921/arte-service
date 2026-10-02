@@ -50,6 +50,8 @@ services:
         aliases: [arte-api]
     read_only: true
     tmpfs: ["/tmp"]
+    volumes:
+      - uploads:/app/uploads
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
@@ -82,3 +84,4 @@ networks:
 
 volumes:
   db_data:
+  uploads:

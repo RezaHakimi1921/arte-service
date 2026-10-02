@@ -86,6 +86,7 @@ public static class BillingEndpoints
             AddedAt = now,
             UpdatedAt = now,
         };
+        if (PriceError(item) is { } priceError) return priceError;
         db.CaseItems.Add(item);
         AddEvent(db, c, CaseEventTypes.ItemAdded, me.RequiredUserId, now,
             new { item.Kind, item.Title, item.Quantity, item.Supplier, item.Status, Total = item.LineTotalRials });
@@ -116,6 +117,7 @@ public static class BillingEndpoints
         if (req.PerformedBy is not null) item.PerformedBy = req.PerformedBy;
         if (req.WarrantyDays is not null) item.WarrantyDays = req.WarrantyDays == 0 ? null : req.WarrantyDays;
         item.UpdatedAt = clock.UtcNow;
+        if (PriceError(item) is { } priceError) return priceError;
 
         AddEvent(db, c, CaseEventTypes.ItemUpdated, me.RequiredUserId, item.UpdatedAt,
             new { item.Title, item.Quantity, item.Status, item.Supplier, Total = item.LineTotalRials });
@@ -225,6 +227,7 @@ public static class BillingEndpoints
     private static async Task<IResult> CreateCatalogAsync(CatalogInput req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
     {
         var errors = ValidateCatalog(req, isNew: true);
+        if (req.DefaultCostRials is { } dc && dc > (req.DefaultPriceRials ?? 0)) errors["defaultCostRials"] = ["قیمت خرید نمی‌تواند از قیمت فروش بیشتر باشد."];
         if (errors.Count > 0) return Results.ValidationProblem(errors);
         var item = new CatalogItem
         {
@@ -322,6 +325,12 @@ public static class BillingEndpoints
         var paysBy = payments.ToLookup(x => x.CaseId);
         return caseIds.ToDictionary(id => id, id => CaseMoney.Of(itemsBy[id], paysBy[id]).BalanceRials);
     }
+
+    /// <summary>A shop part bought for more than it is sold is almost always a typo (spec 08 R4).</summary>
+    private static IResult? PriceError(CaseItem item) =>
+        item.Supplier == Suppliers.Shop && item.UnitCostRials is { } cost && cost > item.UnitPriceRials
+            ? Results.ValidationProblem(new Dictionary<string, string[]> { ["unitCostRials"] = ["قیمت خرید نمی‌تواند از قیمت فروش بیشتر باشد."] })
+            : null;
 
     private static bool CanEditMoney(Membership m, Case c) => CaseAccess.CanWorkOn(m, c) || m.Has(Permissions.CasesCreate);
 

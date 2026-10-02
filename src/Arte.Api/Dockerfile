@@ -14,6 +14,10 @@ COPY --from=build /app .
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_gcServer=0
+# Photos live in a volume; the folder exists in the image owned by the app user,
+# so a fresh named volume inherits that ownership.
+RUN mkdir -p /app/uploads && chown $APP_UID /app/uploads
+ENV Storage__Root=/app/uploads
 # Built-in non-root user of the .NET images.
 USER $APP_UID
 EXPOSE 8080

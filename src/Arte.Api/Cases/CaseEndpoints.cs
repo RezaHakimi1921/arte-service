@@ -204,6 +204,8 @@ public static class CaseEndpoints
             Assignee = assignee, ParentCase = parent,
             c.WarrantyUntil, c.CreditDueAt,
             Billing = await BillingEndpoints.MoneyView(db, c.Id, me, ct),
+            Photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id).OrderBy(a => a.CreatedAt)
+                .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt }).ToListAsync(ct),
             Transitions = allowed,
             CanEdit = CaseAccess.CanWorkOn(me, c) || me.Has(Permissions.CasesCreate),
             CanManage = me.Has(Permissions.CasesCreate),

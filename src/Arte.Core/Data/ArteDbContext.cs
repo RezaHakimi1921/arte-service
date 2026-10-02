@@ -34,6 +34,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<CaseItem> CaseItems => Set<CaseItem>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
+    public DbSet<CaseAttachment> CaseAttachments => Set<CaseAttachment>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -63,6 +64,8 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Role).HasMaxLength(20);
             e.Property(x => x.PayModel).HasMaxLength(20);
             e.Property(x => x.CommissionPercent).HasPrecision(5, 2);
+            e.Property(x => x.CommissionType).HasMaxLength(20).HasDefaultValue("none");
+            e.Property(x => x.CommissionBase).HasMaxLength(30).HasDefaultValue("case_total");
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -200,6 +203,16 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasIndex(x => new { x.TenantId, x.PaidAt });
             e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<CaseAttachment>(e =>
+        {
+            e.Property(x => x.StageKey).HasMaxLength(40);
+            e.Property(x => x.ContentType).HasMaxLength(40);
+            e.Property(x => x.StoragePath).HasMaxLength(200);
+            e.Property(x => x.Caption).HasMaxLength(200);
+            e.HasIndex(x => new { x.TenantId, x.CaseId });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<CatalogItem>(e =>
