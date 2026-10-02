@@ -5,7 +5,7 @@ export type Membership = { tenantId: string; tenantName: string; role: string };
 export type Session = { accessToken: string; expiresAt: string; tenantId: string | null; memberships: Membership[] };
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public fields: Record<string, string[]> = {}) {
+  constructor(public status: number, message: string, public fields: Record<string, string[]> = {}, public body: Record<string, unknown> | null = null) {
     super(message);
   }
 }
@@ -29,7 +29,7 @@ async function parse(res: Response) {
   if (!res.ok) {
     const fields: Record<string, string[]> = body?.errors ?? {};
     const message = body?.title ?? Object.values(fields)[0]?.[0] ?? "خطا در ارتباط با سرور";
-    throw new ApiError(res.status, message, fields);
+    throw new ApiError(res.status, message, fields, body);
   }
   return body;
 }

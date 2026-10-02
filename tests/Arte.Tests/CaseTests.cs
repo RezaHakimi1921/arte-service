@@ -154,6 +154,45 @@ public sealed class CaseTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Intake_with_services_fuel_body_and_vehicle_details_but_no_plate()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            newAsset = new { title = "پژو ۲۰۶", kind = "car", attributes = new Dictionary<string, string> { ["brand"] = "پژو", ["model"] = "۲۰۶", ["year"] = "1398" } },
+            requestedServices = new[] { "تعویض روغن", "ترمز" },
+            fuelLevel = 2, bodyStatus = "damaged", bodyNotes = "خط روی درب جلو",
+        }));
+        var c = await Json(await owner.GetAsync($"/api/v1/cases/{created.GetProperty("id")}"));
+        Assert.Equal(2, c.GetProperty("requestedServices").GetArrayLength());
+        Assert.Equal(2, c.GetProperty("fuelLevel").GetInt32());
+        Assert.Equal("damaged", c.GetProperty("bodyStatus").GetString());
+        Assert.Equal("پژو", c.GetProperty("asset").GetProperty("attributes").GetProperty("brand").GetString());
+
+        // Work cannot start before the plate is entered…
+        var start = await owner.PostAsJsonAsync($"/api/v1/cases/{c.GetProperty("id")}/transitions/{Primary(c)}", new { });
+        Assert.Equal(HttpStatusCode.Conflict, start.StatusCode);
+        Assert.Contains("plate_required", await start.Content.ReadAsStringAsync());
+
+        // …and can once it is.
+        var assetId = c.GetProperty("asset").GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await owner.PatchAsJsonAsync($"/api/v1/assets/{assetId}", new { identifier = "12ب345-11" })).StatusCode);
+        c = await Run(owner, c, Primary(c));
+        Assert.Equal("diagnosing", StageKey(c));
+    }
+
+    [Fact]
+    public async Task Intake_needs_a_service_or_a_description()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var res = await owner.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile() });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var bad = await owner.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), request = "x", fuelLevel = 9 });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
+
+    [Fact]
     public async Task Asset_of_another_customer_is_refused()
     {
         var (owner, _) = await api.NewBusinessAsync();

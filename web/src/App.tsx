@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
-import { CaseDetail, CasesView, DashboardView, NewCaseView, type CaseFilter } from "./cases";
+import { CaseDetail, CasesView, DashboardView, type CaseFilter } from "./cases";
+import { NewCaseView } from "./intake";
 import { Customers } from "./customers";
 import { Field, MobileInput } from "./ui";
 
@@ -130,7 +131,7 @@ function OtpLogin({ onDone, onPassword }: { onDone: (s: Session) => void; onPass
       <div className="brand">
         <img src="/icon.svg" alt="" width={56} height={56} />
         <h1>آرته سرویس</h1>
-        <p className="muted">مدیریت پرونده‌های تعمیرگاه</p>
+        <p className="muted">مدیریت پذیرش و پرونده‌های تعمیرگاه</p>
       </div>
       <form className="card" onSubmit={submit} noValidate>
         {step === "mobile" ? (
@@ -199,7 +200,7 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
         </section>
       )}
       <form className="card" onSubmit={create}>
-        <h2>ثبت موتورسازی جدید</h2>
+        <h2>ثبت تعمیرگاه جدید</h2>
         <Field label="نام مغازه">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required />
         </Field>
@@ -248,7 +249,8 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
 
   let page;
   if (tab === "cases" && newCase)
-    page = <NewCaseView canAssign={can("cases.assign")} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)} />;
+    page = <NewCaseView canAssign={can("cases.assign")} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
+      onOpenStaff={() => go(can("staff.manage") ? "staff" : "more")} />;
   else if (tab === "cases" && caseId)
     page = <CaseDetail id={caseId} onBack={() => setCaseId(null)} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
   else if (tab === "cases")

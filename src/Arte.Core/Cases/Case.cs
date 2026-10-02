@@ -13,6 +13,12 @@ public static class CaseRelations
     public static readonly IReadOnlySet<string> All = new HashSet<string> { Comeback, FollowUp };
 }
 
+public static class BodyStatuses
+{
+    public const string Ok = "ok";
+    public const string Damaged = "damaged";
+}
+
 public static class CustodyStatuses
 {
     public const string InShop = "in_shop";
@@ -38,6 +44,14 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     public int? OdometerKm { get; set; }
     public long? EstimatedAmountRials { get; set; }
     public DateTimeOffset? PromisedAt { get; set; }
+
+    /// <summary>Services the customer asked for / problems they reported, picked from a list.</summary>
+    public string[] RequestedServices { get; set; } = [];
+    /// <summary>0 empty … 4 full, null = not checked.</summary>
+    public short? FuelLevel { get; set; }
+    /// <summary>ok | damaged, null = not checked.</summary>
+    public string? BodyStatus { get; set; }
+    public string? BodyNotes { get; set; }
 
     public string CustodyStatus { get; set; } = CustodyStatuses.InShop;
     /// <summary>What came in with the motorcycle: helmet, key, papers, visible damage…</summary>

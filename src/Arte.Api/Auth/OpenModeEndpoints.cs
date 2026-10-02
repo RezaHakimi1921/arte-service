@@ -16,7 +16,7 @@ namespace Arte.Api.Auth;
 public static class OpenModeEndpoints
 {
     public const string OwnerMobile = "09000000000";
-    public const string BusinessName = "موتورسازی من";
+    public const string BusinessName = "کسب‌وکار من";
 
     public static void MapOpenMode(this IEndpointRouteBuilder app)
     {

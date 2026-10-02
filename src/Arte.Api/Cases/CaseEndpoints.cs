@@ -12,16 +12,18 @@ namespace Arte.Api.Cases;
 
 public static class CaseEndpoints
 {
-    public sealed record NewAsset(string? Title, string? Identifier);
+    public sealed record NewAsset(string? Title, string? Identifier, string? Kind, Dictionary<string, string>? Attributes);
 
     public sealed record CreateCase(
         string? Mobile, string? CustomerName, Guid? AssetId, NewAsset? NewAsset,
         string? Request, int? OdometerKm, Guid? AssigneeId, Guid? ParentCaseId, string? Relation,
-        Dictionary<string, string>? Intake, DateTimeOffset? PromisedAt, long? EstimatedAmountRials);
+        Dictionary<string, string>? Intake, DateTimeOffset? PromisedAt, long? EstimatedAmountRials,
+        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes);
 
     public sealed record UpdateCase(
         string? Request, string? Diagnosis, int? OdometerKm, long? EstimatedAmountRials,
-        DateTimeOffset? PromisedAt, string? CustodyStatus, Dictionary<string, string>? Intake);
+        DateTimeOffset? PromisedAt, string? CustodyStatus, Dictionary<string, string>? Intake,
+        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes);
 
     public sealed record RunTransition(string? Reason);
     public sealed record Assign(Guid? AssigneeId);
@@ -105,7 +107,8 @@ public static class CaseEndpoints
                 CustomerName = r.cu.FullName, CustomerMobile = r.cu.Mobile,
                 AssetTitle = r.a == null ? null : r.a.Title,
                 Stage = new { r.s.Id, r.s.Key, r.s.Name, r.s.Category, r.s.Color, r.s.IsTerminal },
-                r.AssigneeName, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request,
+                AssetIdentifier = r.a == null ? null : r.a.Identifier,
+                r.AssigneeName, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices,
             })
             .ToListAsync(ct);
         return Results.Ok(items);
@@ -123,7 +126,7 @@ public static class CaseEndpoints
         var customer = await db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking()
             .Where(x => x.Id == c.CustomerId).Select(x => new { x.Id, x.FullName, x.Mobile }).SingleAsync(ct);
         var asset = c.AssetId is null ? null : await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking()
-            .Where(x => x.Id == c.AssetId).Select(x => new { x.Id, x.Title, x.Identifier }).SingleOrDefaultAsync(ct);
+            .Where(x => x.Id == c.AssetId).Select(x => new { x.Id, x.Title, x.Identifier, x.Kind, x.Attributes }).SingleOrDefaultAsync(ct);
         var stages = await db.Stages.AsNoTracking().Where(s => s.WorkflowId == c.WorkflowId).ToDictionaryAsync(s => s.Id, ct);
         var stage = stages[c.StageId];
         var transitions = await db.Transitions.AsNoTracking()
@@ -154,11 +157,14 @@ public static class CaseEndpoints
 
         return new
         {
-            c.Id, c.Number, c.Request, c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
+            c.Id, c.Number, c.Request, c.RequestedServices, c.FuelLevel, c.BodyStatus, c.BodyNotes,
+            c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
             c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation,
             c.OpenedAt, c.StageEnteredAt, c.ClosedAt,
             Stage = new { stage.Id, stage.Key, stage.Name, stage.Category, stage.Color, stage.IsTerminal },
-            Customer = customer, Asset = asset, Assignee = assignee, ParentCase = parent,
+            Customer = customer,
+            Asset = asset is null ? null : new { asset.Id, asset.Title, asset.Identifier, asset.Kind, Attributes = asset.Attributes?.RootElement },
+            Assignee = assignee, ParentCase = parent,
             Transitions = allowed,
             CanEdit = CaseAccess.CanWorkOn(me, c) || me.Has(Permissions.CasesCreate),
             CanManage = me.Has(Permissions.CasesCreate),
@@ -225,13 +231,22 @@ public static class CaseEndpoints
     {
         var errors = new Dictionary<string, string[]>();
         if (!Mobile.TryNormalize(req.Mobile, out var mobile)) errors["mobile"] = ["شماره موبایل معتبر نیست."];
-        var request = req.Request?.Trim();
-        if (string.IsNullOrEmpty(request) || request.Length > 2000) errors["request"] = ["شرح مشکل لازم است (حداکثر ۲۰۰۰ حرف)."];
+        var request = req.Request?.Trim() ?? "";
+        var services = CleanServices(req.RequestedServices);
+        if (request.Length > 2000) errors["request"] = ["توضیحات حداکثر ۲۰۰۰ حرف."];
+        if (request.Length == 0 && services is not { Length: > 0 }) errors["request"] = ["حداقل یک سرویس انتخاب کنید یا توضیحی بنویسید."];
+        ValidateIntakeFields(errors, req.RequestedServices, req.FuelLevel, req.BodyStatus, req.BodyNotes);
         if (req.CustomerName is { Length: > 120 }) errors["customerName"] = ["نام حداکثر ۱۲۰ حرف."];
         if (req.OdometerKm is < 0 or > 2_000_000) errors["odometerKm"] = ["کیلومتر نامعتبر است."];
         if (req.EstimatedAmountRials is < 0) errors["estimatedAmountRials"] = ["مبلغ نامعتبر است."];
-        if (req.NewAsset is { } na && (string.IsNullOrWhiteSpace(na.Title) || na.Title.Length > 120 || na.Identifier is { Length: > 60 }))
-            errors["newAsset"] = ["مدل موتور لازم است (حداکثر ۱۲۰ حرف)."];
+        if (req.NewAsset is { } na)
+        {
+            if (string.IsNullOrWhiteSpace(na.Title) || na.Title.Length > 120 || na.Identifier is { Length: > 60 })
+                errors["newAsset"] = ["برند و مدل وسیله لازم است (حداکثر ۱۲۰ حرف)."];
+            if (na.Kind is not null && !AssetKinds.All.Contains(na.Kind)) errors["newAsset"] = ["نوع وسیله نامعتبر است."];
+            if (na.Attributes is { } at && (at.Count > 20 || at.Any(kv => kv.Key.Length is 0 or > 40 || kv.Value is null || kv.Value.Length > 100)))
+                errors["newAsset"] = ["اطلاعات تکمیلی وسیله نامعتبر است."];
+        }
         if (req.Relation is not null && !CaseRelations.All.Contains(req.Relation)) errors["relation"] = ["نوع ارتباط نامعتبر است."];
         if (ValidateIntake(req.Intake) is { } intakeError) errors["intake"] = [intakeError];
         if (errors.Count > 0) return Results.ValidationProblem(errors);
@@ -259,15 +274,16 @@ public static class CaseEndpoints
         if (req.AssetId is { } aid)
         {
             if (!await db.Assets.AnyAsync(a => a.Id == aid && a.CustomerId == customer.Id, ct))
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["assetId"] = ["این موتور متعلق به این مشتری نیست."] });
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["assetId"] = ["این وسیله متعلق به این مشتری نیست."] });
             assetId = aid;
         }
         else if (req.NewAsset is { } newAsset)
         {
             var asset = new Asset
             {
-                CustomerId = customer.Id, Kind = "motorcycle", Title = newAsset.Title!.Trim(),
-                Identifier = string.IsNullOrWhiteSpace(newAsset.Identifier) ? null : newAsset.Identifier.Trim(), CreatedAt = now,
+                CustomerId = customer.Id, Kind = newAsset.Kind ?? AssetKinds.Vehicle, Title = newAsset.Title!.Trim(),
+                Identifier = string.IsNullOrWhiteSpace(newAsset.Identifier) ? null : newAsset.Identifier.Trim(),
+                Attributes = ToJson(newAsset.Attributes), CreatedAt = now,
             };
             db.Assets.Add(asset);
             assetId = asset.Id;
@@ -295,14 +311,16 @@ public static class CaseEndpoints
         var c = new Case
         {
             Number = number, CustomerId = customer.Id, AssetId = assetId, WorkflowId = workflow.Id, StageId = firstStage.Id,
-            AssigneeId = req.AssigneeId, Request = request!, OdometerKm = req.OdometerKm,
+            AssigneeId = req.AssigneeId, Request = request, OdometerKm = req.OdometerKm,
+            RequestedServices = services ?? [], FuelLevel = req.FuelLevel,
+            BodyStatus = req.BodyStatus, BodyNotes = NullIfEmpty(req.BodyNotes),
             EstimatedAmountRials = req.EstimatedAmountRials, PromisedAt = req.PromisedAt?.ToUniversalTime(),
             IntakeChecklist = ToJson(req.Intake),
             ParentCaseId = req.ParentCaseId, Relation = req.ParentCaseId is null ? null : req.Relation ?? CaseRelations.Comeback,
             OpenedAt = now, StageEnteredAt = now, OpenedBy = userId,
         };
         db.Cases.Add(c);
-        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.OdometerKm, c.ParentCaseId });
+        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.OdometerKm, c.ParentCaseId });
         if (c.AssigneeId is not null) AddEvent(db, c, CaseEventTypes.Assigned, userId, now, new { To = await MemberName(db, c.AssigneeId.Value, ct) });
 
         await db.SaveChangesAsync(ct);
@@ -316,13 +334,15 @@ public static class CaseEndpoints
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
 
-        var managerFields = req.EstimatedAmountRials is not null || req.PromisedAt is not null || req.CustodyStatus is not null || req.Intake is not null;
+        var managerFields = req.EstimatedAmountRials is not null || req.PromisedAt is not null || req.CustodyStatus is not null || req.Intake is not null
+                            || req.FuelLevel is not null || req.BodyStatus is not null || req.BodyNotes is not null;
         if (managerFields && !m.Has(Permissions.CasesCreate)) return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
         if (!managerFields && !CaseAccess.CanWorkOn(m, c) && !m.Has(Permissions.CasesCreate))
             return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
 
         var errors = new Dictionary<string, string[]>();
-        if (req.Request is not null && (string.IsNullOrWhiteSpace(req.Request) || req.Request.Length > 2000)) errors["request"] = ["شرح مشکل لازم است (حداکثر ۲۰۰۰ حرف)."];
+        if (req.Request is { Length: > 2000 }) errors["request"] = ["توضیحات حداکثر ۲۰۰۰ حرف."];
+        ValidateIntakeFields(errors, req.RequestedServices, req.FuelLevel, req.BodyStatus, req.BodyNotes);
         if (req.Diagnosis is { Length: > 4000 }) errors["diagnosis"] = ["حداکثر ۴۰۰۰ حرف."];
         if (req.OdometerKm is < 0 or > 2_000_000) errors["odometerKm"] = ["کیلومتر نامعتبر است."];
         if (req.EstimatedAmountRials is < 0) errors["estimatedAmountRials"] = ["مبلغ نامعتبر است."];
@@ -332,6 +352,10 @@ public static class CaseEndpoints
 
         var changed = new Dictionary<string, object?>();
         if (req.Request is not null && req.Request.Trim() != c.Request) { c.Request = req.Request.Trim(); changed["request"] = c.Request; }
+        if (req.RequestedServices is not null) { c.RequestedServices = CleanServices(req.RequestedServices) ?? []; changed["requestedServices"] = c.RequestedServices; }
+        if (req.FuelLevel is not null && req.FuelLevel != c.FuelLevel) { c.FuelLevel = req.FuelLevel; changed["fuelLevel"] = c.FuelLevel; }
+        if (req.BodyStatus is not null && req.BodyStatus != c.BodyStatus) { c.BodyStatus = req.BodyStatus; changed["bodyStatus"] = c.BodyStatus; }
+        if (req.BodyNotes is not null && req.BodyNotes.Trim() != (c.BodyNotes ?? "")) { c.BodyNotes = NullIfEmpty(req.BodyNotes); changed["bodyNotes"] = c.BodyNotes; }
         if (req.Diagnosis is not null && req.Diagnosis.Trim() != (c.Diagnosis ?? "")) { c.Diagnosis = NullIfEmpty(req.Diagnosis); changed["diagnosis"] = c.Diagnosis; }
         if (req.OdometerKm is not null && req.OdometerKm != c.OdometerKm) { c.OdometerKm = req.OdometerKm; changed["odometerKm"] = c.OdometerKm; }
         if (req.EstimatedAmountRials is not null && req.EstimatedAmountRials != c.EstimatedAmountRials) { c.EstimatedAmountRials = req.EstimatedAmountRials; changed["estimatedAmountRials"] = c.EstimatedAmountRials; }
@@ -372,6 +396,13 @@ public static class CaseEndpoints
         var from = stages[t.FromStageId];
         var to = stages[t.ToStageId];
         if (!to.IsActive) return Results.Problem(statusCode: 409, title: "این مرحله غیرفعال است.");
+
+        // The plate may be filled in later, but work cannot start on a vehicle without one.
+        if (from.Category == StageCategories.Open && to.Category is StageCategories.Active or StageCategories.Waiting && c.AssetId is { } assetId
+            && await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter])
+                .AnyAsync(a => a.Id == assetId && (a.Identifier == null || a.Identifier == ""), ct))
+            return Results.Problem(statusCode: 409, title: "قبل از شروع کار، پلاک وسیله را ثبت کنید.",
+                extensions: new Dictionary<string, object?> { ["code"] = "plate_required", ["assetId"] = assetId });
 
         var now = clock.UtcNow;
         var userId = me.RequiredUserId;
@@ -478,6 +509,18 @@ public static class CaseEndpoints
 
     private static Task<string?> MemberName(ArteDbContext db, Guid membershipId, CancellationToken ct) =>
         db.Memberships.Where(m => m.Id == membershipId).Select(m => m.User!.DisplayName ?? m.User.Mobile).SingleOrDefaultAsync(ct);
+
+    private static string[]? CleanServices(string[]? services) =>
+        services?.Select(s => s.Trim()).Where(s => s.Length > 0).Distinct().ToArray();
+
+    private static void ValidateIntakeFields(Dictionary<string, string[]> errors, string[]? services, short? fuel, string? body, string? bodyNotes)
+    {
+        if (services is { } sv && (sv.Length > 20 || sv.Any(s => s is null || s.Length > 60)))
+            errors["requestedServices"] = ["حداکثر ۲۰ سرویس، هر کدام تا ۶۰ حرف."];
+        if (fuel is < 0 or > 4) errors["fuelLevel"] = ["میزان سوخت نامعتبر است."];
+        if (body is not null and not (BodyStatuses.Ok or BodyStatuses.Damaged)) errors["bodyStatus"] = ["وضعیت بدنه نامعتبر است."];
+        if (bodyNotes is { Length: > 500 }) errors["bodyNotes"] = ["حداکثر ۵۰۰ حرف."];
+    }
 
     private static string? ValidateIntake(Dictionary<string, string>? intake) =>
         intake is { } d && (d.Count > 30 || d.Any(kv => kv.Key.Length is 0 or > 40 || kv.Value is null || kv.Value.Length > 200))

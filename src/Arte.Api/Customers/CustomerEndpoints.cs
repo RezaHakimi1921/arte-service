@@ -110,7 +110,7 @@ public static class CustomerEndpoints
             var asset = new Asset
             {
                 CustomerId = id,
-                Kind = req.Kind ?? "motorcycle",
+                Kind = req.Kind ?? AssetKinds.Vehicle,
                 Title = req.Title!.Trim(),
                 Identifier = Clean(req.Identifier),
                 Attributes = ToJson(req.Attributes),
@@ -185,7 +185,7 @@ public static class CustomerEndpoints
                 .SingleOrDefaultAsync(a => a.Id == id && a.DeletedAt != null, ct);
             if (asset is null) return Results.NotFound();
             if (!await db.Customers.AnyAsync(c => c.Id == asset.CustomerId, ct))
-                return Results.Problem(statusCode: 409, title: "ابتدا مشتری این موتور را بازگردانید.");
+                return Results.Problem(statusCode: 409, title: "ابتدا مشتری این وسیله را بازگردانید.");
             asset.DeletedAt = null;
             asset.DeletedBy = null;
             await db.SaveChangesAsync(ct);
@@ -232,7 +232,7 @@ public static class CustomerEndpoints
         var errors = new Dictionary<string, string[]>();
         if (isNew && string.IsNullOrWhiteSpace(req.Title)) errors["title"] = ["مدل وسیله لازم است."];
         if (req.Title is { Length: > 120 }) errors["title"] = ["حداکثر ۱۲۰ حرف."];
-        if (req.Kind is not null and not "motorcycle") errors["kind"] = ["نوع وسیله پشتیبانی نمی‌شود."];
+        if (req.Kind is not null && !AssetKinds.All.Contains(req.Kind)) errors["kind"] = ["نوع وسیله پشتیبانی نمی‌شود."];
         if (req.Identifier is { Length: > 60 }) errors["identifier"] = ["حداکثر ۶۰ حرف."];
         if (req.Attributes is { } a && (a.Count > MaxAttributes || a.Any(kv => kv.Key.Length is 0 or > 40 || kv.Value is null || kv.Value.Length > 100)))
             errors["attributes"] = [$"حداکثر {MaxAttributes} ویژگی، کلید تا ۴۰ و مقدار تا ۱۰۰ حرف."];

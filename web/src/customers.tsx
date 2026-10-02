@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
+import { PlateView } from "./plate";
 import { Field, MobileInput } from "./ui";
 
 type CustomerRow = { id: string; mobile: string; fullName: string | null; assetCount: number };
@@ -158,7 +159,7 @@ function CustomerDetail({ id, canEdit, onBack, onDeleted }: {
         </div>
       )}
 
-      <h3>موتورها</h3>
+      <h3>وسایل نقلیه</h3>
       <ul className="list">
         {c.assets.map((a) =>
           editAssetId === a.id ? (
@@ -169,7 +170,7 @@ function CustomerDetail({ id, canEdit, onBack, onDeleted }: {
             <li key={a.id} className="row-static">
               <span>
                 {a.title}
-                {a.identifier && <span className="muted font-num"> · {a.identifier}</span>}
+                {a.identifier && <> <PlateView identifier={a.identifier} /></>}
               </span>
               {canEdit && (
                 <span className="row-actions">
@@ -180,13 +181,13 @@ function CustomerDetail({ id, canEdit, onBack, onDeleted }: {
             </li>
           ),
         )}
-        {c.assets.length === 0 && <li className="empty muted">هنوز موتوری ثبت نشده.</li>}
+        {c.assets.length === 0 && <li className="empty muted">هنوز وسیله‌ای ثبت نشده.</li>}
       </ul>
       {canEdit &&
         (addingAsset ? (
           <AssetForm customerId={c.id} onDone={() => { setAddingAsset(false); load(); }} />
         ) : (
-          <button className="primary block" onClick={() => setAddingAsset(true)}>+ افزودن موتور</button>
+          <button className="primary block" onClick={() => setAddingAsset(true)}>+ افزودن وسیله نقلیه</button>
         ))}
     </section>
   );
@@ -246,10 +247,10 @@ function AssetForm({ customerId, asset, onDone }: { customerId: string; asset?: 
 
   return (
     <form className="card" onSubmit={submit} noValidate>
-      <Field label="مدل موتور" error={errors.title ?? errors.form}>
-        <input placeholder="مثلاً هوندا CG 125" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required autoFocus />
+      <Field label="برند و مدل" error={errors.title ?? errors.form}>
+        <input placeholder="مثلاً پژو ۲۰۶" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required autoFocus />
       </Field>
-      <Field label="پلاک یا شماره موتور" error={errors.identifier}>
+      <Field label="پلاک یا شناسه" error={errors.identifier}>
         <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} maxLength={60} />
       </Field>
       <div className="actions">

@@ -148,6 +148,8 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Request).HasMaxLength(2000);
             e.Property(x => x.Diagnosis).HasMaxLength(4000);
             e.Property(x => x.CustodyStatus).HasMaxLength(20);
+            e.Property(x => x.BodyStatus).HasMaxLength(20);
+            e.Property(x => x.BodyNotes).HasMaxLength(500);
             e.Property(x => x.Relation).HasMaxLength(20);
             e.Property(x => x.Version).IsRowVersion();
             e.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);

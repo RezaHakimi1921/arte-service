@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
-import { Field, MobileInput } from "./ui";
+import { PlateInput, PlateView, emptyPlate } from "./plate";
+import { Field } from "./ui";
+import { FUEL_LEVELS, formatPlate, type PlateParts } from "./vehicles";
 
 /* ───────── types ───────── */
 
 type StageRef = { id: string; key: string; name: string; category: string; color: string; isTerminal: boolean };
 type CaseRow = {
   id: string; number: number; customerName: string | null; customerMobile: string; assetTitle: string | null;
-  stage: StageRef; assigneeName: string | null; stageEnteredAt: string; promisedAt: string | null; request: string;
+  assetIdentifier: string | null; stage: StageRef; assigneeName: string | null; stageEnteredAt: string; promisedAt: string | null;
+  request: string; requestedServices: string[];
 };
 type TransitionView = { id: string; label: string; isPrimary: boolean; requiresReason: boolean; toStage: { name: string; category: string; color: string } };
 type TimelineEntry = { id: number; type: string; occurredAt: string; actor: string | null; data: Record<string, unknown> | null };
 type CaseDetailView = {
-  id: string; number: number; request: string; diagnosis: string | null; odometerKm: number | null;
+  id: string; number: number; request: string; requestedServices: string[]; fuelLevel: number | null;
+  bodyStatus: string | null; bodyNotes: string | null; diagnosis: string | null; odometerKm: number | null;
   estimatedAmountRials: number | null; promisedAt: string | null; custodyStatus: string; intake: Record<string, string> | null;
   relation: string | null; openedAt: string; stageEnteredAt: string; closedAt: string | null;
   stage: StageRef; customer: { id: string; fullName: string | null; mobile: string };
-  asset: { id: string; title: string; identifier: string | null } | null;
+  asset: { id: string; title: string; identifier: string | null; attributes: Record<string, string> | null } | null;
   assignee: { id: string; name: string } | null; parentCase: { id: string; number: number } | null;
   transitions: TransitionView[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
 };
@@ -64,7 +68,7 @@ export function DashboardView({ onOpenCases, onNewCase, canCreate }: {
 
   return (
     <section>
-      {canCreate && <button className="primary block big" onClick={onNewCase}>+ پذیرش موتور جدید</button>}
+      {canCreate && <button className="primary block big" onClick={onNewCase}>+ پذیرش جدید</button>}
       <div className="tiles">
         {tiles.map((t) => (
           <button key={t.label} className={`tile ${t.tone ?? ""}`} onClick={() => onOpenCases(t.filter)}>
@@ -136,7 +140,7 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
   return (
     <section>
       <div className="toolbar">
-        <input type="search" placeholder="شماره پرونده، نام، موبایل یا موتور" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جستجوی پرونده" />
+        <input type="search" placeholder="شماره پرونده، نام، موبایل، پلاک یا مدل" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جستجوی پرونده" />
         {canCreate && <button className="primary" onClick={onNewCase}>+ پرونده</button>}
       </div>
       <div className="chips" role="tablist">
@@ -156,8 +160,9 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
                 <StageChip stage={c.stage} />
               </span>
               <span className="case-row-title">{c.customerName ?? c.customerMobile}{c.assetTitle && <span className="muted"> · {c.assetTitle}</span>}</span>
+              {c.assetIdentifier && <PlateView identifier={c.assetIdentifier} />}
               <span className="case-row-sub muted">
-                {c.request}
+                {[...c.requestedServices, c.request].filter(Boolean).join("، ")}
               </span>
               <span className="case-row-meta muted small">
                 {c.assigneeName ? `مسئول: ${c.assigneeName}` : "بدون مسئول"} · {ago(c.stageEnteredAt)} در این مرحله
@@ -171,179 +176,6 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
   );
 }
 
-/* ───────── new case ───────── */
-
-type CustomerHit = { id: string; mobile: string; fullName: string | null };
-type CustomerFull = { id: string; fullName: string | null; assets: { id: string; title: string; identifier: string | null }[] };
-type ParentSuggestion = { id: string; number: number; closedAt: string; request: string } | null;
-
-const INTAKE_ITEMS = ["کلاه کاسکت", "سوئیچ", "مدارک", "قفل", "باک پر"];
-
-export function NewCaseView({ canAssign, onCreated, onCancel }: { canAssign: boolean; onCreated: (id: string) => void; onCancel: () => void }) {
-  const [mobile, setMobile] = useState("");
-  const [customer, setCustomer] = useState<CustomerFull | null>(null);
-  const [customerName, setCustomerName] = useState("");
-  const [assetId, setAssetId] = useState<string | "new">("new");
-  const [assetTitle, setAssetTitle] = useState("");
-  const [plate, setPlate] = useState("");
-  const [request, setRequest] = useState("");
-  const [odometer, setOdometer] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
-  const [staff, setStaff] = useState<Assignable[]>([]);
-  const [parent, setParent] = useState<ParentSuggestion>(null);
-  const [linkParent, setLinkParent] = useState(true);
-  const [intake, setIntake] = useState<Record<string, boolean>>({});
-  const [condition, setCondition] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (canAssign) api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => {});
-  }, [canAssign]);
-
-  // Once the number is complete, find the customer and their motorcycles.
-  useEffect(() => {
-    setCustomer(null);
-    setAssetId("new");
-    if (mobile.length !== 11) return;
-    api<CustomerHit[]>(`/api/v1/customers?q=${mobile}`)
-      .then(async (hits) => {
-        const hit = hits.find((h) => h.mobile === mobile);
-        if (!hit) return;
-        const full = await api<CustomerFull>(`/api/v1/customers/${hit.id}`);
-        setCustomer(full);
-        if (full.assets.length > 0) setAssetId(full.assets[full.assets.length - 1].id);
-      })
-      .catch(() => {});
-  }, [mobile]);
-
-  useEffect(() => {
-    setParent(null);
-    if (assetId === "new") return;
-    api<ParentSuggestion>(`/api/v1/cases/suggest-parent?assetId=${assetId}`).then(setParent).catch(() => {});
-  }, [assetId]);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setErrors({});
-    const intakeData: Record<string, string> = {};
-    for (const item of INTAKE_ITEMS) if (intake[item]) intakeData[item] = "دارد";
-    if (condition.trim()) intakeData["وضعیت ظاهری"] = condition.trim();
-    try {
-      const created = await api<{ id: string }>("/api/v1/cases", {
-        body: {
-          mobile,
-          customerName: customer?.fullName ? undefined : customerName || undefined,
-          assetId: assetId === "new" ? undefined : assetId,
-          newAsset: assetId === "new" && assetTitle.trim() ? { title: assetTitle, identifier: plate || null } : undefined,
-          request,
-          odometerKm: odometer ? Number(odometer) : undefined,
-          assigneeId: assigneeId || undefined,
-          parentCaseId: parent && linkParent ? parent.id : undefined,
-          intake: Object.keys(intakeData).length ? intakeData : undefined,
-        },
-      });
-      onCreated(created.id);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        const f = Object.fromEntries(Object.entries(err.fields).map(([k, v]) => [k, v[0]]));
-        setErrors(Object.keys(f).length ? f : { form: err.message });
-      } else setErrors({ form: "خطا در ارتباط با سرور" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form className="card" onSubmit={submit} noValidate>
-      <h2>پذیرش موتور</h2>
-      <Field label="موبایل مشتری" error={errors.mobile}>
-        <MobileInput value={mobile} onChange={setMobile} autoFocus />
-      </Field>
-
-      {customer ? (
-        <p className="muted">مشتری: <strong>{customer.fullName ?? "بدون نام"}</strong></p>
-      ) : (
-        mobile.length === 11 && (
-          <Field label="نام مشتری (مشتری جدید)" error={errors.customerName}>
-            <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} maxLength={120} />
-          </Field>
-        )
-      )}
-
-      {customer && customer.assets.length > 0 && (
-        <div className="field">
-          <span className="label">موتور</span>
-          <div className="chips">
-            {customer.assets.map((a) => (
-              <button type="button" key={a.id} className={`chip-button${assetId === a.id ? " active" : ""}`} onClick={() => setAssetId(a.id)}>
-                {a.title}{a.identifier ? ` · ${a.identifier}` : ""}
-              </button>
-            ))}
-            <button type="button" className={`chip-button${assetId === "new" ? " active" : ""}`} onClick={() => setAssetId("new")}>+ موتور دیگر</button>
-          </div>
-        </div>
-      )}
-
-      {assetId === "new" && (
-        <>
-          <Field label="مدل موتور" error={errors.newAsset}>
-            <input placeholder="مثلاً هوندا CG 125" value={assetTitle} onChange={(e) => setAssetTitle(e.target.value)} maxLength={120} />
-          </Field>
-          <Field label="پلاک یا شماره موتور">
-            <input value={plate} onChange={(e) => setPlate(e.target.value)} maxLength={60} />
-          </Field>
-        </>
-      )}
-
-      {parent && (
-        <label className="check">
-          <input type="checkbox" checked={linkParent} onChange={(e) => setLinkParent(e.target.checked)} />
-          <span>برگشتی پرونده <span className="font-num">#{faNumber.format(parent.number)}</span> ({ago(parent.closedAt)} پیش تحویل شد)</span>
-        </label>
-      )}
-
-      <Field label="شرح مشکل" error={errors.request}>
-        <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={2000} rows={3} placeholder="مثلاً هنگام گرم شدن خاموش می‌شود" />
-      </Field>
-      <Field label="کیلومتر" error={errors.odometerKm}>
-        <input inputMode="numeric" dir="ltr" className="font-num" value={odometer} onChange={(e) => setOdometer(e.target.value.replace(/\D/g, "").slice(0, 7))} />
-      </Field>
-
-      <div className="field">
-        <span className="label">همراه موتور</span>
-        <div className="chips">
-          {INTAKE_ITEMS.map((item) => (
-            <button type="button" key={item} className={`chip-button${intake[item] ? " active" : ""}`} aria-pressed={!!intake[item]}
-              onClick={() => setIntake({ ...intake, [item]: !intake[item] })}>
-              {item}
-            </button>
-          ))}
-        </div>
-      </div>
-      <Field label="وضعیت ظاهری (خط و خش، شکستگی…)" error={errors.intake}>
-        <input value={condition} onChange={(e) => setCondition(e.target.value)} maxLength={200} />
-      </Field>
-
-      {canAssign && (
-        <Field label="مسئول" error={errors.assigneeId}>
-          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-            <option value="">فعلاً بدون مسئول</option>
-            {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </Field>
-      )}
-
-      {errors.form && <span className="error" role="alert">{errors.form}</span>}
-      <div className="actions">
-        <button className="primary" disabled={busy}>ثبت پرونده</button>
-        <button type="button" onClick={onCancel}>انصراف</button>
-      </div>
-    </form>
-  );
-}
-
 /* ───────── detail ───────── */
 
 const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
@@ -353,14 +185,15 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "case.updated": (d) => `ویرایش: ${Object.keys(d).map((k) => FIELD_NAMES[k] ?? k).join("، ")}`,
   "case.note_added": (d) => `یادداشت: ${d.text}`,
   "case.reopened": (d) => `پرونده دوباره باز شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
-  "case.delivered": () => "موتور تحویل مشتری شد",
+  "case.delivered": () => "وسیله تحویل مشتری شد",
   "case.cancelled": (d) => `پرونده لغو شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
   "case.deleted": () => "پرونده حذف شد",
   "case.restored": () => "پرونده بازگردانی شد",
-  "case.custody_changed": (d) => (d.custodyStatus === "in_shop" ? "موتور در مغازه است" : "موتور دست مشتری است"),
+  "case.custody_changed": (d) => (d.custodyStatus === "in_shop" ? "وسیله در تعمیرگاه است" : "وسیله دست مشتری است"),
 };
 const FIELD_NAMES: Record<string, string> = {
-  request: "شرح مشکل", diagnosis: "عیب‌یابی", odometerKm: "کیلومتر", estimatedAmountRials: "برآورد هزینه", promisedAt: "زمان تحویل", intake: "همراه موتور",
+  request: "توضیحات", requestedServices: "سرویس‌ها", fuelLevel: "میزان سوخت", bodyStatus: "وضعیت بدنه", bodyNotes: "شرح آسیب",
+  diagnosis: "عیب‌یابی", odometerKm: "کیلومتر", estimatedAmountRials: "برآورد هزینه", promisedAt: "زمان تحویل", intake: "همراه وسیله",
 };
 
 export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () => void; onDeleted: (number: number) => void }) {
@@ -373,6 +206,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState("");
   const [staff, setStaff] = useState<Assignable[]>([]);
+  const [needPlate, setNeedPlate] = useState<TransitionView | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -398,6 +232,10 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       setC(await api<CaseDetailView>(`/api/v1/cases/${id}/transitions/${t.id}`, { body: { reason: withReason } }));
       setPending(null);
     } catch (err) {
+      if (err instanceof ApiError && err.body?.code === "plate_required") {
+        setNeedPlate(t);
+        return;
+      }
       setError(err instanceof ApiError ? err.message : "خطا");
       if (err instanceof ApiError && err.status === 409) await load();
     } finally {
@@ -457,14 +295,22 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
           <strong>{c.customer.fullName ?? "بدون نام"}</strong>{" "}
           <a className="font-num" dir="ltr" href={`tel:${c.customer.mobile}`}>{c.customer.mobile}</a>
         </p>
-        {c.asset && <p>{c.asset.title}{c.asset.identifier && <span className="muted font-num"> · {c.asset.identifier}</span>}</p>}
+        {c.asset && (
+          <div className="asset-line">
+            <span>{c.asset.title}{c.asset.attributes?.year && <span className="muted"> · مدل {c.asset.attributes.year}</span>}</span>
+            {c.asset.identifier ? <PlateView identifier={c.asset.identifier} /> : <span className="badge warn">بدون پلاک</span>}
+          </div>
+        )}
         {c.parentCase && <p className="muted">برگشتی پرونده <span className="font-num">#{faNumber.format(c.parentCase.number)}</span></p>}
-        <p className="muted small">{ago(c.stageEnteredAt)} در این مرحله · {c.custodyStatus === "in_shop" ? "موتور در مغازه" : "موتور دست مشتری"}</p>
+        <p className="muted small">{ago(c.stageEnteredAt)} در این مرحله · {c.custodyStatus === "in_shop" ? "وسیله در تعمیرگاه" : "وسیله دست مشتری"}</p>
       </div>
 
       {error && <p className="error" role="alert">{error}</p>}
 
-      {pending ? (
+      {needPlate && c.asset ? (
+        <PlateFix assetId={c.asset.id} onCancel={() => setNeedPlate(null)}
+          onSaved={async () => { const t = needPlate; setNeedPlate(null); await load(); await run(t); }} />
+      ) : pending ? (
         <div className="card">
           <Field label={`دلیل «${pending.label}»`}>
             <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} autoFocus />
@@ -493,12 +339,16 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         <CaseEditForm c={c} onDone={(updated) => { setEditing(false); if (updated) setC(updated); }} />
       ) : (
         <div className="card">
-          <Detail label="شرح مشکل" value={c.request} />
+          {c.requestedServices.length > 0 && <Detail label="سرویس‌های درخواستی" value={c.requestedServices.join("، ")} />}
+          {c.request && <Detail label="توضیحات" value={c.request} />}
+          {c.fuelLevel != null && <Detail label="میزان سوخت" value={FUEL_LEVELS[c.fuelLevel]} />}
+          {c.bodyStatus && <Detail label="وضعیت بدنه" value={c.bodyStatus === "ok" ? "سالم" : `آسیب: ${c.bodyNotes ?? "—"}`} />}
+          {c.asset?.attributes && <VehicleAttributes attributes={c.asset.attributes} />}
           <Detail label="عیب‌یابی" value={c.diagnosis ?? "—"} />
           <Detail label="کیلومتر" value={c.odometerKm != null ? faNumber.format(c.odometerKm) : "—"} />
           {c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
           {c.promisedAt && <Detail label="قول تحویل" value={faDateTime.format(new Date(c.promisedAt))} />}
-          {c.intake && <Detail label="همراه موتور" value={Object.entries(c.intake).map(([k, v]) => (v === "دارد" ? k : `${k}: ${v}`)).join("، ")} />}
+          {c.intake && <Detail label="همراه وسیله" value={Object.entries(c.intake).map(([k, v]) => (v === "دارد" ? k : `${k}: ${v}`)).join("، ")} />}
           {c.canEdit && <button onClick={() => setEditing(true)}>ویرایش</button>}
         </div>
       )}
@@ -516,8 +366,8 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       {c.canManage && (
         <div className="actions wrap">
           {c.custodyStatus === "in_shop"
-            ? <button onClick={() => custody("with_customer")}>موتور دست مشتری است</button>
-            : <button onClick={() => custody("in_shop")}>موتور در مغازه است</button>}
+            ? <button onClick={() => custody("with_customer")}>وسیله دست مشتری است</button>
+            : <button onClick={() => custody("in_shop")}>وسیله در تعمیرگاه است</button>}
           <button className="danger" onClick={remove}>حذف پرونده</button>
         </div>
       )}
@@ -536,6 +386,47 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         ))}
       </ol>
     </section>
+  );
+}
+
+const ATTRIBUTE_NAMES: Record<string, string> = {
+  color: "رنگ", vin: "شماره شاسی", fuelType: "نوع سوخت", gearbox: "گیربکس",
+};
+
+function VehicleAttributes({ attributes }: { attributes: Record<string, string> }) {
+  const rows = Object.entries(ATTRIBUTE_NAMES).filter(([k]) => attributes[k]);
+  if (rows.length === 0) return null;
+  return <Detail label="مشخصات وسیله" value={rows.map(([k, name]) => `${name}: ${attributes[k]}`).join(" · ")} />;
+}
+
+function PlateFix({ assetId, onSaved, onCancel }: { assetId: string; onSaved: () => void; onCancel: () => void }) {
+  const [plate, setPlate] = useState<PlateParts>(emptyPlate());
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    const identifier = formatPlate(plate);
+    if (!identifier) {
+      setError("پلاک کامل نیست.");
+      return;
+    }
+    try {
+      await api(`/api/v1/assets/${assetId}`, { method: "PATCH", body: { identifier } });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "خطا");
+    }
+  }
+
+  return (
+    <div className="card attention">
+      <h3>قبل از شروع کار، پلاک را وارد کنید</h3>
+      <PlateInput value={plate} onChange={setPlate} invalid={!!error} />
+      {error && <span className="error">{error}</span>}
+      <div className="actions">
+        <button className="primary" onClick={save}>ثبت پلاک و ادامه</button>
+        <button onClick={onCancel}>انصراف</button>
+      </div>
+    </div>
   );
 }
 
@@ -572,7 +463,7 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
 
   return (
     <form className="card" onSubmit={submit} noValidate>
-      <Field label="شرح مشکل" error={errors.request}>
+      <Field label="توضیحات" error={errors.request}>
         <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={2000} rows={3} />
       </Field>
       <Field label="عیب‌یابی" error={errors.diagnosis}>

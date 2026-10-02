@@ -18,7 +18,16 @@ public sealed class Customer : ITenantOwned, ISoftDeletable
     public List<Asset> Assets { get; set; } = [];
 }
 
-/// <summary>What the customer brings in: a motorcycle today, any device later.</summary>
+public static class AssetKinds
+{
+    public const string Vehicle = "vehicle";
+    public const string Car = "car";
+    public const string Motorcycle = "motorcycle";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string> { Vehicle, Car, Motorcycle };
+}
+
+/// <summary>What the customer brings in: a vehicle today, any device later.</summary>
 public sealed class Asset : ITenantOwned, ISoftDeletable, IDisposable
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();

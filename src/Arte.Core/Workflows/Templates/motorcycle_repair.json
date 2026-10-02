@@ -1,6 +1,6 @@
 {
   "key": "motorcycle_repair",
-  "name": "تعمیر موتورسیکلت",
+  "name": "پذیرش و تعمیر وسیله نقلیه",
   "stages": [
     { "key": "received",          "name": "پذیرش شد",           "category": "open",      "color": "gray" },
     { "key": "diagnosing",        "name": "در حال عیب‌یابی",     "category": "active",    "color": "blue" },
