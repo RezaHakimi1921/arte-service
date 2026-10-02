@@ -1,5 +1,6 @@
 # Production stack for service.artepersia.com
-# Only Caddy is reachable from outside; Postgres and the API live on an internal network.
+# Nothing is published on the host. Postgres and the API live on an internal network;
+# only the web container joins the edge proxy's network.
 name: arte-service
 
 services:
@@ -46,30 +47,30 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
-  caddy:
+  web:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on: [api]
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+    # No published ports: the server's edge Caddy (PersonalWallet stack) terminates TLS
+    # for service.artepersia.com and forwards to arte-web:80 on the shared network.
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ../web/dist:/srv:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks: [internal, public]
+    networks:
+      internal: {}
+      edge:
+        aliases: [arte-web]
+    read_only: true
+    tmpfs: ["/tmp", "/data", "/config"]
     cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
     security_opt: ["no-new-privileges:true"]
 
 networks:
   internal:
     internal: true
-  public: {}
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-personalwallet_default}
 
 volumes:
   db_data:
-  caddy_data:
-  caddy_config:

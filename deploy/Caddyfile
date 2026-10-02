@@ -1,12 +1,16 @@
 {
-	email admin@artepersia.com
+	# TLS for service.artepersia.com is terminated by the server's edge Caddy
+	# (the PersonalWallet stack owns ports 80/443). This Caddy only serves the PWA
+	# and proxies the API on the shared Docker network.
+	auto_https off
+	admin off
 	servers {
-		# X-Forwarded-For from the internet is never trusted; Caddy sets it to the real client IP.
+		# Only the edge proxy on a private Docker network may set X-Forwarded-For.
 		trusted_proxies static private_ranges
 	}
 }
 
-service.artepersia.com {
+:80 {
 	encode zstd gzip
 
 	header {
@@ -24,7 +28,11 @@ service.artepersia.com {
 	}
 
 	handle /api/* {
-		reverse_proxy api:8080
+		reverse_proxy api:8080 {
+			# One value: the real client IP as resolved through the trusted edge proxy.
+			header_up X-Forwarded-For {client_ip}
+			header_up X-Forwarded-Proto https
+		}
 	}
 
 	handle {
@@ -39,9 +47,4 @@ service.artepersia.com {
 		output stdout
 		format json
 	}
-}
-
-# Bare IP or unknown hosts get nothing.
-:80 {
-	respond 404
 }

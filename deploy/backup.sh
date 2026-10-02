@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Daily database dump, kept 14 days. Install with: crontab -e  →  15 3 * * * /opt/arte-service/deploy/backup.sh
+# Daily database dump, kept 14 days. Install with: crontab -e  →  15 3 * * * /home/cluadai/arte-service/deploy/backup.sh
 set -eu
 cd "$(dirname "$0")"
 mkdir -p backups
