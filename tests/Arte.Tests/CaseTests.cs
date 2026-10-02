@@ -141,6 +141,10 @@ public sealed class CaseTests(ArteApiFactory api)
             var wf = await db.Workflows.Include(w => w.Stages).SingleAsync();
             var testing = new Arte.Core.Workflows.Stage { WorkflowId = wf.Id, Key = "testing", Name = "تست", Category = "active", Order = 5 };
             db.Stages.Add(testing);
+            // The old template had no "review" stage at all: remove it, as production had it.
+            var review = wf.Stages.Single(x => x.Key == "review");
+            await db.Transitions.Where(t => t.FromStageId == review.Id || t.ToStageId == review.Id).ExecuteDeleteAsync();
+            db.Stages.Remove(review);
             wf.Stages.Single(x => x.Key == "awaiting_approval").IsActive = true;
             await db.SaveChangesAsync();
             await db.Cases.Where(x => x.Id == caseId).ExecuteUpdateAsync(x => x.SetProperty(k => k.StageId, testing.Id));

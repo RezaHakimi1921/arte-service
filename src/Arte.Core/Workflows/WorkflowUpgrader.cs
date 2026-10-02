@@ -60,6 +60,10 @@ public static class WorkflowUpgrader
                 order++;
             }
 
+            // New stages must exist in the database before cases can be moved onto them (FK).
+            if (db.ChangeTracker.Entries<Stage>().Any(e => e.State == EntityState.Added))
+                await db.SaveChangesAsync(ct);
+
             // Stages that left the template: switch off, move their open cases on.
             var templateKeys = template.Stages.Select(s => s.Key).ToHashSet();
             foreach (var orphan in wf.Stages.Where(s => !templateKeys.Contains(s.Key)).ToList())
