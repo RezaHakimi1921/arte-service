@@ -136,7 +136,11 @@ if (config.GetValue("Database:MigrateOnStartup", false))
     await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Database.MigrateAsync();
 }
 
+if (args.Length > 0 && args[0] == "set-password")
+    return await SetPasswordCommand.RunAsync(app.Services, args);
+
 app.Run();
+return 0;
 
 static string ClientIp(HttpContext http) => http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 

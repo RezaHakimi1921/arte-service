@@ -39,6 +39,9 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Mobile).HasMaxLength(11);
             e.HasIndex(x => x.Mobile).IsUnique();
             e.Property(x => x.DisplayName).HasMaxLength(80);
+            e.Property(x => x.Username).HasMaxLength(40);
+            e.HasIndex(x => x.Username).IsUnique().HasFilter("\"Username\" IS NOT NULL");
+            e.Property(x => x.PasswordHash).HasMaxLength(200);
         });
 
         b.Entity<Membership>(e =>

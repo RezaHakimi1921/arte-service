@@ -45,6 +45,7 @@ public sealed class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         builder.UseSetting("Jwt:Key", Convert.ToBase64String(new byte[32].Select((_, i) => (byte)(i * 7 + 3)).ToArray()));
         builder.UseSetting("Otp:Pepper", "test-pepper-test-pepper-test-pepper-1234");
         builder.UseSetting("Signup:InviteCode", InviteCode);
+        builder.UseSetting("Auth:PasswordLoginEnabled", "true");
         // Tests log in many users from one IP; the per-IP limits have their own test.
         builder.UseSetting("RateLimits:AuthPerMinute", "100000");
         builder.UseSetting("RateLimits:GlobalPerMinute", "100000");

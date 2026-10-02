@@ -10,6 +10,12 @@ public sealed class User
     public string? DisplayName { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? LastLoginAt { get; set; }
+
+    /// <summary>Optional second way in, set only from the server console (set-password). OTP stays the default.</summary>
+    public string? Username { get; set; }
+    public string? PasswordHash { get; set; }
+    public int FailedPasswordAttempts { get; set; }
+    public DateTimeOffset? PasswordLockedUntil { get; set; }
 }
 
 public sealed class Membership : ITenantOwned

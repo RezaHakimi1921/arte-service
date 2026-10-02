@@ -13,6 +13,7 @@ public static class AuthEndpoints
     public sealed record OtpRequest(string? Mobile);
     public sealed record OtpVerify(string? Mobile, string? Code);
     public sealed record SelectTenant(Guid TenantId);
+    public sealed record PasswordLogin(string? Username, string? Password);
     public sealed record MembershipView(Guid TenantId, string TenantName, string Role);
     public sealed record SessionView(string AccessToken, DateTimeOffset ExpiresAt, Guid? TenantId, IReadOnlyList<MembershipView> Memberships);
 
@@ -57,7 +58,52 @@ public static class AuthEndpoints
             return Results.Ok(ToSession(issued, selected, memberships));
         });
 
-        g.MapPost("/refresh", async (ArteDbContext db, TokenService tokens, HttpContext http,
+        g.MapPost("/password", async (PasswordLogin req, ArteDbContext db, TokenService tokens, Audit audit, IClock clock,
+            HttpContext http, IOptions<JwtOptions> jwt, IConfiguration config, CancellationToken ct) =>
+        {
+            var failed = Results.Problem(statusCode: 400, title: "نام کاربری یا رمز نادرست است.");
+            if (!config.GetValue("Auth:PasswordLoginEnabled", false)) return Results.NotFound();
+            var username = req.Username?.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(username) || username.Length > 40 || string.IsNullOrEmpty(req.Password) || req.Password.Length > 200)
+                return failed;
+
+            var now = clock.UtcNow;
+            var user = await db.Users.SingleOrDefaultAsync(u => u.Username == username, ct);
+            if (user?.PasswordHash is null)
+            {
+                PasswordHasher.Verify(req.Password, PasswordHasher.Dummy);
+                return failed;
+            }
+            if (user.PasswordLockedUntil > now)
+                return Results.Problem(statusCode: 429, title: "به‌خاطر تلاش‌های ناموفق، ورود موقتاً قفل است. ۱۵ دقیقه بعد تلاش کنید.");
+
+            if (!PasswordHasher.Verify(req.Password, user.PasswordHash))
+            {
+                user.FailedPasswordAttempts++;
+                if (user.FailedPasswordAttempts >= 5)
+                {
+                    user.PasswordLockedUntil = now.AddMinutes(15);
+                    user.FailedPasswordAttempts = 0;
+                    audit.Record("auth.password_locked", null, user.Id);
+                }
+                await db.SaveChangesAsync(ct);
+                return failed;
+            }
+
+            user.FailedPasswordAttempts = 0;
+            user.PasswordLockedUntil = null;
+            user.LastLoginAt = now;
+            audit.Record("auth.login_password", null, user.Id);
+            await db.SaveChangesAsync(ct);
+
+            var memberships = await ActiveMemberships(db, user.Id, ct);
+            var selected = memberships.Count == 1 ? memberships[0].Membership : null;
+            var issued = await tokens.IssueAsync(user.Id, selected, ct);
+            SetRefreshCookie(http, issued, jwt.Value);
+            return Results.Ok(ToSession(issued, selected, memberships));
+        });
+
+        g.MapPost("/refresh",async (ArteDbContext db, TokenService tokens, HttpContext http,
             IOptions<JwtOptions> jwt, CancellationToken ct) =>
         {
             if (!http.Request.Cookies.TryGetValue(TokenService.RefreshCookie, out var presented) || presented.Length > 100)

@@ -42,6 +42,51 @@ export default function App() {
 /* ───────── Login ───────── */
 
 function Login({ onDone }: { onDone: (s: Session) => void }) {
+  const [mode, setMode] = useState<"otp" | "password">("otp");
+  if (mode === "password") return <PasswordLogin onDone={onDone} onBack={() => setMode("otp")} />;
+  return <OtpLogin onDone={onDone} onPassword={() => setMode("password")} />;
+}
+
+function PasswordLogin({ onDone, onBack }: { onDone: (s: Session) => void; onBack: () => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      onDone(await api<Session>("/api/v1/auth/password", { body: { username, password } }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "خطا در ارتباط با سرور");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="auth">
+      <div className="brand">
+        <img src="/icon.svg" alt="" width={56} height={56} />
+        <h1>آرته سرویس</h1>
+      </div>
+      <form className="card" onSubmit={submit} noValidate>
+        <Field label="نام کاربری">
+          <input dir="ltr" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
+        </Field>
+        <Field label="رمز عبور" error={error}>
+          <input type="password" dir="ltr" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        </Field>
+        <button className="primary" disabled={busy}>ورود</button>
+        <button type="button" className="link" onClick={onBack}>ورود با کد پیامکی</button>
+      </form>
+    </main>
+  );
+}
+
+function OtpLogin({ onDone, onPassword }: { onDone: (s: Session) => void; onPassword: () => void }) {
   const [mobile, setMobile] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"mobile" | "code">("mobile");
@@ -94,6 +139,9 @@ function Login({ onDone }: { onDone: (s: Session) => void }) {
           <button type="button" className="link" onClick={() => { setStep("mobile"); setCode(""); setError(null); }}>
             تغییر شماره
           </button>
+        )}
+        {step === "mobile" && (
+          <button type="button" className="link" onClick={onPassword}>ورود با نام کاربری</button>
         )}
       </form>
     </main>
