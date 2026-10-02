@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Arte.Api.Billing;
 using Arte.Api.Security;
+using Arte.Core.Billing;
 using Arte.Core.Cases;
 using Arte.Core.Common;
 using Arte.Core.Customers;
@@ -25,7 +27,7 @@ public static class CaseEndpoints
         DateTimeOffset? PromisedAt, string? CustodyStatus, Dictionary<string, string>? Intake,
         string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes);
 
-    public sealed record RunTransition(string? Reason, string? WaitReason);
+    public sealed record RunTransition(string? Reason, string? WaitReason, bool? AllowCredit, DateTimeOffset? CreditDueAt);
     public sealed record SetWait(string? WaitReason);
     public sealed record Assign(Guid? AssigneeId);
     public sealed record Note(string? Text);
@@ -186,6 +188,8 @@ public static class CaseEndpoints
             Customer = customer,
             Asset = asset is null ? null : new { asset.Id, asset.Title, asset.Identifier, asset.Kind, Attributes = asset.Attributes?.RootElement },
             Assignee = assignee, ParentCase = parent,
+            c.WarrantyUntil, c.CreditDueAt,
+            Billing = await BillingEndpoints.MoneyView(db, c.Id, me, ct),
             Transitions = allowed,
             CanEdit = CaseAccess.CanWorkOn(me, c) || me.Has(Permissions.CasesCreate),
             CanManage = me.Has(Permissions.CasesCreate),
@@ -437,11 +441,32 @@ public static class CaseEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["waitReason"] = ["علت انتظار نامعتبر است."] });
         }
 
+        // Delivery with money still owed must be an explicit decision (نسیه), and starts the warranty.
+        long creditRials = 0;
+        DateTimeOffset? warrantyUntil = null;
+        if (to.Key == "delivered")
+        {
+            var items = await db.CaseItems.AsNoTracking().Where(i => i.CaseId == c.Id).ToListAsync(ct);
+            var payments = await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct);
+            creditRials = CaseMoney.Of(items, payments).BalanceRials;
+            if (creditRials > 0 && req.AllowCredit != true)
+                return Results.Problem(statusCode: 409, title: "این پرونده مانده حساب دارد.",
+                    extensions: new Dictionary<string, object?> { ["code"] = "balance_due", ["balanceRials"] = creditRials });
+            var warrantyDays = items.Where(i => i.Billable && i.DeletedAt == null).Max(i => i.WarrantyDays);
+            if (warrantyDays is > 0) warrantyUntil = clock.UtcNow.AddDays(warrantyDays.Value);
+        }
+
         var now = clock.UtcNow;
         var userId = me.RequiredUserId;
         c.StageId = to.Id;
         c.StageEnteredAt = now;
         c.WaitReason = waitReason;
+        if (to.Key == "delivered")
+        {
+            c.WarrantyUntil = warrantyUntil;
+            c.CreditDueAt = creditRials > 0 ? req.CreditDueAt?.ToUniversalTime() : null;
+            if (creditRials > 0) AddEvent(db, c, CaseEventTypes.Credit, userId, now, new { BalanceRials = creditRials, DueAt = c.CreditDueAt });
+        }
         AddEvent(db, c, CaseEventTypes.StageChanged, userId, now,
             new { From = from.Name, To = to.Name, to.Category, Action = t.Label, Reason = reason, WaitReason = waitReason });
 
@@ -561,8 +586,10 @@ public static class CaseEndpoints
             })
             .Take(500).ToListAsync(ct);
 
+        var balances = await BillingEndpoints.Balances(db, open.Select(o => o.Id).ToList(), ct);
         var cards = open.Select(i => new
         {
+            BalanceRials = balances.GetValueOrDefault(i.Id),
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
             i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.WaitReason, i.OpenedAt,
             Mine = i.AssigneeId == m.Id,

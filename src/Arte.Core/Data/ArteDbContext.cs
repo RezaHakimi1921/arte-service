@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Arte.Core.Billing;
 using Arte.Core.Cases;
 using Arte.Core.Common;
 using Arte.Core.Customers;
@@ -30,6 +31,9 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<Transition> Transitions => Set<Transition>();
     public DbSet<Case> Cases => Set<Case>();
     public DbSet<CaseEvent> CaseEvents => Set<CaseEvent>();
+    public DbSet<CaseItem> CaseItems => Set<CaseItem>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -167,6 +171,40 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Type).HasMaxLength(60);
             e.HasIndex(x => new { x.TenantId, x.CaseId, x.Id });
             e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<CaseItem>(e =>
+        {
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Title).HasMaxLength(120);
+            e.Property(x => x.Quantity).HasPrecision(10, 2);
+            e.Property(x => x.Supplier).HasMaxLength(20);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Ignore(x => x.Billable);
+            e.Ignore(x => x.LineTotalRials);
+            e.Ignore(x => x.LineCostRials);
+            e.HasIndex(x => new { x.TenantId, x.CaseId });
+            e.HasIndex(x => new { x.TenantId, x.PerformedBy });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.PerformedBy).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<CatalogItem>().WithMany().HasForeignKey(x => x.CatalogItemId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<Payment>(e =>
+        {
+            e.Property(x => x.Method).HasMaxLength(20);
+            e.Property(x => x.Note).HasMaxLength(300);
+            e.HasIndex(x => new { x.TenantId, x.CaseId });
+            e.HasIndex(x => new { x.TenantId, x.PaidAt });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<CatalogItem>(e =>
+        {
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Title).HasMaxLength(120);
+            e.HasIndex(x => new { x.TenantId, x.Kind, x.Title });
         });
 
         ApplyTenantFilters(b);

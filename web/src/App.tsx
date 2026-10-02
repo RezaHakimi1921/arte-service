@@ -4,6 +4,7 @@ import { CaseDetail, CasesView, type CaseFilter } from "./cases";
 import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
+import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
 import { Field, MobileInput } from "./ui";
 
@@ -244,15 +245,17 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
   const [newCase, setNewCase] = useState(false);
   const [caseFilter, setCaseFilter] = useState<CaseFilter>({});
   const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
+  const [morePage, setMorePage] = useState<"receivables" | "catalog" | null>(null);
   const can = (p: string) => me.business!.permissions.includes(p);
 
   // A new page starts at the top, not at the previous page's scroll position.
-  useEffect(() => { window.scrollTo(0, 0); }, [tab, caseId, newCase]);
+  useEffect(() => { window.scrollTo(0, 0); }, [tab, caseId, newCase, morePage]);
 
   function go(next: Tab) {
     setTab(next);
     setCaseId(null);
     setNewCase(false);
+    setMorePage(null);
   }
   function openCases(filter: CaseFilter) {
     setCaseFilter(filter);
@@ -280,7 +283,9 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
     page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={can("cases.create")} />;
   else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
   else if (tab === "staff") page = <StaffList />;
-  else if (tab === "more") page = <More me={me} onSignOut={onSignOut} />;
+  else if (tab === "more" && morePage === "receivables") page = <ReceivablesView onBack={() => setMorePage(null)} onOpenCase={(id) => { setTab("cases"); setCaseId(id); }} />;
+  else if (tab === "more" && morePage === "catalog") page = <CatalogView onBack={() => setMorePage(null)} canSeeCost={can("reports.view")} />;
+  else if (tab === "more") page = <More me={me} onSignOut={onSignOut} onOpen={setMorePage} can={can} />;
   else page = <HomeView key={String(caseId)} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
 
   return (
@@ -400,7 +405,9 @@ function StaffList() {
 
 /* ───────── More ───────── */
 
-function More({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
+function More({ me, onSignOut, onOpen, can }: {
+  me: Me; onSignOut: () => void; onOpen: (p: "receivables" | "catalog") => void; can: (p: string) => boolean;
+}) {
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "light");
 
   function toggleTheme() {
@@ -420,6 +427,12 @@ function More({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
         <p className="font-num" dir="ltr">{me.mobile}</p>
         <p className="muted">{ROLE_NAMES[me.business!.role] ?? me.business!.role}</p>
       </div>
+      {(can("payments.record") || can("reports.view")) && (
+        <button className="row-button" onClick={() => onOpen("receivables")}><span>نسیه‌ها</span><span className="muted">طلب از مشتریان</span></button>
+      )}
+      {can("cases.create") && (
+        <button className="row-button" onClick={() => onOpen("catalog")}><span>فهرست قیمت</span><span className="muted">قطعه، اجرت، خدمت</span></button>
+      )}
       <AccountSettings />
       <button className="row-button" onClick={toggleTheme}>
         <span>تم</span>

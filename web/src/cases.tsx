@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
+import { BillingSection, CreditSheet, MoneyBar, toman as tomanFmt, type Billing } from "./billing";
 import { useFeedback } from "./feedback";
 import { ALERT_ICON, MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, statusText, type Alert } from "./labels";
 import { PlateInput, PlateView, emptyPlate } from "./plate";
@@ -14,7 +15,7 @@ export type CaseCardData = {
   id: string; number: number; customerName: string | null; customerMobile: string; assetTitle: string | null;
   assetIdentifier: string | null; stage: StageRef; assigneeName: string | null; stageEnteredAt: string;
   promisedAt: string | null; request: string; requestedServices: string[]; waitReason: string | null; alert?: Alert | null;
-  reasons?: Alert[];
+  reasons?: Alert[]; balanceRials?: number;
 };
 type TransitionView = { id: string; label: string; isPrimary: boolean; requiresReason: boolean; toStage: { name: string; category: string; color: string } };
 type TimelineEntry = { id: number; type: string; occurredAt: string; actor: string | null; data: Record<string, unknown> | null };
@@ -27,6 +28,7 @@ type CaseDetailView = {
   asset: { id: string; title: string; identifier: string | null; attributes: Record<string, string> | null } | null;
   assignee: { id: string; name: string } | null; parentCase: { id: string; number: number } | null;
   transitions: TransitionView[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
+  billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
 };
 type Assignable = { id: string; name: string; role: string };
 export type CaseFilter = { category?: string; mine?: boolean; all?: boolean };
@@ -89,6 +91,9 @@ export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) 
         {c.assigneeName ? `مسئول: ${c.assigneeName}` : "بدون مسئول"}
         {c.promisedAt && ` · قول تحویل: ${promiseText(c.promisedAt)}`}
       </span>
+      {c.stage.category === "done" && !!c.balanceRials && c.balanceRials > 0 && (
+        <span className="alert-line warn">مانده: <span className="font-num">{tomanFmt(c.balanceRials)}</span></span>
+      )}
       {alerts.slice(0, 2).map((a) => <AlertLine key={a.code} alert={a} />)}
     </button>
   );
@@ -189,7 +194,7 @@ const FIELD_NAMES: Record<string, string> = {
   diagnosis: "عیب‌یابی", odometerKm: "کیلومتر", estimatedAmountRials: "برآورد هزینه", promisedAt: "قول تحویل", intake: "همراه وسیله",
 };
 
-type Sheet = null | "actions" | "assign" | "note" | "wait" | "parts" | "promise";
+type Sheet = null | "actions" | "assign" | "note" | "wait" | "parts" | "promise" | "credit";
 
 export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () => void; onDeleted: (number: number) => void }) {
   const { notify } = useFeedback();
@@ -203,6 +208,8 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
   const [note, setNote] = useState("");
   const [staff, setStaff] = useState<Assignable[]>([]);
   const [needPlate, setNeedPlate] = useState<TransitionView | null>(null);
+  const [balanceDue, setBalanceDue] = useState(0);
+  const [paySignal, setPaySignal] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -234,7 +241,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
     }
   }
 
-  async function run(t: TransitionView, extra: { reason?: string; waitReason?: string } = {}) {
+  async function run(t: TransitionView, extra: { reason?: string; waitReason?: string; allowCredit?: boolean; creditDueAt?: string | null } = {}) {
     if (t.requiresReason && !extra.reason) {
       setPending(t);
       setReason("");
@@ -251,6 +258,10 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       if (err instanceof ApiError && err.body?.code === "plate_required") {
         close();
         setNeedPlate(t);
+      } else if (err instanceof ApiError && err.body?.code === "balance_due") {
+        setPending(t);
+        setBalanceDue(Number(err.body.balanceRials ?? 0));
+        setSheet("credit");
       } else if (err instanceof ApiError && err.body?.code === "wait_reason_required") {
         setPending(t);
         setSheet("parts");
@@ -305,6 +316,14 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
             <span>{c.promisedAt ? promiseText(c.promisedAt) : "تعیین نشده"}</span>
           </button>
         </div>
+        <MoneyBar money={c.billing.money} />
+        {(c.warrantyUntil || c.creditDueAt) && (
+          <p className="muted small">
+            {c.warrantyUntil && `ضمانت تا ${new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", year: "numeric" }).format(new Date(c.warrantyUntil))}`}
+            {c.warrantyUntil && c.creditDueAt && " · "}
+            {c.creditDueAt && `موعد پرداخت نسیه: ${new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}`}
+          </p>
+        )}
         {c.parentCase && <p className="muted small">برگشتی پرونده <span className="font-num">#{faNumber.format(c.parentCase.number)}</span></p>}
       </div>
 
@@ -319,13 +338,16 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
           {primary && <button className="primary block big" disabled={busy} onClick={() => run(primary)}>{primary.label}</button>}
           <div className="quick-actions">
             {others.length > 0 && <button onClick={() => setSheet("actions")}>اقدام‌های دیگر</button>}
-            {c.canEdit && (
+            {c.canEdit && !c.stage.isTerminal && (
               <button onClick={() => setSheet("wait")}>{c.waitReason ? "رفع توقف" : "کار متوقف است"}</button>
             )}
             <button onClick={() => setSheet("note")}>یادداشت</button>
           </div>
         </div>
       )}
+
+      <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal}
+        onChange={(b) => setC({ ...c, billing: b })} />
 
       {/* Secondary details, collapsible. */}
       <Collapsible title="درخواست مشتری" open>
@@ -386,6 +408,10 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
           ))
         )}
       </BottomSheet>
+
+      <CreditSheet open={sheet === "credit"} balanceRials={balanceDue} busy={busy} onClose={close}
+        onPay={() => { close(); setPaySignal((n) => n + 1); }}
+        onCredit={(dueIso) => pending && run(pending, { allowCredit: true, creditDueAt: dueIso })} />
 
       <BottomSheet open={sheet === "parts"} title="قطعه را چه کسی تهیه می‌کند؟" onClose={close}>
         {PARTS_OPTIONS.map((o) => (

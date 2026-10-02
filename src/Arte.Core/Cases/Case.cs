@@ -80,6 +80,11 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     public string? Relation { get; set; }
     public Guid? MergedIntoCaseId { get; set; }
 
+    /// <summary>Set at delivery from the longest warranty on shop-supplied lines.</summary>
+    public DateTimeOffset? WarrantyUntil { get; set; }
+    /// <summary>Delivered with a balance (نسیه): when the customer promised to pay.</summary>
+    public DateTimeOffset? CreditDueAt { get; set; }
+
     public DateTimeOffset OpenedAt { get; set; }
     public DateTimeOffset StageEnteredAt { get; set; }
     public DateTimeOffset? ClosedAt { get; set; }
@@ -118,4 +123,10 @@ public static class CaseEventTypes
     public const string Restored = "case.restored";
     public const string CustodyChanged = "case.custody_changed";
     public const string WaitChanged = "case.wait_changed";
+    public const string ItemAdded = "case.item_added";
+    public const string ItemUpdated = "case.item_updated";
+    public const string ItemRemoved = "case.item_removed";
+    public const string PaymentRecorded = "payment.recorded";
+    public const string PaymentVoided = "payment.voided";
+    public const string Credit = "case.credit";
 }
