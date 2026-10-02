@@ -1,0 +1,75 @@
+# Production stack for service.artepersia.com
+# Only Caddy is reachable from outside; Postgres and the API live on an internal network.
+name: arte-service
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: arte
+      POSTGRES_USER: arte
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arte -d arte"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt: ["no-new-privileges:true"]
+    shm_size: 128mb
+
+  api:
+    build:
+      context: ..
+      dockerfile: src/Arte.Api/Dockerfile
+    image: arte-service-api:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: Host=db;Port=5432;Database=arte;Username=arte;Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY:?set in .env}
+      Otp__Pepper: ${OTP_PEPPER:?set in .env}
+      Signup__InviteCode: ${SIGNUP_INVITE_CODE:?set in .env}
+      Sms__Provider: ${SMS_PROVIDER:-fake}
+      Sms__AllowFakeInProduction: ${SMS_ALLOW_FAKE:-false}
+      Sms__FakeAllowedMobiles__0: ${SMS_FAKE_MOBILE_1:-}
+      Sms__FakeAllowedMobiles__1: ${SMS_FAKE_MOBILE_2:-}
+    # No internet egress yet. When a real SMS provider is added, attach an egress network here.
+    networks: [internal]
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../web/dist:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal, public]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  internal:
+    internal: true
+  public: {}
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:

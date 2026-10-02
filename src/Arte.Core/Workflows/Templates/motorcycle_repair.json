@@ -1,0 +1,32 @@
+{
+  "key": "motorcycle_repair",
+  "name": "تعمیر موتورسیکلت",
+  "stages": [
+    { "key": "received",          "name": "پذیرش شد",           "category": "open",      "color": "gray" },
+    { "key": "diagnosing",        "name": "در حال عیب‌یابی",     "category": "active",    "color": "blue" },
+    { "key": "awaiting_approval", "name": "منتظر تأیید مشتری",  "category": "waiting",   "color": "orange" },
+    { "key": "awaiting_parts",    "name": "منتظر قطعه",          "category": "waiting",   "color": "orange" },
+    { "key": "repairing",         "name": "در حال تعمیر",        "category": "active",    "color": "blue" },
+    { "key": "testing",           "name": "تست",                 "category": "active",    "color": "blue" },
+    { "key": "ready",             "name": "آماده تحویل",         "category": "done",      "color": "green" },
+    { "key": "delivered",         "name": "تحویل شد",            "category": "done",      "color": "teal", "terminal": true },
+    { "key": "cancelled",         "name": "انصراف",              "category": "cancelled", "color": "red",  "terminal": true }
+  ],
+  "transitions": [
+    { "from": "received",          "to": "diagnosing",        "label": "شروع عیب‌یابی",      "primary": true, "permission": "cases.work" },
+    { "from": "received",          "to": "repairing",         "label": "شروع تعمیر",         "permission": "cases.work" },
+    { "from": "received",          "to": "cancelled",         "label": "انصراف",             "reason": true,  "permission": "cases.create" },
+    { "from": "diagnosing",        "to": "awaiting_approval", "label": "ارسال برای تأیید",   "primary": true, "permission": "cases.work" },
+    { "from": "diagnosing",        "to": "repairing",         "label": "شروع تعمیر",         "permission": "cases.work" },
+    { "from": "diagnosing",        "to": "awaiting_parts",    "label": "منتظر قطعه",         "permission": "cases.work" },
+    { "from": "awaiting_approval", "to": "repairing",         "label": "مشتری تأیید کرد",    "primary": true, "permission": "cases.work" },
+    { "from": "awaiting_approval", "to": "cancelled",         "label": "مشتری رد کرد",       "reason": true,  "permission": "cases.create" },
+    { "from": "repairing",         "to": "awaiting_parts",    "label": "منتظر قطعه",         "permission": "cases.work" },
+    { "from": "repairing",         "to": "testing",           "label": "پایان تعمیر",        "primary": true, "permission": "cases.work" },
+    { "from": "awaiting_parts",    "to": "repairing",         "label": "قطعه رسید",          "primary": true, "permission": "cases.work" },
+    { "from": "testing",           "to": "repairing",         "label": "نیاز به کار بیشتر",  "permission": "cases.work" },
+    { "from": "testing",           "to": "ready",             "label": "آماده تحویل",        "primary": true, "permission": "cases.work" },
+    { "from": "ready",             "to": "delivered",         "label": "ثبت تحویل",          "primary": true, "permission": "cases.create" },
+    { "from": "delivered",         "to": "received",          "label": "بازگشایی در ضمانت",  "reason": true,  "permission": "cases.create" }
+  ]
+}

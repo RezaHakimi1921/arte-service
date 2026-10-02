@@ -1,0 +1,6 @@
+<Project>
+  <!-- api.nuget.org از بعضی شبکه‌ها timeout می‌دهد و هر بیلد را ~۱–۲ دقیقه کند می‌کند -->
+  <PropertyGroup>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

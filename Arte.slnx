@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Arte.Api/Arte.Api.csproj" />
+    <Project Path="src/Arte.Core/Arte.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Arte.Tests/Arte.Tests.csproj" />
+  </Folder>
+</Solution>

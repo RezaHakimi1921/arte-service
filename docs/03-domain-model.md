@@ -98,6 +98,41 @@ Supplier (shop | customer), Status (needed | used), PerformedBy?, AddedBy, Added
 
 `PerformedBy` روی `labor`: چه شاگردی این کار را انجام داد (پایه گزارش کارکرد و دستمزد درصدی شاگرد در آینده).
 
+### کار شاگرد و دستمزد
+- **کسی که کار به او تخصیص دارد، خودش «پایان تعمیر» را می‌زند**؛ استاد ممکن است اصلاً در مغازه نباشد.
+  Transitionهای کاری (`repairing → testing`، `awaiting_parts → repairing`، …) برای `cases.work` روی پرونده‌های خودش مجاز است.
+- `Membership.PayModel`: `fixed | commission | mixed`، `CommissionPercent?`، `FixedMonthly?`.
+- کارکرد شاگرد = `Σ labor` با `PerformedBy` او در بازه؛ پورسانت = کارکرد × درصد. (گزارش در S5؛ مدل از S1.)
+
+### ارتباط پرونده‌ها: بازگشایی، برگشتی، ادغام
+- **بازگشایی:** پرونده `delivered` در بازه ضمانت دوباره باز می‌شود (Transition `delivered → received` با دلیل
+  اجباری، فقط `cases.create`). Event `case.reopened`.
+- **پرونده برگشتی:** اگر پرونده جدید باز شد، می‌تواند `ParentCaseId` بگیرد (`Relation = comeback`).
+  هنگام ثبت پرونده برای موتوری که در ۳۰ روز گذشته پرونده داشته، سیستم می‌پرسد «برگشتی پرونده #۱۰۲۴ است؟».
+- **ادغام (Merge):** پرونده B در پرونده A ادغام می‌شود: Itemها، Paymentها، Attachmentها و Timeline به A
+  منتقل می‌شوند، B با `MergedIntoCaseId = A` بسته و فقط‌خواندنی می‌شود (حذف نمی‌شود). شرط: همان مشتری، و B هنوز تحویل نشده.
+  Event `case.merged` روی هر دو. فقط `cases.create`.
+
+### ضمانت (Warranty)
+`CaseItem.WarrantyDays?` و `Case.WarrantyUntil` (= تحویل + بیشترین WarrantyDays اجرت/قطعه مغازه).
+- قطعه مشتری هرگز ضمانت ندارد.
+- پرونده برگشتی در بازه ضمانت → اجرت‌ها پیش‌فرض با برچسب «ضمانتی» و مبلغ صفر.
+- فاکتور، تاریخ پایان ضمانت را نشان می‌دهد.
+
+### نسیه (حساب مشتری)
+- مانده پرونده‌های تحویل‌شده = بدهی مشتری. `Customer.Balance` محاسبه‌ای از همه پرونده‌ها.
+- `Case.DueDate?` (سررسید قول‌داده‌شده) + لیست «نسیه‌ها» با مرتب‌سازی بر اساس سررسید/مبلغ.
+- پرداخت بعدی می‌تواند به پرونده قدیمی ثبت شود. SMS یادآوری بدهی (الگو `customer.debt_reminder`)، دستی در MVP.
+- هنگام ثبت پرونده جدید برای مشتری بدهکار، هشدار نمایش داده می‌شود.
+
+### نگهداشت موتور (Custody)
+- `Case.CustodyStatus`: `in_shop | with_customer` و `CheckedInAt / CheckedOutAt`. موتوری که «آماده تحویل» است
+  ولی هنوز در مغازه است در داشبورد دیده می‌شود.
+- **قبض پذیرش:** هنگام پذیرش، وضعیت ظاهری، کیلومتر، لوازم همراه (کلاه، سوئیچ، مدارک)، و عکس‌ها ثبت می‌شود
+  (`IntakeChecklist jsonb`) و لینک قبض برای مشتری می‌رود؛ همین سند در تحویل استفاده می‌شود.
+- `StorageFeePerDay?` در تنظیمات (اختیاری): اگر موتور N روز بعد از «آماده تحویل» تحویل گرفته نشد، هزینه انبارداری
+  پیشنهاد می‌شود (به‌صورت Item، با تأیید کاربر).
+
 ### CatalogItem
 `Id, TenantId, Kind, Title, DefaultPrice, IsActive` (موجودی/انبار خارج از MVP)
 
@@ -157,6 +192,7 @@ stateDiagram-v2
     testing --> ready: آماده تحویل ★
     ready --> delivered: ثبت تحویل ★
     received --> cancelled: انصراف (دلیل)
+    delivered --> received: بازگشایی در ضمانت (دلیل)
     delivered --> [*]
     cancelled --> [*]
 ```
@@ -185,4 +221,7 @@ stateDiagram-v2
 | `payment.recorded` | caseId, amount, method, balanceAfter |
 | `case.delivered` | caseId, customerId, assetId, total, paid, balance, odometerKm |
 | `case.cancelled` | caseId, reason |
+| `case.reopened` | caseId, reason |
+| `case.merged` | sourceCaseId, targetCaseId |
+| `case.custody_changed` | caseId, custodyStatus |
 | `message.sent` / `message.failed` | messageId, caseId?, template |

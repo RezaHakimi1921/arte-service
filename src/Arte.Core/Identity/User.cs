@@ -1,0 +1,72 @@
+using Arte.Core.Tenancy;
+
+namespace Arte.Core.Identity;
+
+/// <summary>A person, identified by mobile. Not tenant-owned: one person can work in several businesses.</summary>
+public sealed class User
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public required string Mobile { get; set; }
+    public string? DisplayName { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? LastLoginAt { get; set; }
+}
+
+public sealed class Membership : ITenantOwned
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid TenantId { get; set; }
+    public Guid UserId { get; set; }
+    public User? User { get; set; }
+    public required string Role { get; set; }
+    public string[] Permissions { get; set; } = [];
+    public string PayModel { get; set; } = PayModels.None;
+    public decimal? CommissionPercent { get; set; }
+    public long? FixedMonthlyRials { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public bool Has(string permission) => Role == Roles.Owner || Permissions.Contains(permission);
+}
+
+public sealed class OtpChallenge
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public required string Mobile { get; set; }
+    public required string CodeHash { get; set; }
+    public int Attempts { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? ConsumedAt { get; set; }
+    public string? RequestIp { get; set; }
+    /// <summary>Postgres xmin: two parallel verifies of one code cannot both win.</summary>
+    public uint Version { get; set; }
+}
+
+/// <summary>Stored hashed. Rotated on every use; reuse of a rotated token revokes the whole family.</summary>
+public sealed class RefreshToken
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid UserId { get; set; }
+    public Guid FamilyId { get; set; }
+    public Guid? TenantId { get; set; }
+    public required string TokenHash { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public string? RevokedReason { get; set; }
+    /// <summary>Postgres xmin: a token can be rotated only once.</summary>
+    public uint Version { get; set; }
+}
+
+/// <summary>Security-relevant actions (logins, staff and permission changes). Append-only.</summary>
+public sealed class AuditEvent
+{
+    public long Id { get; set; }
+    public Guid? TenantId { get; set; }
+    public Guid? UserId { get; set; }
+    public required string Type { get; set; }
+    public string? Ip { get; set; }
+    public string? Detail { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
+}
