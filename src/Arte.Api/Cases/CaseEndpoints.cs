@@ -20,12 +20,12 @@ public static class CaseEndpoints
         string? Mobile, string? CustomerName, Guid? AssetId, NewAsset? NewAsset,
         string? Request, int? OdometerKm, Guid? AssigneeId, Guid? ParentCaseId, string? Relation,
         Dictionary<string, string>? Intake, DateTimeOffset? PromisedAt, long? EstimatedAmountRials,
-        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes);
+        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems);
 
     public sealed record UpdateCase(
         string? Request, string? Diagnosis, int? OdometerKm, long? EstimatedAmountRials,
         DateTimeOffset? PromisedAt, string? CustodyStatus, Dictionary<string, string>? Intake,
-        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes);
+        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems);
 
     public sealed record RunTransition(string? Reason, string? WaitReason, bool? AllowCredit, DateTimeOffset? CreditDueAt);
     public sealed record SetWait(string? WaitReason);
@@ -124,7 +124,7 @@ public static class CaseEndpoints
                 AssetTitle = r.a == null ? null : r.a.Title,
                 Stage = new { r.s.Id, r.s.Key, r.s.Name, r.s.Category, r.s.Color, r.s.IsTerminal },
                 AssetIdentifier = r.a == null ? null : r.a.Identifier,
-                r.AssigneeName, r.c.AssigneeId, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices,
+                r.AssigneeName, r.c.AssigneeId, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices, r.c.ReportedProblems,
                 r.c.WaitReason,
             })
             .ToListAsync(ct);
@@ -132,7 +132,7 @@ public static class CaseEndpoints
         return Results.Ok(items.Select(i => new
         {
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
-            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.OpenedAt, i.Request, i.RequestedServices, i.WaitReason,
+            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.OpenedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason,
             Alert = CaseAlerts.Primary(i.Stage.IsTerminal, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
         }));
     }
@@ -180,7 +180,7 @@ public static class CaseEndpoints
 
         return new
         {
-            c.Id, c.Number, c.Request, c.RequestedServices, c.FuelLevel, c.BodyStatus, c.BodyNotes,
+            c.Id, c.Number, c.Request, c.RequestedServices, c.ReportedProblems, c.FuelLevel, c.BodyStatus, c.BodyNotes,
             c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
             c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation, c.WaitReason,
             c.OpenedAt, c.StageEnteredAt, c.ClosedAt,
@@ -258,8 +258,11 @@ public static class CaseEndpoints
         if (!Mobile.TryNormalize(req.Mobile, out var mobile)) errors["mobile"] = ["شماره موبایل معتبر نیست."];
         var request = req.Request?.Trim() ?? "";
         var services = CleanServices(req.RequestedServices);
+        var problems = CleanServices(req.ReportedProblems);
         if (request.Length > 2000) errors["request"] = ["توضیحات حداکثر ۲۰۰۰ حرف."];
-        if (request.Length == 0 && services is not { Length: > 0 }) errors["request"] = ["حداقل یک سرویس انتخاب کنید یا توضیحی بنویسید."];
+        if (request.Length == 0 && services is not { Length: > 0 } && problems is not { Length: > 0 })
+            errors["request"] = ["حداقل یک ایراد یا خدمت انتخاب کنید یا توضیحی بنویسید."];
+        if (problems is { Length: > 20 } || problems?.Any(x => x.Length > 60) == true) errors["reportedProblems"] = ["حداکثر ۲۰ ایراد، هر کدام تا ۶۰ حرف."];
         ValidateIntakeFields(errors, req.RequestedServices, req.FuelLevel, req.BodyStatus, req.BodyNotes);
         if (req.CustomerName is { Length: > 120 }) errors["customerName"] = ["نام حداکثر ۱۲۰ حرف."];
         if (req.OdometerKm is < 0 or > 2_000_000) errors["odometerKm"] = ["کیلومتر نامعتبر است."];
@@ -314,6 +317,11 @@ public static class CaseEndpoints
             assetId = asset.Id;
         }
 
+        var requireAssignee = await db.Tenants.AsNoTracking()
+            .Where(t => t.Id == me.RequiredMembership.TenantId).Select(t => t.RequireAssigneeOnIntake).SingleAsync(ct);
+        if (requireAssignee && req.AssigneeId is null)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["assigneeId"] = ["پرونده باید به یک همکار سپرده شود."] });
+
         if (req.AssigneeId is { } assignee)
         {
             if (!me.RequiredMembership.Has(Permissions.CasesAssign))
@@ -337,7 +345,7 @@ public static class CaseEndpoints
         {
             Number = number, CustomerId = customer.Id, AssetId = assetId, WorkflowId = workflow.Id, StageId = firstStage.Id,
             AssigneeId = req.AssigneeId, Request = request, OdometerKm = req.OdometerKm,
-            RequestedServices = services ?? [], FuelLevel = req.FuelLevel,
+            RequestedServices = services ?? [], ReportedProblems = problems ?? [], FuelLevel = req.FuelLevel,
             BodyStatus = req.BodyStatus, BodyNotes = NullIfEmpty(req.BodyNotes),
             EstimatedAmountRials = req.EstimatedAmountRials, PromisedAt = req.PromisedAt?.ToUniversalTime(),
             IntakeChecklist = ToJson(req.Intake),
@@ -345,7 +353,7 @@ public static class CaseEndpoints
             OpenedAt = now, StageEnteredAt = now, OpenedBy = userId,
         };
         db.Cases.Add(c);
-        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.OdometerKm, c.ParentCaseId });
+        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.ReportedProblems, c.OdometerKm, c.ParentCaseId });
         if (c.AssigneeId is not null) AddEvent(db, c, CaseEventTypes.Assigned, userId, now, new { To = await MemberName(db, c.AssigneeId.Value, ct) });
 
         await db.SaveChangesAsync(ct);
@@ -367,6 +375,8 @@ public static class CaseEndpoints
 
         var errors = new Dictionary<string, string[]>();
         if (req.Request is { Length: > 2000 }) errors["request"] = ["توضیحات حداکثر ۲۰۰۰ حرف."];
+        if (req.ReportedProblems is { Length: > 20 } || req.ReportedProblems?.Any(x => x is null || x.Length > 60) == true)
+            errors["reportedProblems"] = ["حداکثر ۲۰ ایراد، هر کدام تا ۶۰ حرف."];
         ValidateIntakeFields(errors, req.RequestedServices, req.FuelLevel, req.BodyStatus, req.BodyNotes);
         if (req.Diagnosis is { Length: > 4000 }) errors["diagnosis"] = ["حداکثر ۴۰۰۰ حرف."];
         if (req.OdometerKm is < 0 or > 2_000_000) errors["odometerKm"] = ["کیلومتر نامعتبر است."];
@@ -378,6 +388,7 @@ public static class CaseEndpoints
         var changed = new Dictionary<string, object?>();
         if (req.Request is not null && req.Request.Trim() != c.Request) { c.Request = req.Request.Trim(); changed["request"] = c.Request; }
         if (req.RequestedServices is not null) { c.RequestedServices = CleanServices(req.RequestedServices) ?? []; changed["requestedServices"] = c.RequestedServices; }
+        if (req.ReportedProblems is not null) { c.ReportedProblems = CleanServices(req.ReportedProblems) ?? []; changed["reportedProblems"] = c.ReportedProblems; }
         if (req.FuelLevel is not null && req.FuelLevel != c.FuelLevel) { c.FuelLevel = req.FuelLevel; changed["fuelLevel"] = c.FuelLevel; }
         if (req.BodyStatus is not null && req.BodyStatus != c.BodyStatus) { c.BodyStatus = req.BodyStatus; changed["bodyStatus"] = c.BodyStatus; }
         if (req.BodyNotes is not null && req.BodyNotes.Trim() != (c.BodyNotes ?? "")) { c.BodyNotes = NullIfEmpty(req.BodyNotes); changed["bodyNotes"] = c.BodyNotes; }
@@ -421,13 +432,6 @@ public static class CaseEndpoints
         var from = stages[t.FromStageId];
         var to = stages[t.ToStageId];
         if (!to.IsActive) return Results.Problem(statusCode: 409, title: "این مرحله غیرفعال است.");
-
-        // The plate may be filled in later, but work cannot start on a vehicle without one.
-        if (from.Category == StageCategories.Open && to.Category is StageCategories.Active or StageCategories.Waiting && c.AssetId is { } assetId
-            && await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter])
-                .AnyAsync(a => a.Id == assetId && (a.Identifier == null || a.Identifier == ""), ct))
-            return Results.Problem(statusCode: 409, title: "قبل از شروع کار، پلاک وسیله را ثبت کنید.",
-                extensions: new Dictionary<string, object?> { ["code"] = "plate_required", ["assetId"] = assetId });
 
         // Waiting stages say why. Approval is implied; for parts, who brings them must be chosen.
         string? waitReason = null;
@@ -582,7 +586,7 @@ public static class CaseEndpoints
                 AssetTitle = a == null ? null : a.Title, AssetIdentifier = a == null ? null : a.Identifier,
                 Stage = new { s.Id, s.Key, s.Name, s.Category, s.Color, s.IsTerminal },
                 AssigneeName = mem == null ? null : mem.User!.DisplayName ?? mem.User.Mobile,
-                c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.WaitReason, c.OpenedAt,
+                c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.ReportedProblems, c.WaitReason, c.OpenedAt,
             })
             .Take(500).ToListAsync(ct);
 
@@ -591,7 +595,7 @@ public static class CaseEndpoints
         {
             BalanceRials = balances.GetValueOrDefault(i.Id),
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
-            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.WaitReason, i.OpenedAt,
+            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason, i.OpenedAt,
             Mine = i.AssigneeId == m.Id,
             Reasons = CaseAlerts.All(i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now, seeAll),
             Alert = CaseAlerts.Primary(false, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
@@ -614,6 +618,11 @@ public static class CaseEndpoints
                 Waiting = cards.Count(c => c.WaitReason is not null || c.Stage.Category == StageCategories.Waiting),
                 Ready = cards.Count(c => c.Stage.Category == StageCategories.Done),
                 OpenedToday = await cases.CountAsync(c => c.OpenedAt >= CaseAlerts.TehranMidnightUtc(now), ct),
+                DeliveredToday = await (from c in cases join s in db.Stages on c.StageId equals s.Id
+                                        where s.Key == "delivered" && c.ClosedAt >= CaseAlerts.TehranMidnightUtc(now) select c).CountAsync(ct),
+                Unassigned = open.Count(o => o.AssigneeId == null && o.Stage.Category != StageCategories.Done),
+                Blocked = cards.Count(c => c.WaitReason is not null),
+                ReadyBalanceRials = cards.Where(c => c.Stage.Category == StageCategories.Done).Sum(c => Math.Max(0, c.BalanceRials)),
             },
         });
     }

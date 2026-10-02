@@ -39,6 +39,17 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
         if (token is null) return null;
 
         var now = clock.UtcNow;
+        // Grace window: if the response carrying the new token never arrived (page reloaded, signal dropped),
+        // the client resends the token it just rotated. Within a few seconds that is not theft: issue a fresh
+        // token in the same family. Later replays still revoke the whole family.
+        var grace = TimeSpan.FromSeconds(_jwt.RefreshReuseGraceSeconds);
+        if (token is { RevokedReason: "rotated", RevokedAt: { } rotatedAt } && now - rotatedAt <= grace && token.ExpiresAt > now
+            && !(token.IsOpenMode && !openModeOn))
+        {
+            var again = await resolveMembership(token.UserId, token.TenantId);
+            return await IssueInFamilyAsync(token.UserId, again, token.FamilyId, token.IsOpenMode, ct);
+        }
+
         if (token.RevokedAt is not null)
         {
             if (token.RevokedReason == "rotated")

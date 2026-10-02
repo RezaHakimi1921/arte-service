@@ -81,14 +81,19 @@ public class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         return (client, session);
     }
 
-    /// <summary>New owner with a new business, already selected.</summary>
-    public async Task<(HttpClient Client, Guid TenantId)> NewBusinessAsync(string? mobile = null)
+    /// <summary>
+    /// New owner with a new business, already selected. Most tests open cases without an assignee,
+    /// so the "assignee required at intake" setting is switched off unless asked for.
+    /// </summary>
+    public async Task<(HttpClient Client, Guid TenantId)> NewBusinessAsync(string? mobile = null, bool requireAssignee = false)
     {
         var (client, _) = await LoginAsync(mobile ?? NewMobile());
-        var res = await client.PostAsJsonAsync("/api/v1/tenants", new { name = "موتورسازی تست", inviteCode = InviteCode });
+        var res = await client.PostAsJsonAsync("/api/v1/tenants", new { name = "تعمیرگاه تست", inviteCode = InviteCode });
         res.EnsureSuccessStatusCode();
         var tenantId = (await res.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         await SelectAsync(client, tenantId);
+        if (!requireAssignee)
+            (await client.PutAsJsonAsync("/api/v1/settings/business", new { requireAssigneeOnIntake = false })).EnsureSuccessStatusCode();
         return (client, tenantId);
     }
 

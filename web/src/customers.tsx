@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
 import { PlateView } from "./plate";
-import { Field, MobileInput } from "./ui";
+import { Field, MobileInput, toLatinDigits } from "./ui";
 
 type CustomerRow = { id: string; mobile: string; fullName: string | null; assetCount: number };
 type AssetView = { id: string; title: string; identifier: string | null };
@@ -24,7 +24,7 @@ export function Customers({ canEdit }: { canEdit: boolean }) {
   const [undo, setUndo] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async (term: string) => {
-    setRows(await api<CustomerRow[]>(`/api/v1/customers?q=${encodeURIComponent(term)}`));
+    setRows(await api<CustomerRow[]>(`/api/v1/customers?q=${encodeURIComponent(toLatinDigits(term))}`));
   }, []);
 
   useEffect(() => {

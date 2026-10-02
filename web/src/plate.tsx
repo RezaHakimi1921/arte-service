@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { PLATE_LETTERS, parsePlate, type PlateParts } from "./vehicles";
+import { PLATE_LETTERS, parseMotoPlate, parsePlate, type MotoPlateParts, type PlateParts } from "./vehicles";
 
 const toDigits = (raw: string, max: number) =>
   raw
@@ -70,8 +70,48 @@ export function PlateInput({ value, onChange, invalid }: { value: PlateParts; on
   );
 }
 
+/** Motorcycle plate: 3 digits on top, 5 below, IR strip on the left. */
+export function MotoPlateInput({ value, onChange, invalid }: { value: MotoPlateParts; onChange: (p: MotoPlateParts) => void; invalid?: boolean }) {
+  const bottomRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className={`plate moto-plate${invalid ? " invalid" : ""}`} dir="ltr" role="group" aria-label="پلاک موتورسیکلت">
+      <span className="plate-strip" aria-hidden="true">
+        <span className="plate-flag" />
+        <span>I.R.</span>
+        <span>IRAN</span>
+      </span>
+      <span className="moto-rows">
+        <input
+          className="moto-top" inputMode="numeric" aria-label="سه رقم بالای پلاک" placeholder="۱۲۳"
+          value={fa(value.top)}
+          onChange={(e) => {
+            const digits = toDigits(e.target.value, 8);
+            const top = digits.slice(0, 3);
+            const overflow = digits.slice(3);
+            onChange({ top, bottom: overflow ? overflow : value.bottom });
+            if (top.length === 3) bottomRef.current?.focus();
+          }}
+        />
+        <input
+          ref={bottomRef} className="moto-bottom" inputMode="numeric" aria-label="پنج رقم پایین پلاک" placeholder="۴۵۶۷۸"
+          value={fa(value.bottom)}
+          onChange={(e) => onChange({ ...value, bottom: toDigits(e.target.value, 5) })}
+        />
+      </span>
+    </div>
+  );
+}
+
 /** Read-only plate. Falls back to plain text for identifiers that are not a standard plate. */
 export function PlateView({ identifier }: { identifier: string | null }) {
+  const moto = parseMotoPlate(identifier);
+  if (moto)
+    return (
+      <span className="plate small-plate moto-plate" dir="ltr" aria-label={`پلاک موتورسیکلت ${moto.top} ${moto.bottom}`}>
+        <span className="plate-strip" aria-hidden="true"><span className="plate-flag" /></span>
+        <span className="moto-rows"><span className="plate-text">{fa(moto.top)}</span><span className="plate-text">{fa(moto.bottom)}</span></span>
+      </span>
+    );
   const p = parsePlate(identifier);
   if (!p) return identifier ? <span className="font-num">{identifier}</span> : null;
   return (
@@ -86,3 +126,4 @@ export function PlateView({ identifier }: { identifier: string | null }) {
 }
 
 export const emptyPlate = (): PlateParts => ({ two: "", letter: "", three: "", region: "" });
+export const emptyMotoPlate = (): MotoPlateParts => ({ top: "", bottom: "" });

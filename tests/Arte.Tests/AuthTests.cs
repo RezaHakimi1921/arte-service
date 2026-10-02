@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -93,7 +95,14 @@ public sealed class AuthTests(ArteApiFactory api)
         // T1 is rotated into T2.
         await RefreshAndReadCookie(client);
 
-        // An attacker replays T1.
+        // An attacker replays T1 after the grace window.
+        using (var scope = api.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Arte.Core.Data.ArteDbContext>();
+            var hash = Arte.Api.Auth.TokenService.Hash(stolen);
+            await db.RefreshTokens.Where(t => t.TokenHash == hash)
+                .ExecuteUpdateAsync(x => x.SetProperty(t => t.RevokedAt, DateTimeOffset.UtcNow.AddMinutes(-2)));
+        }
         var replay = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
         replay.Headers.Add("Cookie", $"arte_rt={stolen}");
         var raw = api.Server.CreateClient();
@@ -101,6 +110,20 @@ public sealed class AuthTests(ArteApiFactory api)
 
         // The legitimate session's T2 is now dead too.
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsync("/api/v1/auth/refresh", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_lost_refresh_response_does_not_log_the_user_out()
+    {
+        var (client, _) = await api.LoginAsync(ArteApiFactory.NewMobile());
+        var held = await RefreshAndReadCookie(client);      // the token the browser holds
+        await RefreshAndReadCookie(client);                  // rotated, but pretend the response never arrived
+
+        var retry = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        retry.Headers.Add("Cookie", $"arte_rt={held}");
+        Assert.Equal(HttpStatusCode.OK, (await api.Server.CreateClient().SendAsync(retry)).StatusCode);
+        // And the session is still alive afterwards.
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsync("/api/v1/auth/refresh", null)).StatusCode);
     }
 
     [Fact]

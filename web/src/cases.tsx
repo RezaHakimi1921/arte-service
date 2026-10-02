@@ -3,10 +3,10 @@ import { api, ApiError } from "./api";
 import { BillingSection, CreditSheet, MoneyBar, toman as tomanFmt, type Billing } from "./billing";
 import { useFeedback } from "./feedback";
 import { ALERT_ICON, MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, statusText, type Alert } from "./labels";
-import { PlateInput, PlateView, emptyPlate } from "./plate";
+import { PlateView } from "./plate";
 import { BottomSheet, SheetOption } from "./sheet";
-import { Field, NumberInput, formatNumber } from "./ui";
-import { FUEL_LEVELS, formatPlate, type PlateParts } from "./vehicles";
+import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
+import { FUEL_LEVELS, PROBLEMS, SERVICE_CATEGORIES } from "./vehicles";
 
 /* ───────── types ───────── */
 
@@ -15,12 +15,12 @@ export type CaseCardData = {
   id: string; number: number; customerName: string | null; customerMobile: string; assetTitle: string | null;
   assetIdentifier: string | null; stage: StageRef; assigneeName: string | null; stageEnteredAt: string;
   promisedAt: string | null; request: string; requestedServices: string[]; waitReason: string | null; alert?: Alert | null;
-  reasons?: Alert[]; balanceRials?: number;
+  reasons?: Alert[]; balanceRials?: number; openedAt?: string; reportedProblems?: string[];
 };
 type TransitionView = { id: string; label: string; isPrimary: boolean; requiresReason: boolean; toStage: { name: string; category: string; color: string } };
 type TimelineEntry = { id: number; type: string; occurredAt: string; actor: string | null; data: Record<string, unknown> | null };
 type CaseDetailView = {
-  id: string; number: number; request: string; requestedServices: string[]; fuelLevel: number | null;
+  id: string; number: number; request: string; requestedServices: string[]; reportedProblems: string[]; fuelLevel: number | null;
   bodyStatus: string | null; bodyNotes: string | null; diagnosis: string | null; odometerKm: number | null;
   estimatedAmountRials: number | null; promisedAt: string | null; custodyStatus: string; intake: Record<string, string> | null;
   relation: string | null; waitReason: string | null; openedAt: string; stageEnteredAt: string; closedAt: string | null;
@@ -38,6 +38,7 @@ export type CaseFilter = { category?: string; mine?: boolean; all?: boolean };
 const faDateTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const faWeekdayTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 const faNumber = new Intl.NumberFormat("fa-IR", { useGrouping: false });
+const faShort = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
 export function ago(iso: string) {
   const minutes = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -89,6 +90,7 @@ export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) 
       </span>
       <span className="case-row-meta muted small">
         {c.assigneeName ? `مسئول: ${c.assigneeName}` : "بدون مسئول"}
+        {c.openedAt && ` · پذیرش: ${faShort.format(new Date(c.openedAt))}`}
         {c.promisedAt && ` · قول تحویل: ${promiseText(c.promisedAt)}`}
       </span>
       {c.stage.category === "done" && !!c.balanceRials && c.balanceRials > 0 && (
@@ -124,7 +126,7 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
     if (filter.category) params.set("category", filter.category);
     if (filter.mine) params.set("mine", "true");
     if (filter.all) params.set("all", "true");
-    if (q.trim()) params.set("q", q.trim());
+    if (q.trim()) params.set("q", toLatinDigits(q.trim()));
     const t = setTimeout(() => api<CaseCardData[]>(`/api/v1/cases?${params}`).then(setRows).catch(() => setRows([])), 200);
     return () => clearTimeout(t);
   }, [filter, q]);
@@ -146,7 +148,7 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
         ))}
       </div>
       {rows && rows.length === 0 ? (
-        filtered ? <p className="empty muted">پرونده‌ای با این شرایط پیدا نشد.</p> : <EmptyCases canCreate={canCreate} onNewCase={onNewCase} />
+        filtered ? <p className="empty muted">پرونده‌ای با این شرایط پیدا نشد.</p> : <EmptyCases canCreate={canCreate} />
       ) : (
         <ul className="list">
           {rows?.map((c) => <li key={c.id}><CaseCard c={c} onOpen={onOpen} /></li>)}
@@ -156,16 +158,15 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
   );
 }
 
-export function EmptyCases({ canCreate, onNewCase }: { canCreate: boolean; onNewCase: () => void }) {
+export function EmptyCases({ canCreate }: { canCreate: boolean }) {
   return (
     <div className="empty-state">
       <h3>هنوز پرونده‌ای ثبت نشده</h3>
       <p className="muted">
         {canCreate
-          ? "اولین وسیله را پذیرش کنید تا مراحل تعمیر، مسئول کار و تحویل آن را یک‌جا مدیریت کنید."
+          ? "با دکمه «پذیرش» اولین وسیله را ثبت کنید تا مراحل تعمیر، مسئول کار و تحویل آن را یک‌جا مدیریت کنید."
           : "وقتی کاری به شما سپرده شود، این‌جا می‌بینید و مرحله به مرحله جلو می‌برید."}
       </p>
-      {canCreate && <button className="primary" onClick={onNewCase}>پذیرش اولین وسیله</button>}
     </div>
   );
 }
@@ -188,9 +189,17 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "case.restored": () => "پرونده بازگردانی شد",
   "case.custody_changed": (d) => (d.custodyStatus === "in_shop" ? "وسیله در تعمیرگاه است" : "وسیله دست مشتری است"),
   "case.wait_changed": (d) => (d.waitReason ? `کار متوقف شد: ${WAIT_REASONS[d.waitReason as string] ?? ""}` : "کار دوباره جریان گرفت"),
+  "case.item_added": (d) => d.restored ? `ردیف «${d.title}» بازگردانی شد` : `${ITEM_KIND[d.kind as string] ?? "ردیف"} ثبت شد: ${d.title}${d.quantity && Number(d.quantity) !== 1 ? ` × ${formatNumber(Number(d.quantity))}` : ""}${d.supplier === "customer" ? " (قطعه مشتری)" : ""}${d.status === "needed" ? " (هنوز نصب نشده)" : ""}`,
+  "case.item_updated": (d) => `ردیف «${d.title}» ویرایش شد`,
+  "case.item_removed": (d) => `ردیف «${d.title}» حذف شد`,
+  "payment.recorded": (d) => `پرداخت ${tomanFmt(Number(d.amountRials ?? 0))} (${METHOD[d.method as string] ?? ""})${d.note ? ` — ${d.note}` : ""}`,
+  "payment.voided": (d) => `پرداخت ${tomanFmt(Number(d.amountRials ?? 0))} باطل شد`,
+  "case.credit": (d) => `تحویل به‌صورت نسیه؛ مانده ${tomanFmt(Number(d.balanceRials ?? 0))}`,
 };
+const ITEM_KIND: Record<string, string> = { part: "قطعه", labor: "اجرت", service: "خدمت" };
+const METHOD: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
 const FIELD_NAMES: Record<string, string> = {
-  request: "توضیحات", requestedServices: "سرویس‌ها", fuelLevel: "میزان سوخت", bodyStatus: "وضعیت بدنه", bodyNotes: "شرح آسیب",
+  request: "توضیحات", requestedServices: "خدمات درخواستی", reportedProblems: "ایراد اعلامی", fuelLevel: "میزان سوخت", bodyStatus: "وضعیت بدنه", bodyNotes: "شرح آسیب",
   diagnosis: "عیب‌یابی", odometerKm: "کیلومتر", estimatedAmountRials: "برآورد هزینه", promisedAt: "قول تحویل", intake: "همراه وسیله",
 };
 
@@ -207,7 +216,6 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState("");
   const [staff, setStaff] = useState<Assignable[]>([]);
-  const [needPlate, setNeedPlate] = useState<TransitionView | null>(null);
   const [balanceDue, setBalanceDue] = useState(0);
   const [paySignal, setPaySignal] = useState(0);
 
@@ -255,10 +263,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       notify(`انجام شد: ${t.label}`);
       close();
     } catch (err) {
-      if (err instanceof ApiError && err.body?.code === "plate_required") {
-        close();
-        setNeedPlate(t);
-      } else if (err instanceof ApiError && err.body?.code === "balance_due") {
+      if (err instanceof ApiError && err.body?.code === "balance_due") {
         setPending(t);
         setBalanceDue(Number(err.body.balanceRials ?? 0));
         setSheet("credit");
@@ -327,13 +332,8 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         {c.parentCase && <p className="muted small">برگشتی پرونده <span className="font-num">#{faNumber.format(c.parentCase.number)}</span></p>}
       </div>
 
-      {needPlate && c.asset && (
-        <PlateFix assetId={c.asset.id} onCancel={() => setNeedPlate(null)}
-          onSaved={async () => { const t = needPlate; setNeedPlate(null); await load(); await run(t); }} />
-      )}
-
       {/* Next action: one big button; everything else in a sheet. */}
-      {c.transitions.length > 0 && !needPlate && (
+      {c.transitions.length > 0 && (
         <div className="next-actions">
           {primary && <button className="primary block big" disabled={busy} onClick={() => run(primary)}>{primary.label}</button>}
           <div className="quick-actions">
@@ -347,17 +347,20 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       )}
 
       <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal}
-        onChange={(b) => setC({ ...c, billing: b })} />
+        onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
 
       {/* Secondary details, collapsible. */}
       <Collapsible title="درخواست مشتری" open>
-        {c.requestedServices.length > 0 && <Detail label="سرویس‌ها" value={c.requestedServices.join("، ")} />}
-        {c.request && <Detail label="توضیحات" value={c.request} />}
+        <Detail label="ایراد اعلامی" value={c.reportedProblems.length > 0 ? c.reportedProblems.join("، ") : "—"} />
+        {c.request && <Detail label="شرح مشتری" value={c.request} />}
+        <Detail label="خدمات درخواستی" value={c.requestedServices.length > 0 ? c.requestedServices.join("، ") : "—"} />
         <Detail label="عیب‌یابی" value={c.diagnosis ?? "—"} />
         {c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
-        {c.canEdit && !editing && <button onClick={() => setEditing(true)}>ویرایش</button>}
-        {editing && <CaseEditForm c={c} onDone={(updated) => { setEditing(false); if (updated) { setC(updated); notify("ذخیره شد"); } }} />}
+        {c.canEdit && <button onClick={() => setEditing(true)}>ویرایش درخواست</button>}
       </Collapsible>
+      <BottomSheet open={editing} title="ویرایش درخواست مشتری" onClose={() => setEditing(false)}>
+        {editing && <CaseEditForm c={c} onDone={(updated) => { setEditing(false); if (updated) { setC(updated); notify("ذخیره شد"); } }} />}
+      </BottomSheet>
 
       <Collapsible title="پذیرش و وضعیت ظاهری">
         <Detail label="کیلومتر" value={c.odometerKm != null ? `${formatNumber(c.odometerKm)} کیلومتر` : "—"} />
@@ -379,7 +382,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         <ol className="timeline">
           {c.timeline.map((e) => (
             <li key={e.id}>
-              <span className="timeline-text">{(EVENT_TEXT[e.type] ?? (() => e.type))(e.data ?? {})}</span>
+              <span className="timeline-text">{(EVENT_TEXT[e.type] ?? (() => "تغییر در پرونده"))(e.data ?? {})}</span>
               <span className="muted small">{faDateTime.format(new Date(e.occurredAt))}{e.actor ? ` · ${e.actor}` : ""}</span>
             </li>
           ))}
@@ -516,37 +519,6 @@ function VehicleAttributes({ attributes }: { attributes: Record<string, string> 
   return <Detail label="مشخصات وسیله" value={rows.map(([k, name]) => `${name}: ${attributes[k]}`).join(" · ")} />;
 }
 
-function PlateFix({ assetId, onSaved, onCancel }: { assetId: string; onSaved: () => void; onCancel: () => void }) {
-  const [plate, setPlate] = useState<PlateParts>(emptyPlate());
-  const [error, setError] = useState<string | null>(null);
-
-  async function save() {
-    const identifier = formatPlate(plate);
-    if (!identifier) {
-      setError("پلاک کامل نیست.");
-      return;
-    }
-    try {
-      await api(`/api/v1/assets/${assetId}`, { method: "PATCH", body: { identifier } });
-      onSaved();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "خطا");
-    }
-  }
-
-  return (
-    <div className="card attention">
-      <h3>قبل از شروع کار، پلاک را وارد کنید</h3>
-      <PlateInput value={plate} onChange={setPlate} invalid={!!error} />
-      {error && <span className="error">{error}</span>}
-      <div className="actions">
-        <button className="primary" onClick={save}>ثبت پلاک و ادامه</button>
-        <button onClick={onCancel}>انصراف</button>
-      </div>
-    </div>
-  );
-}
-
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div className="detail">
@@ -557,6 +529,9 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: CaseDetailView | null) => void }) {
+  const [problems, setProblems] = useState<string[]>(c.reportedProblems);
+  const [services, setServices] = useState<string[]>(c.requestedServices);
+  const [category, setCategory] = useState(SERVICE_CATEGORIES[0].name);
   const [request, setRequest] = useState(c.request);
   const [diagnosis, setDiagnosis] = useState(c.diagnosis ?? "");
   const [odometer, setOdometer] = useState(c.odometerKm?.toString() ?? "");
@@ -567,7 +542,7 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
-    const body: Record<string, unknown> = { request, diagnosis };
+    const body: Record<string, unknown> = { request, diagnosis, reportedProblems: problems, requestedServices: services };
     if (odometer) body.odometerKm = Number(odometer);
     if (c.canManage && estimate) body.estimatedAmountRials = Number(estimate) * 10;
     setBusy(true);
@@ -585,7 +560,35 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
 
   return (
     <form className="edit-form" onSubmit={submit} noValidate>
-      <Field label="توضیحات" error={errors.request}>
+      <div className="field">
+        <span className="label">ایراد اعلامی</span>
+        <div className="chips">
+          {[...new Set([...PROBLEMS, ...problems])].map((p) => (
+            <button type="button" key={p} aria-pressed={problems.includes(p)} className={`chip-button${problems.includes(p) ? " active" : ""}`}
+              onClick={() => setProblems(problems.includes(p) ? problems.filter((x) => x !== p) : [...problems, p])}>{p}</button>
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        <span className="label">خدمات درخواستی</span>
+        <div className="category-tabs" role="tablist" aria-label="دسته خدمات">
+          {SERVICE_CATEGORIES.map((cat) => (
+            <button type="button" key={cat.name} role="tab" aria-selected={category === cat.name}
+              className={`category-tab${category === cat.name ? " on" : ""}`} onClick={() => setCategory(cat.name)}>
+              {cat.name}
+              {cat.services.some((x) => services.includes(x)) && <span className="count font-num">{formatNumber(cat.services.filter((x) => services.includes(x)).length)}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="chips">
+          {(SERVICE_CATEGORIES.find((x) => x.name === category) ?? SERVICE_CATEGORIES[0]).services.map((x) => (
+            <button type="button" key={x} aria-pressed={services.includes(x)} className={`chip-button${services.includes(x) ? " active" : ""}`}
+              onClick={() => setServices(services.includes(x) ? services.filter((y) => y !== x) : [...services, x])}>{x}</button>
+          ))}
+        </div>
+        {services.length > 0 && <p className="picked muted small">انتخاب‌شده: {services.join("، ")}</p>}
+      </div>
+      <Field label="شرح مشتری" error={errors.request}>
         <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={2000} rows={3} />
       </Field>
       <Field label="عیب‌یابی" error={errors.diagnosis}>

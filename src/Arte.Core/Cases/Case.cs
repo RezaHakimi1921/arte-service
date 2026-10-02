@@ -61,8 +61,10 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     public long? EstimatedAmountRials { get; set; }
     public DateTimeOffset? PromisedAt { get; set; }
 
-    /// <summary>Services the customer asked for / problems they reported, picked from a list.</summary>
+    /// <summary>Services the customer asked for, picked from the categorised list (no free text).</summary>
     public string[] RequestedServices { get; set; } = [];
+    /// <summary>Problems the customer reported («ایراد اعلامی»), picked from a list; details go in Request.</summary>
+    public string[] ReportedProblems { get; set; } = [];
     /// <summary>0 empty … 4 full, null = not checked.</summary>
     public short? FuelLevel { get; set; }
     /// <summary>ok | damaged, null = not checked.</summary>

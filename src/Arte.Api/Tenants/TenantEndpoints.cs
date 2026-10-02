@@ -15,6 +15,7 @@ namespace Arte.Api.Tenants;
 public static class TenantEndpoints
 {
     public sealed record CreateTenant(string? Name, string? Phone, string? InviteCode, string? OwnerName);
+    public sealed record BusinessSettings(string? Name, string? Phone, string? Address, bool? RequireAssigneeOnIntake);
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -32,11 +33,35 @@ public static class TenantEndpoints
                 {
                     m.TenantId,
                     Name = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.Name).SingleAsync(ct),
+                    RequireAssigneeOnIntake = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.RequireAssigneeOnIntake).SingleAsync(ct),
                     m.Role,
                     Permissions = m.Role == Roles.Owner ? [.. Permissions.All] : m.Permissions,
                 },
             });
         }).RequireAuthorization();
+
+        app.MapGet("/api/v1/settings/business", async (RequestUser me, ArteDbContext db, CancellationToken ct) =>
+            Results.Ok(await db.Tenants.AsNoTracking().Where(t => t.Id == me.RequiredMembership.TenantId)
+                .Select(t => new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake }).SingleAsync(ct)))
+            .RequirePermission(Permissions.SettingsManage);
+
+        app.MapPut("/api/v1/settings/business", async (BusinessSettings req, RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
+        {
+            var errors = new Dictionary<string, string[]>();
+            if (req.Name is not null && (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 120)) errors["name"] = ["نام ۱ تا ۱۲۰ حرف."];
+            if (req.Phone is { Length: > 20 }) errors["phone"] = ["حداکثر ۲۰ کاراکتر."];
+            if (req.Address is { Length: > 300 }) errors["address"] = ["حداکثر ۳۰۰ حرف."];
+            if (errors.Count > 0) return Results.ValidationProblem(errors);
+
+            var t = await db.Tenants.SingleAsync(x => x.Id == me.RequiredMembership.TenantId, ct);
+            if (req.Name is not null) t.Name = req.Name.Trim();
+            if (req.Phone is not null) t.Phone = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim();
+            if (req.Address is not null) t.Address = string.IsNullOrWhiteSpace(req.Address) ? null : req.Address.Trim();
+            if (req.RequireAssigneeOnIntake is { } r) t.RequireAssigneeOnIntake = r;
+            audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake });
+        }).RequirePermission(Permissions.SettingsManage);
 
         app.MapPost("/api/v1/tenants", async (CreateTenant req, RequestUser me, IServiceScopeFactory scopes,
             IOptions<SignupOptions> signup, ArteDbContext db, CancellationToken ct) =>

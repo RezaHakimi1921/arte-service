@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
 import { useFeedback } from "./feedback";
 import { BottomSheet, SheetOption } from "./sheet";
-import { Field, NumberInput, formatNumber } from "./ui";
+import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
 
 /* ───────── types ───────── */
 
@@ -238,7 +238,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) { setError("عنوان را بنویسید."); return; }
-    const q = Number(qty.replace(/[^\d.]/g, ""));
+    const q = Number(toLatinDigits(qty).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, ""));
     if (!(q > 0)) { setError("تعداد نامعتبر است."); return; }
     const body: Record<string, unknown> = {
       kind, title: title.trim(), quantity: q, unitPriceRials: toRials(price), discountRials: toRials(discount),
@@ -283,7 +283,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
 
         <div className="grid-2">
           <Field label="تعداد">
-            <input inputMode="decimal" dir="ltr" className="font-num" value={qty} onChange={(e) => setQty(e.target.value.replace(/[^\d.۰-۹]/g, "").slice(0, 7))} />
+            <input inputMode="decimal" dir="ltr" className="font-num" value={qty} onChange={(e) => setQty(toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 7))} />
           </Field>
           <Field label={supplier === "customer" && kind === "part" ? "قیمت (برای سابقه)" : "قیمت فروش (هر عدد)"}>
             <NumberInput value={price} onChange={setPrice} max={11} suffix="تومان" />

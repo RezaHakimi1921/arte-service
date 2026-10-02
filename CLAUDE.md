@@ -31,6 +31,13 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 - Vehicle intake order: type (سواری / شاسی‌بلند / ون / وانت / موتورسیکلت) → brand → model → model year
   (from `web/src/vehicles.ts`; "سایر" allows free text). Production years there are approximate.
 - Fuel level colours run red (empty) → green (full) via `--fuel-0…4`.
+- **Persian digits are accepted in every input** (mobile, plate, amounts, quantities, search): convert with
+  `toLatinDigits` / `onlyDigits` before sending; the server only ever sees Latin digits.
+- Long pick lists (brand, model) use the searchable `Combobox`; typed text is kept if not in the list.
+- Plates: car plate `12ب345-11` (`PlateInput`), motorcycle plate `123-45678` (`MotoPlateInput`). The plate is optional.
+- Reported problems («ایراد اعلامی») and requested services («خدمات درخواستی») are separate lists; services come only
+  from the categorised list (`SERVICE_CATEGORIES`), never free text.
+- Never copy a competitor's wording or rules; take ideas, write our own.
 - **Every calendar and date is Persian (Jalali)**: display with `Intl.DateTimeFormat("fa-IR-u-ca-persian", …)`,
   pick dates with Jalali day chips (امروز / فردا / weekday + Jalali date), never a browser `<input type="date">`
   or a Gregorian calendar. Store UTC on the server. The only Gregorian exception is a vehicle's model year, when the user chooses «میلادی».

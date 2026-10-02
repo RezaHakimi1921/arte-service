@@ -142,10 +142,27 @@ export const COLORS = ["سفید", "مشکی", "نقره‌ای", "خاکستر�
 export const FUELS = ["بنزینی", "دوگانه‌سوز", "دیزلی", "هیبرید", "برقی"];
 export const GEARBOXES = ["دستی", "اتوماتیک", "CVT"];
 
-export const SERVICES = [
-  "تعویض روغن", "تعویض فیلترها", "سرویس دوره‌ای", "عیب‌یابی فنی", "ترمز", "جلوبندی و تعلیق", "برق و باتری",
-  "کولر و بخاری", "گیربکس و کلاچ", "اگزوز", "لاستیک و رینگ", "صافکاری", "نقاشی", "شستشو", "صدای غیرعادی", "روشن نمی‌شود",
+/** What the customer says is wrong («ایراد اعلامی»). Free-text details go in the notes. */
+export const PROBLEMS = [
+  "روشن نمی‌شود", "دیر روشن می‌شود", "خاموش می‌کند", "صدای غیرعادی", "لرزش", "دود", "نشتی روغن یا آب",
+  "جوش آوردن", "ترمز ضعیف یا صدا دارد", "فرمان سنگین یا کج", "مصرف سوخت بالا", "کم‌قدرت شده", "چراغ هشدار روشن است",
+  "کولر خنک نمی‌کند", "مشکل برق و باتری", "تصادف یا آسیب بدنه",
 ];
+
+/** Services the customer asks for, grouped by category. Chosen from the list only (no free text). */
+export const SERVICE_CATEGORIES: { name: string; services: string[] }[] = [
+  { name: "سرویس دوره‌ای", services: ["تعویض روغن", "تعویض فیلتر روغن", "تعویض فیلتر هوا", "تعویض فیلتر کابین", "تعویض فیلتر بنزین", "سرویس کامل دوره‌ای", "تعویض شمع"] },
+  { name: "فنی و مکانیکی", services: ["عیب‌یابی فنی", "تنظیم و سرویس انژکتور", "تعمیر سرسیلندر", "تعویض تسمه تایم", "تعویض واتر پمپ", "تعمیر اساسی"] },
+  { name: "ترمز", services: ["تعویض لنت جلو", "تعویض لنت عقب", "تراش دیسک", "تعویض روغن ترمز", "تعمیر کالیپر"] },
+  { name: "جلوبندی و تعلیق", services: ["تعمیر جلوبندی", "تعویض کمک‌فنر", "تنظیم فرمان و زاویه", "بالانس چرخ"] },
+  { name: "گیربکس و کلاچ", services: ["تعویض روغن گیربکس", "تعویض دیسک و صفحه کلاچ", "تعمیر گیربکس"] },
+  { name: "برق و الکترونیک", services: ["تعویض باتری", "تعمیر دینام", "تعمیر استارت", "عیب‌یابی با دیاگ", "سیم‌کشی و چراغ‌ها"] },
+  { name: "کولر و بخاری", services: ["شارژ گاز کولر", "تعمیر کمپرسور", "سرویس بخاری"] },
+  { name: "بدنه", services: ["صافکاری", "نقاشی", "پولیش و واکس", "شستشو"] },
+  { name: "لاستیک و رینگ", services: ["تعویض لاستیک", "پنچرگیری", "تعمیر رینگ"] },
+];
+
+export const ALL_SERVICES = SERVICE_CATEGORIES.flatMap((c) => c.services);
 
 export const ACCOMPANYING = ["سوئیچ یدک", "کارت و مدارک", "زاپاس", "جک و آچار", "ریموت / دزدگیر", "ضبط یا پنل"];
 
@@ -155,6 +172,18 @@ export const FUEL_LEVELS = ["خالی", "یک‌چهارم", "نصف", "سه‌�
 export const PLATE_LETTERS = ["الف", "ب", "پ", "ت", "ث", "ج", "د", "ز", "س", "ش", "ص", "ط", "ع", "ف", "ق", "ک", "گ", "ل", "م", "ن", "و", "ه", "ی", "ژ", "D", "S"];
 
 export type PlateParts = { two: string; letter: string; three: string; region: string };
+
+/** Motorcycle plate: 3 digits on top, 5 below → "123-45678". */
+export type MotoPlateParts = { top: string; bottom: string };
+
+export function parseMotoPlate(identifier: string | null | undefined): MotoPlateParts | null {
+  const m = identifier?.match(/^(\d{3})-(\d{5})$/);
+  return m ? { top: m[1], bottom: m[2] } : null;
+}
+
+export function formatMotoPlate(p: MotoPlateParts): string | null {
+  return p.top.length === 3 && p.bottom.length === 5 ? `${p.top}-${p.bottom}` : null;
+}
 
 /** "12ب345-11" ⇄ parts. Anything else is treated as a free-text identifier. */
 export function parsePlate(identifier: string | null | undefined): PlateParts | null {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
 import { CaseDetail, CasesView, type CaseFilter } from "./cases";
-import { FeedbackProvider } from "./feedback";
+import { FeedbackProvider, useFeedback } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { CatalogView, ReceivablesView } from "./billing";
@@ -13,7 +13,7 @@ type Me = {
   mobile: string;
   displayName: string | null;
   openMode: boolean;
-  business: { tenantId: string; name: string; role: string; permissions: string[] } | null;
+  business: { tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean } | null;
 };
 type Tab = "home" | "cases" | "customers" | "staff" | "more";
 
@@ -64,7 +64,7 @@ export default function App() {
   if (!me.business) return <ChooseBusiness session={session} onDone={signIn} />;
   return (
     <FeedbackProvider>
-      <Shell me={me} onSignOut={() => signIn(null)} />
+      <Shell me={me} onSignOut={() => signIn(null)} onSettingsChanged={() => { api<Me>("/api/v1/me").then(setMe).catch(() => {}); }} />
     </FeedbackProvider>
   );
 }
@@ -239,13 +239,13 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
 
 /* ───────── Shell ───────── */
 
-function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
+function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => void; onSettingsChanged: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
   const [caseId, setCaseId] = useState<string | null>(null);
   const [newCase, setNewCase] = useState(false);
   const [caseFilter, setCaseFilter] = useState<CaseFilter>({});
   const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
-  const [morePage, setMorePage] = useState<"receivables" | "catalog" | null>(null);
+  const [morePage, setMorePage] = useState<"receivables" | "catalog" | "settings" | null>(null);
   const can = (p: string) => me.business!.permissions.includes(p);
 
   // A new page starts at the top, not at the previous page's scroll position.
@@ -275,7 +275,7 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
 
   let page;
   if (tab === "cases" && newCase)
-    page = <NewCaseView canAssign={can("cases.assign")} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
+    page = <NewCaseView canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
       onOpenStaff={() => go(can("staff.manage") ? "staff" : "more")} />;
   else if (tab === "cases" && caseId)
     page = <CaseDetail id={caseId} onBack={() => setCaseId(null)} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
@@ -285,6 +285,7 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
   else if (tab === "staff") page = <StaffList />;
   else if (tab === "more" && morePage === "receivables") page = <ReceivablesView onBack={() => setMorePage(null)} onOpenCase={(id) => { setTab("cases"); setCaseId(id); }} />;
   else if (tab === "more" && morePage === "catalog") page = <CatalogView onBack={() => setMorePage(null)} canSeeCost={can("reports.view")} />;
+  else if (tab === "more" && morePage === "settings") page = <BusinessSettingsView onBack={() => setMorePage(null)} onSaved={onSettingsChanged} />;
   else if (tab === "more") page = <More me={me} onSignOut={onSignOut} onOpen={setMorePage} can={can} />;
   else page = <HomeView key={String(caseId)} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
 
@@ -406,7 +407,7 @@ function StaffList() {
 /* ───────── More ───────── */
 
 function More({ me, onSignOut, onOpen, can }: {
-  me: Me; onSignOut: () => void; onOpen: (p: "receivables" | "catalog") => void; can: (p: string) => boolean;
+  me: Me; onSignOut: () => void; onOpen: (p: "receivables" | "catalog" | "settings") => void; can: (p: string) => boolean;
 }) {
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "light");
 
@@ -429,6 +430,9 @@ function More({ me, onSignOut, onOpen, can }: {
       </div>
       {(can("payments.record") || can("reports.view")) && (
         <button className="row-button" onClick={() => onOpen("receivables")}><span>نسیه‌ها</span><span className="muted">طلب از مشتریان</span></button>
+      )}
+      {can("settings.manage") && (
+        <button className="row-button" onClick={() => onOpen("settings")}><span>تنظیمات کسب‌وکار</span><span className="muted">نام، قوانین پذیرش</span></button>
       )}
       {can("cases.create") && (
         <button className="row-button" onClick={() => onOpen("catalog")}><span>فهرست قیمت</span><span className="muted">قطعه، اجرت، خدمت</span></button>
@@ -520,6 +524,58 @@ function AccountSettings() {
       {saved && <span className="success" role="status">ذخیره شد.</span>}
       <button className="primary" disabled={busy}>ذخیره</button>
     </form>
+  );
+}
+
+type BusinessSettings = { name: string; phone: string | null; address: string | null; requireAssigneeOnIntake: boolean };
+
+function BusinessSettingsView({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
+  const { notify } = useFeedback();
+  const [s, setS] = useState<BusinessSettings | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<BusinessSettings>("/api/v1/settings/business").then(setS).catch(() => {}); }, []);
+
+  async function save(next: Partial<BusinessSettings>) {
+    if (!s || busy) return;
+    setBusy(true);
+    try {
+      setS(await api<BusinessSettings>("/api/v1/settings/business", { method: "PUT", body: { ...s, ...next } }));
+      notify("ذخیره شد");
+      onSaved();
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "خطا", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!s) return <div className="splash" aria-busy="true" />;
+  return (
+    <section>
+      <button className="link back" onClick={onBack}>→ بیشتر</button>
+      <h2>تنظیمات کسب‌وکار</h2>
+      <form className="card" onSubmit={(e) => { e.preventDefault(); save({}); }}>
+        <Field label="نام کسب‌وکار">
+          <input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} maxLength={120} />
+        </Field>
+        <Field label="تلفن">
+          <input type="tel" inputMode="tel" dir="ltr" value={s.phone ?? ""} onChange={(e) => setS({ ...s, phone: e.target.value })} maxLength={20} />
+        </Field>
+        <Field label="نشانی">
+          <textarea rows={2} value={s.address ?? ""} onChange={(e) => setS({ ...s, address: e.target.value })} maxLength={300} />
+        </Field>
+        <button className="primary" disabled={busy}>ذخیره</button>
+      </form>
+      <h3>قوانین پذیرش</h3>
+      <label className="setting-row">
+        <span>
+          <strong>تعیین مسئول هنگام پذیرش الزامی باشد</strong>
+          <span className="muted small">هر پرونده جدید باید همان لحظه به یک همکار سپرده شود.</span>
+        </span>
+        <input type="checkbox" role="switch" className="switch" checked={s.requireAssigneeOnIntake} disabled={busy}
+          onChange={(e) => save({ requireAssigneeOnIntake: e.target.checked })} />
+      </label>
+    </section>
   );
 }
 

@@ -170,14 +170,7 @@ public sealed class CaseTests(ArteApiFactory api)
         Assert.Equal("damaged", c.GetProperty("bodyStatus").GetString());
         Assert.Equal("پژو", c.GetProperty("asset").GetProperty("attributes").GetProperty("brand").GetString());
 
-        // Work cannot start before the plate is entered…
-        var start = await owner.PostAsJsonAsync($"/api/v1/cases/{c.GetProperty("id")}/transitions/{Primary(c)}", new { });
-        Assert.Equal(HttpStatusCode.Conflict, start.StatusCode);
-        Assert.Contains("plate_required", await start.Content.ReadAsStringAsync());
-
-        // …and can once it is.
-        var assetId = c.GetProperty("asset").GetProperty("id").GetGuid();
-        Assert.Equal(HttpStatusCode.OK, (await owner.PatchAsJsonAsync($"/api/v1/assets/{assetId}", new { identifier = "12ب345-11" })).StatusCode);
+        // The plate is optional: work starts without it, and it can be added later.
         c = await Run(owner, c, Primary(c));
         Assert.Equal("diagnosing", StageKey(c));
     }
@@ -244,6 +237,36 @@ public sealed class CaseTests(ArteApiFactory api)
         var hit = await Json(await a.GetAsync($"/api/v1/assets/lookup?identifier={Uri.EscapeDataString(plate)}"));
         Assert.Equal("صاحب", hit.GetProperty("customer").GetProperty("fullName").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync($"/api/v1/assets/lookup?identifier={Uri.EscapeDataString(plate)}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Assignee_is_required_at_intake_unless_the_owner_turns_it_off()
+    {
+        var (owner, _) = await api.NewBusinessAsync(requireAssignee: true);
+        var res = await owner.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), reportedProblems = new[] { "روشن نمی‌شود" } });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        Assert.Contains("assigneeId", await res.Content.ReadAsStringAsync());
+
+        var me = await Json(await owner.GetAsync("/api/v1/me"));
+        Assert.True(me.GetProperty("business").GetProperty("requireAssigneeOnIntake").GetBoolean());
+        var staff = await Json(await owner.GetAsync("/api/v1/staff/assignable"));
+        var ownerMember = staff[0].GetProperty("id").GetGuid();
+        var ok = await Json(await owner.PostAsJsonAsync("/api/v1/cases",
+            new { mobile = ArteApiFactory.NewMobile(), reportedProblems = new[] { "روشن نمی‌شود" }, assigneeId = ownerMember }));
+        var detail = await Json(await owner.GetAsync($"/api/v1/cases/{ok.GetProperty("id")}"));
+        Assert.Equal("روشن نمی‌شود", detail.GetProperty("reportedProblems")[0].GetString());
+
+        // Problems and services are edited separately later.
+        var edited = await Json(await owner.PatchAsJsonAsync($"/api/v1/cases/{ok.GetProperty("id")}",
+            new { reportedProblems = new[] { "صدای غیرعادی" }, requestedServices = new[] { "تعویض روغن", "ترمز" } }));
+        Assert.Equal(2, edited.GetProperty("requestedServices").GetArrayLength());
+        Assert.Equal("صدای غیرعادی", edited.GetProperty("reportedProblems")[0].GetString());
+
+        // A technician cannot change business settings.
+        var techMobile = ArteApiFactory.NewMobile();
+        await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, role = "technician" });
+        var (tech, _) = await api.LoginAsync(techMobile);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tech.PutAsJsonAsync("/api/v1/settings/business", new { requireAssigneeOnIntake = false })).StatusCode);
     }
 
     [Fact]

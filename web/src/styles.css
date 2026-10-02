@@ -440,8 +440,9 @@ input.vin { text-transform: uppercase; letter-spacing: 0.08em; }
 .toggle.bad { color: var(--stage-red); background: var(--bad-bg); border-color: transparent; }
 .toggle.good.on { outline: 2px solid var(--stage-green); font-weight: 700; }
 .toggle.bad.on { outline: 2px solid var(--stage-red); font-weight: 700; }
-.intake-submit { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
-.intake-submit button { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); margin-bottom: 0; }
+/* Not sticky: a floating footer covered the last chips on small screens. */
+.intake-footer { display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.5rem; }
+.intake-footer button { margin: 0; }
 
 /* ── Iranian plate ── */
 .plate {
@@ -753,3 +754,63 @@ button.secondary { background: var(--accent-soft); color: var(--accent); border-
 .suggestions { display: flex; flex-direction: column; gap: 0.3rem; }
 .suggestion { display: flex; justify-content: space-between; align-items: center; min-height: 44px; text-align: start; }
 .row-static.inactive { opacity: 0.55; }
+
+/* ── searchable select ── */
+.combo { position: relative; }
+.combo-list {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+.combo-list li { padding: 0.65rem 0.75rem; border-radius: 8px; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.combo-list li.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+@media (hover: hover) and (pointer: fine) { .combo-list li:hover { background: var(--surface-2); } }
+
+/* ── service categories ── */
+.category-tabs { display: flex; gap: 0.35rem; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 0.2rem; scrollbar-width: none; }
+.category-tabs::-webkit-scrollbar { display: none; }
+.category-tab { flex-shrink: 0; min-height: 38px; padding: 0.3rem 0.8rem; border-radius: 10px; font-size: 0.88rem; display: inline-flex; gap: 0.35rem; align-items: center; }
+.category-tab.on { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 700; }
+.category-tab.on .count { background: rgba(255, 255, 255, 0.25); color: inherit; }
+.picked { margin: 0; }
+select.invalid { border-color: var(--danger); }
+
+/* ── dashboard tiles ── */
+.tile-sub { margin-top: 0.1rem; }
+.tiles { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 560px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+
+/* ── motorcycle plate: 3 digits over 5 ── */
+.moto-plate { height: 70px; }
+.moto-rows { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 0.5rem; }
+.moto-rows input { height: 32px; text-align: center; }
+.moto-top { width: 4em; }
+.moto-bottom { width: 6.5em; }
+.small-plate.moto-plate { height: 38px; }
+.small-plate .moto-rows { padding: 0 0.3rem; line-height: 1.05; }
+.small-plate .moto-rows .plate-text { padding: 0; font-size: 0.75rem; }
+
+/* ── settings ── */
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.setting-row > span { display: flex; flex-direction: column; gap: 0.15rem; }
+.switch { width: 46px; height: 28px; min-height: 28px; flex-shrink: 0; accent-color: var(--accent); }
