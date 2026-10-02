@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -60,7 +62,7 @@ public sealed class CaseTests(ArteApiFactory api)
     {
         var (owner, _) = await api.NewBusinessAsync();
         var c = await Open(owner);
-        foreach (var expected in new[] { "diagnosing", "awaiting_approval", "repairing", "testing", "ready", "delivered" })
+        foreach (var expected in new[] { "diagnosing", "repairing", "review", "ready", "delivered" })
         {
             c = await Run(owner, c, Primary(c));
             Assert.Equal(expected, StageKey(c));
@@ -86,16 +88,82 @@ public sealed class CaseTests(ArteApiFactory api)
 
         var c = await Json(await tech.GetAsync($"/api/v1/cases/{mine.GetProperty("id")}"));
         c = await Run(tech, c, TransitionTo(c, "در حال تعمیر"));
-        c = await Run(tech, c, Primary(c)); // پایان تعمیر → تست
-        c = await Run(tech, c, Primary(c)); // آماده تحویل
-        Assert.Equal("ready", StageKey(c));
-
-        // Delivery needs cases.create: not offered to the technician, and refused if forced.
+        c = await Run(tech, c, Primary(c)); // پایان کار → بررسی استاد
+        Assert.Equal("review", StageKey(c));
+        // The technician cannot approve their own work.
         Assert.Empty(c.GetProperty("transitions").EnumerateArray());
+
         var ownerView = await Json(await owner.GetAsync($"/api/v1/cases/{mine.GetProperty("id")}"));
+        ownerView = await Run(owner, ownerView, Primary(ownerView)); // تأیید؛ اطلاع به مشتری
+        Assert.Equal("ready", StageKey(ownerView));
         var deliver = Primary(ownerView);
         Assert.Equal(HttpStatusCode.Forbidden,
             (await tech.PostAsJsonAsync($"/api/v1/cases/{mine.GetProperty("id")}/transitions/{deliver}", new { })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Optional_steps_follow_the_business_settings()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+
+        // No review: finishing the repair goes straight to "ready".
+        (await owner.PutAsJsonAsync("/api/v1/settings/business", new { requireFinalReview = false })).EnsureSuccessStatusCode();
+        var c = await Open(owner);
+        c = await Run(owner, c, Primary(c));                         // عیب‌یابی
+        Assert.Equal("repairing", StageKey(c = await Run(owner, c, Primary(c)))); // approval off → main step is repair
+        c = await Run(owner, c, Primary(c));
+        Assert.Equal("ready", StageKey(c));
+
+        // Customer approval on: diagnosis leads to waiting for the customer.
+        (await owner.PutAsJsonAsync("/api/v1/settings/business", new { requireCustomerApproval = true, requireFinalReview = true })).EnsureSuccessStatusCode();
+        var d = await Open(owner);
+        d = await Run(owner, d, Primary(d));
+        d = await Run(owner, d, Primary(d));
+        Assert.Equal("awaiting_approval", StageKey(d));
+        Assert.Equal("customer_approval", d.GetProperty("waitReason").GetString());
+        d = await Run(owner, d, Primary(d));
+        d = await Run(owner, d, Primary(d));
+        Assert.Equal("review", StageKey(d));
+    }
+
+    [Fact]
+    public async Task Upgrader_moves_an_old_business_onto_the_new_template()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var c = await Open(owner);
+        var caseId = c.GetProperty("id").GetGuid();
+
+        // Simulate the previous template: an active "testing" stage holding the case, approval switched on.
+        using (var scope = api.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<Arte.Core.Tenancy.TenantContext>().Set(tenantId);
+            var db = scope.ServiceProvider.GetRequiredService<Arte.Core.Data.ArteDbContext>();
+            var wf = await db.Workflows.Include(w => w.Stages).SingleAsync();
+            var testing = new Arte.Core.Workflows.Stage { WorkflowId = wf.Id, Key = "testing", Name = "تست", Category = "active", Order = 5 };
+            db.Stages.Add(testing);
+            wf.Stages.Single(x => x.Key == "awaiting_approval").IsActive = true;
+            await db.SaveChangesAsync();
+            await db.Cases.Where(x => x.Id == caseId).ExecuteUpdateAsync(x => x.SetProperty(k => k.StageId, testing.Id));
+        }
+
+        (await owner.PutAsJsonAsync("/api/v1/settings/business", new { name = "تعمیرگاه تست" })).EnsureSuccessStatusCode();
+
+        var after = await Json(await owner.GetAsync($"/api/v1/cases/{caseId}"));
+        Assert.Equal("review", StageKey(after));
+        var keys = (await Json(await owner.GetAsync("/api/v1/workflow"))).GetProperty("stages").EnumerateArray().Select(x => x.GetProperty("key").GetString()).ToList();
+        Assert.DoesNotContain("testing", keys);
+        Assert.DoesNotContain("awaiting_approval", keys);
+    }
+
+    [Fact]
+    public async Task Case_number_can_be_searched_as_CASE_prefix()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        await Open(owner);
+        var second = await Open(owner);
+        var hits = await Json(await owner.GetAsync("/api/v1/cases?q=CASE-2"));
+        Assert.Equal(second.GetProperty("id").GetGuid(), Assert.Single(hits.EnumerateArray()).GetProperty("id").GetGuid());
+        Assert.Equal("case.opened", hits[0].GetProperty("lastEvent").GetProperty("type").GetString());
     }
 
     [Fact]

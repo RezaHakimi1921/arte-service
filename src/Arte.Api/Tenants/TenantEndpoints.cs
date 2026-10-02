@@ -15,7 +15,8 @@ namespace Arte.Api.Tenants;
 public static class TenantEndpoints
 {
     public sealed record CreateTenant(string? Name, string? Phone, string? InviteCode, string? OwnerName);
-    public sealed record BusinessSettings(string? Name, string? Phone, string? Address, bool? RequireAssigneeOnIntake);
+    public sealed record BusinessSettings(string? Name, string? Phone, string? Address, bool? RequireAssigneeOnIntake,
+        bool? RequireCustomerApproval, bool? RequireFinalReview);
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -42,7 +43,7 @@ public static class TenantEndpoints
 
         app.MapGet("/api/v1/settings/business", async (RequestUser me, ArteDbContext db, CancellationToken ct) =>
             Results.Ok(await db.Tenants.AsNoTracking().Where(t => t.Id == me.RequiredMembership.TenantId)
-                .Select(t => new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake }).SingleAsync(ct)))
+                .Select(t => new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
 
         app.MapPut("/api/v1/settings/business", async (BusinessSettings req, RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
@@ -58,9 +59,14 @@ public static class TenantEndpoints
             if (req.Phone is not null) t.Phone = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim();
             if (req.Address is not null) t.Address = string.IsNullOrWhiteSpace(req.Address) ? null : req.Address.Trim();
             if (req.RequireAssigneeOnIntake is { } r) t.RequireAssigneeOnIntake = r;
+            if (req.RequireCustomerApproval is { } ca) t.RequireCustomerApproval = ca;
+            if (req.RequireFinalReview is { } fr) t.RequireFinalReview = fr;
             audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
             await db.SaveChangesAsync(ct);
-            return Results.Ok(new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake });
+            // Optional workflow steps follow the settings.
+            await WorkflowUpgrader.UpgradeTenantAsync(db, t, ct);
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview });
         }).RequirePermission(Permissions.SettingsManage);
 
         app.MapPost("/api/v1/tenants", async (CreateTenant req, RequestUser me, IServiceScopeFactory scopes,
@@ -115,7 +121,7 @@ public static class TenantEndpoints
             Permissions = Roles.DefaultPermissions(Roles.Owner),
             CreatedAt = clock.UtcNow,
         });
-        db.Workflows.Add(WorkflowTemplates.Instantiate(WorkflowTemplates.MotorcycleRepair, tenant.Id));
+        db.Workflows.Add(WorkflowTemplates.Instantiate(WorkflowTemplates.MotorcycleRepair, tenant.Id, tenant));
 
         if (!string.IsNullOrEmpty(ownerName))
         {

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
 import { MotoPlateInput, PlateInput, PlateView, emptyMotoPlate, emptyPlate } from "./plate";
-import { Combobox, Field, MobileInput, NumberInput, formatNumber } from "./ui";
+import { ServicePicker } from "./services";
+import { Combobox, Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import {
-  ACCOMPANYING, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, PROBLEMS, SERVICE_CATEGORIES, VEHICLE_CATALOG, VEHICLE_KINDS,
+  ACCOMPANYING, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, PROBLEMS, VEHICLE_CATALOG, VEHICLE_KINDS,
   formatMotoPlate, formatPlate, modelYears, type MotoPlateParts, type PlateParts, type VehicleKind,
 } from "./vehicles";
 
@@ -60,6 +61,9 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
   const [model, setModel] = useState("");
   const [calendar, setCalendar] = useState<"jalali" | "gregorian">("jalali");
   const [year, setYear] = useState("");
+  const [yearText, setYearText] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [justRegistered, setJustRegistered] = useState(false);
   const [allYears, setAllYears] = useState(false);
   const [plate, setPlate] = useState<PlateParts>(emptyPlate());
   const [motoPlate, setMotoPlate] = useState<MotoPlateParts>(emptyMotoPlate());
@@ -78,7 +82,6 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
   const [problems, setProblems] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [services, setServices] = useState<string[]>([]);
-  const [category, setCategory] = useState(SERVICE_CATEGORIES[0].name);
   const [assigneeId, setAssigneeId] = useState("");
   const [staff, setStaff] = useState<Assignable[] | null>(null);
   const [parent, setParent] = useState<ParentSuggestion>(null);
@@ -95,6 +98,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
   useEffect(() => {
     setCustomer(null);
     setLookedUp(false);
+    setJustRegistered(false);
     setAssetId("new");
     if (mobile.length !== 11) return;
     api<CustomerHit[]>(`/api/v1/customers?q=${mobile}`)
@@ -157,6 +161,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
     setBrand("");
     setModel("");
     setYear("");
+    setYearText("");
     setAllYears(false);
   }
 
@@ -224,8 +229,23 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
     }
   }
 
+  /** Saves the new customer now, so the rest of the intake continues for a known customer. */
+  async function saveCustomer() {
+    if (savingCustomer || mobile.length !== 11) return;
+    setSavingCustomer(true);
+    try {
+      const created = await api<{ id: string }>("/api/v1/customers", { body: { mobile, fullName: customerName.trim() || undefined } });
+      setCustomer(await api<CustomerFull>(`/api/v1/customers/${created.id}`));
+      setJustRegistered(true);
+      setErrors((e) => ({ ...e, customer: "" }));
+    } catch (err) {
+      setErrors((e) => ({ ...e, customer: err instanceof ApiError ? err.message : "خطا" }));
+    } finally {
+      setSavingCustomer(false);
+    }
+  }
+
   const sameOwner = plateOwner && plateOwner.customer.mobile === mobile;
-  const currentCategory = SERVICE_CATEGORIES.find((c) => c.name === category) ?? SERVICE_CATEGORIES[0];
   const assigneeSection = canAssign && (
     <Section icon="user" title={requireAssignee ? "مسئول پرونده" : "مسئول پرونده (اختیاری)"}>
       <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} aria-label="مسئول پرونده" className={errors.assignee ? "invalid" : ""}>
@@ -263,7 +283,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
         )}
         {customer && (
           <p className="customer-found">
-            <span className="badge good">مشتری قبلی</span>
+            <span className="badge good">{justRegistered ? "مشتری ثبت شد" : "مشتری قبلی"}</span>
             <strong>{customer.fullName ?? "بدون نام"}</strong>
             <span className="muted small">{customer.assets.length > 0 ? `${formatNumber(customer.assets.length)} وسیله ثبت‌شده` : ""}</span>
           </p>
@@ -271,7 +291,13 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
         {!customer && lookedUp && (
           <div className="new-customer">
             <p><span className="badge warn">مشتری جدید</span> نام مشتری را وارد کنید.</p>
-            <input placeholder="نام و نام خانوادگی" value={customerName} onChange={(e) => setCustomerName(e.target.value)} maxLength={120} aria-label="نام مشتری" />
+            <div className="inline-form">
+              <input placeholder="نام و نام خانوادگی" value={customerName} onChange={(e) => setCustomerName(e.target.value)} maxLength={120} aria-label="نام مشتری" />
+              <button type="button" className="primary" onClick={saveCustomer} disabled={savingCustomer} aria-busy={savingCustomer}>
+                {savingCustomer ? "در حال ثبت…" : "ثبت مشتری"}
+              </button>
+            </div>
+            {errors.customer && <span className="error">{errors.customer}</span>}
           </div>
         )}
       </Section>
@@ -308,11 +334,11 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
               <div className="grid-2">
                 <Field label="برند">
                   <Combobox label="برند" value={brand} options={brands} placeholder="جستجوی برند"
-                    onChange={(v) => { setBrand(v); setModel(""); setYear(""); setAllYears(false); }} />
+                    onChange={(v) => { setBrand(v); setModel(""); setYear(""); setYearText(""); setAllYears(false); }} />
                 </Field>
                 <Field label="مدل">
                   <Combobox label="مدل" value={model} options={models} placeholder={brand.trim() ? "جستجوی مدل" : "اول برند"}
-                    disabled={!brand.trim()} onChange={(v) => { setModel(v); setYear(""); setAllYears(false); }} />
+                    disabled={!brand.trim()} onChange={(v) => { setModel(v); setYear(""); setYearText(""); setAllYears(false); }} />
                 </Field>
               </div>
             )}
@@ -326,12 +352,17 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
                     <button type="button" role="radio" aria-checked={calendar === "gregorian"} className={calendar === "gregorian" ? "on" : ""} onClick={() => { setCalendar("gregorian"); setYear(""); }}>میلادی</button>
                   </span>
                 </div>
-                <select value={year} aria-label="سال ساخت"
-                  onChange={(e) => { if (e.target.value === "other") { setAllYears(true); setYear(""); } else setYear(e.target.value); }}>
-                  <option value="">انتخاب سال</option>
-                  {years.map((y) => <option key={y} value={y}>{faYear.format(y)}</option>)}
-                  {!allYears && modelEntry?.[1] && <option value="other">سال دیگر…</option>}
-                </select>
+                <Combobox label="سال ساخت" value={yearText} placeholder="جستجوی سال، مثلاً ۱۳۹۸"
+                  options={years.map((y) => faYear.format(y))}
+                  onChange={(v) => {
+                    setYearText(v);
+                    const digits = toLatinDigits(v).replace(/\D/g, "");
+                    setYear(digits.length === 4 ? digits : "");
+                    if (digits.length === 4 && !years.includes(Number(digits))) setAllYears(true);
+                  }} />
+                {!allYears && modelEntry?.[1] && (
+                  <button type="button" className="link small" onClick={() => setAllYears(true)}>سال‌های دیگر</button>
+                )}
               </div>
             )}
 
@@ -413,24 +444,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
       </Section>
 
       <Section icon="list" title="خدمات درخواستی" badge={services.length > 0 && <span className="badge good">{formatNumber(services.length)} خدمت</span>}>
-        <div className="category-tabs" role="tablist" aria-label="دسته خدمات">
-          {SERVICE_CATEGORIES.map((c) => {
-            const picked = c.services.filter((s) => services.includes(s)).length;
-            return (
-              <button type="button" key={c.name} role="tab" aria-selected={category === c.name}
-                className={`category-tab${category === c.name ? " on" : ""}`} onClick={() => setCategory(c.name)}>
-                {c.name}{picked > 0 && <span className="count font-num">{formatNumber(picked)}</span>}
-              </button>
-            );
-          })}
-        </div>
-        <div className="chips">
-          {currentCategory.services.map((s) => (
-            <button type="button" key={s} aria-pressed={services.includes(s)} className={`chip-button${services.includes(s) ? " active" : ""}`}
-              onClick={() => toggle(services, setServices, s)}>{s}</button>
-          ))}
-        </div>
-        {services.length > 0 && <p className="picked muted small">انتخاب‌شده: {services.join("، ")}</p>}
+        <ServicePicker value={services} onChange={setServices} />
       </Section>
 
       {requireAssignee && assigneeSection}
@@ -482,7 +496,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
 
       {errors.form && <p className="error" role="alert">{errors.form}</p>}
       <div className="intake-footer">
-        <button className="primary block big" disabled={busy}>{busy ? "در حال ثبت…" : full ? "ثبت پذیرش" : "ثبت سریع"}</button>
+        <button className="primary block big" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت پذیرش…" : full ? "ثبت پذیرش" : "ثبت سریع"}</button>
         {!full && (
           <button type="button" className="block secondary" onClick={() => setFull(true)}>
             تکمیل پذیرش (کیلومتر، سوخت، بدنه…)

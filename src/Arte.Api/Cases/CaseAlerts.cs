@@ -20,9 +20,10 @@ public static class CaseAlerts
         new DateTimeOffset(now.ToOffset(Tehran).Date, Tehran).ToUniversalTime();
 
     public static List<Alert> All(string category, Guid? assigneeId, DateTimeOffset stageEnteredAt, DateTimeOffset? promisedAt,
-        string? waitReason, DateTimeOffset now, bool forManager)
+        string? waitReason, DateTimeOffset now, bool forManager, string? stageKey = null)
     {
         var list = new List<Alert>();
+        if (forManager && stageKey == "review") list.Add(new("review", "کار تمام شده؛ منتظر بررسی شما", "warn"));
         var days = (int)Math.Floor((now - stageEnteredAt).TotalDays);
         var done = category == StageCategories.Done;
 

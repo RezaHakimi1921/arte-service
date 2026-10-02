@@ -50,4 +50,6 @@ public sealed class Transition : ITenantOwned
     public bool RequiresReason { get; set; }
     /// <summary>Permission needed to run it, e.g. cases.work or cases.create.</summary>
     public required string RequiredPermission { get; set; }
+    /// <summary>Only offered while the stage with this key is switched off (e.g. "finish → ready" when there is no review).</summary>
+    public string? UnlessStageKey { get; set; }
 }

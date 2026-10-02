@@ -30,3 +30,46 @@ export function statusText(stage: StageLike, waitReason: string | null | undefin
 export type Alert = { code: string; text: string; severity: "warn" | "danger" };
 
 export const ALERT_ICON: Record<string, string> = { warn: "⚠", danger: "⏰" };
+
+/** Case number as used in search, messages and the API: CASE-1024 (Latin digits, never grouped). */
+export const caseCode = (n: number) => `CASE-${n}`;
+
+const tomanText = (rials: unknown) => `${new Intl.NumberFormat("fa-IR").format(Math.round(Number(rials ?? 0) / 10))} تومان`;
+const ITEM_KIND: Record<string, string> = { part: "قطعه", labor: "اجرت", service: "خدمت" };
+const METHOD: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
+const FIELD_NAMES: Record<string, string> = {
+  request: "شرح مشتری", requestedServices: "خدمات درخواستی", reportedProblems: "ایراد اعلامی", fuelLevel: "میزان سوخت",
+  bodyStatus: "وضعیت بدنه", bodyNotes: "شرح آسیب", diagnosis: "عیب‌یابی", odometerKm: "کیلومتر",
+  estimatedAmountRials: "برآورد هزینه", promisedAt: "قول تحویل", intake: "همراه وسیله",
+};
+
+const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
+  "case.opened": () => "پرونده باز شد",
+  "case.stage_changed": (d) =>
+    `${d.action ?? "تغییر مرحله"}: از «${d.from}» به «${d.to}»`
+    + (d.waitReason ? ` — ${WAIT_REASONS[d.waitReason as string] ?? ""}` : "")
+    + (d.reason ? ` (دلیل: ${d.reason})` : ""),
+  "case.assigned": (d) => (d.to ? `سپرده شد به ${d.to}` : "مسئول برداشته شد"),
+  "case.updated": (d) => `ویرایش: ${Object.keys(d).map((k) => FIELD_NAMES[k] ?? k).join("، ")}`,
+  "case.note_added": (d) => `یادداشت: ${d.text}`,
+  "case.reopened": (d) => `پرونده دوباره باز شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
+  "case.delivered": () => "وسیله تحویل مشتری شد",
+  "case.cancelled": (d) => `پرونده لغو شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
+  "case.deleted": () => "پرونده حذف شد",
+  "case.restored": () => "پرونده بازگردانی شد",
+  "case.custody_changed": (d) => (d.custodyStatus === "in_shop" ? "وسیله در تعمیرگاه است" : "وسیله دست مشتری است"),
+  "case.wait_changed": (d) => (d.waitReason ? `کار متوقف شد: ${WAIT_REASONS[d.waitReason as string] ?? ""}` : "کار دوباره جریان گرفت"),
+  "case.item_added": (d) => d.restored
+    ? `ردیف «${d.title}» بازگردانی شد`
+    : `${ITEM_KIND[d.kind as string] ?? "ردیف"} ثبت شد: ${d.title}${d.quantity && Number(d.quantity) !== 1 ? ` × ${new Intl.NumberFormat("fa-IR").format(Number(d.quantity))}` : ""}${d.supplier === "customer" ? " (قطعه مشتری)" : ""}${d.status === "needed" ? " (هنوز نصب نشده)" : ""}`,
+  "case.item_updated": (d) => `ردیف «${d.title}» ویرایش شد`,
+  "case.item_removed": (d) => `ردیف «${d.title}» حذف شد`,
+  "payment.recorded": (d) => `پرداخت ${tomanText(d.amountRials)} (${METHOD[d.method as string] ?? ""})${d.note ? ` — ${d.note}` : ""}`,
+  "payment.voided": (d) => `پرداخت ${tomanText(d.amountRials)} باطل شد`,
+  "case.credit": (d) => `تحویل به‌صورت نسیه؛ مانده ${tomanText(d.balanceRials)}`,
+};
+
+/** Plain Persian for any timeline event; never shows a raw code. */
+export function eventText(type: string, data: Record<string, unknown> | null | undefined): string {
+  return (EVENT_TEXT[type] ?? (() => "تغییر در پرونده"))(data ?? {});
+}

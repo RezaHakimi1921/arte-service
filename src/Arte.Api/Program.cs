@@ -150,6 +150,24 @@ if (config.GetValue("Database:MigrateOnStartup", false))
     await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Database.MigrateAsync();
 }
 
+// Keep every business on the current workflow template (idempotent).
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var tenantIds = await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Tenants.Select(t => t.Id).ToListAsync();
+    foreach (var tenantId in tenantIds)
+    {
+        await using var tenantScope = app.Services.CreateAsyncScope();
+        tenantScope.ServiceProvider.GetRequiredService<TenantContext>().Set(tenantId);
+        var db = tenantScope.ServiceProvider.GetRequiredService<ArteDbContext>();
+        var tenant = await db.Tenants.SingleAsync(t => t.Id == tenantId);
+        if (await Arte.Core.Workflows.WorkflowUpgrader.UpgradeTenantAsync(db, tenant, CancellationToken.None) > 0)
+        {
+            await db.SaveChangesAsync();
+            app.Logger.LogInformation("Workflow upgraded for tenant {TenantId}", tenantId);
+        }
+    }
+}
+
 if (!config.GetValue("Auth:OpenMode", false))
 {
     await using var scope = app.Services.CreateAsyncScope();

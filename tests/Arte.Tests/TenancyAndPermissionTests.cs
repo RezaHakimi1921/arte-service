@@ -40,7 +40,8 @@ public sealed class TenancyAndPermissionTests(ArteApiFactory api)
         var (client, _) = await api.NewBusinessAsync();
         var wf = await client.GetFromJsonAsync<JsonElement>("/api/v1/workflow");
         var keys = wf.GetProperty("stages").EnumerateArray().Select(s => s.GetProperty("key").GetString()).ToList();
-        Assert.Equal(["received", "diagnosing", "awaiting_approval", "awaiting_parts", "repairing", "testing", "ready", "delivered", "cancelled"], keys);
+        // Customer approval is off by default; the master's final review is on.
+        Assert.Equal(["received", "diagnosing", "awaiting_parts", "repairing", "review", "ready", "delivered", "cancelled"], keys);
     }
 
     [Fact]

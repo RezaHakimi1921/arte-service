@@ -43,6 +43,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Vertical).HasMaxLength(40);
             e.Property(x => x.Phone).HasMaxLength(20);
             e.Property(x => x.Address).HasMaxLength(300);
+            e.Property(x => x.RequireFinalReview).HasDefaultValue(true);
         });
 
         b.Entity<User>(e =>
@@ -137,6 +138,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         {
             e.Property(x => x.Label).HasMaxLength(60);
             e.Property(x => x.RequiredPermission).HasMaxLength(40);
+            e.Property(x => x.UnlessStageKey).HasMaxLength(40);
             e.HasIndex(x => new { x.WorkflowId, x.FromStageId });
             e.HasOne<Stage>().WithMany().HasForeignKey(x => x.FromStageId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Stage>().WithMany().HasForeignKey(x => x.ToStageId).OnDelete(DeleteBehavior.Restrict);

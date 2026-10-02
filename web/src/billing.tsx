@@ -332,7 +332,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
           </label>
         )}
 
-        <button className="primary block" disabled={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+        <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
         {onDelete && <SheetOption label="حذف این ردیف" tone="danger" disabled={busy} onClick={onDelete} />}
       </form>
     </BottomSheet>
@@ -377,7 +377,7 @@ function PaymentSheet({ open, suggested, busy, onClose, onSave }: {
         <Field label="توضیح (اختیاری)">
           <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="مثلاً بیعانه خرید قطعه" />
         </Field>
-        <button className="primary block" disabled={busy}>{busy ? "در حال ثبت…" : "ثبت پرداخت"}</button>
+        <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت…" : "ثبت پرداخت"}</button>
       </form>
     </BottomSheet>
   );
@@ -427,7 +427,7 @@ export function ReceivablesView({ onOpenCase, onBack }: { onOpenCase: (id: strin
   const dateFmt = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
   return (
     <section>
-      <button className="link back" onClick={onBack}>→ بیشتر</button>
+      <button className="link back" onClick={onBack}>→ تنظیمات</button>
       <h2>نسیه‌ها</h2>
       {error && <p className="error">{error}</p>}
       {data && (
@@ -506,7 +506,7 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
 
   return (
     <section>
-      <button className="link back" onClick={onBack}>→ بیشتر</button>
+      <button className="link back" onClick={onBack}>→ تنظیمات</button>
       <div className="toolbar"><h2 style={{ margin: 0, flex: 1 }}>فهرست قیمت</h2><button className="primary" onClick={() => open("new")}>+ افزودن</button></div>
       {rows.length === 0 && <p className="empty muted">قطعه‌ها، اجرت‌ها و خدمات پرتکرار را با قیمت این‌جا ثبت کنید تا هنگام ثبت در پرونده با چند حرف پیدا شوند.</p>}
       <ul className="list">

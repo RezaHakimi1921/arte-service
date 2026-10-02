@@ -38,6 +38,14 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 - Reported problems («ایراد اعلامی») and requested services («خدمات درخواستی») are separate lists; services come only
   from the categorised list (`SERVICE_CATEGORIES`), never free text.
 - Never copy a competitor's wording or rules; take ideas, write our own.
+- **Loading is always visible**: every button that submits sets `disabled` + `aria-busy` while waiting (CSS draws a
+  spinner) and says what it is doing («در حال ثبت پذیرش…»); every page that loads data shows `.splash` (spinner) until
+  ready; navigation after a submit happens only when the server answered. Never a frozen button or a blank page.
+- Light theme is the default; the theme is stored (`arte-theme`) only when the user picks one in Settings → ظاهر.
+- Case numbers are shown as `CASE-123` (Latin, never grouped) everywhere, and search accepts that form.
+- Settings is one calm grouped list (حساب، کسب‌وکار، فروش، مدیریت، سیستم); each row opens its own single-purpose page.
+- Workflow steps that differ between shops (customer approval, master's final review…) are **business settings**
+  that switch stages on/off via `WorkflowUpgrader`, never code branches per shop.
 - **Every calendar and date is Persian (Jalali)**: display with `Intl.DateTimeFormat("fa-IR-u-ca-persian", …)`,
   pick dates with Jalali day chips (امروز / فردا / weekday + Jalali date), never a browser `<input type="date">`
   or a Gregorian calendar. Store UTC on the server. The only Gregorian exception is a vehicle's model year, when the user chooses «میلادی».

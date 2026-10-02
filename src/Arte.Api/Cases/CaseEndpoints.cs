@@ -102,7 +102,8 @@ public static class CaseEndpoints
         if (!string.IsNullOrEmpty(term))
         {
             if (term.Length > 60) return Results.ValidationProblem(new Dictionary<string, string[]> { ["q"] = ["عبارت جستجو طولانی است."] });
-            if (long.TryParse(term.TrimStart('#'), out var number) && term.Length <= 8)
+            var numberText = System.Text.RegularExpressions.Regex.Replace(term, "^(?i:case)[-\\s]*|^#", "");
+            if (long.TryParse(numberText, out var number) && numberText.Length <= 9)
                 rows = rows.Where(r => r.c.Number == number);
             else
             {
@@ -126,6 +127,8 @@ public static class CaseEndpoints
                 AssetIdentifier = r.a == null ? null : r.a.Identifier,
                 r.AssigneeName, r.c.AssigneeId, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices, r.c.ReportedProblems,
                 r.c.WaitReason,
+                LastEvent = db.CaseEvents.Where(e => e.CaseId == r.c.Id).OrderByDescending(e => e.Id)
+                    .Select(e => new { e.Type, e.OccurredAt, e.Data }).FirstOrDefault(),
             })
             .ToListAsync(ct);
         var now = DateTimeOffset.UtcNow;
@@ -133,6 +136,7 @@ public static class CaseEndpoints
         {
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
             i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.OpenedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason,
+            LastEvent = i.LastEvent == null ? null : new { i.LastEvent.Type, i.LastEvent.OccurredAt, Data = i.LastEvent.Data?.RootElement },
             Alert = CaseAlerts.Primary(i.Stage.IsTerminal, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
         }));
     }
@@ -154,12 +158,22 @@ public static class CaseEndpoints
         var stage = stages[c.StageId];
         var transitions = await db.Transitions.AsNoTracking()
             .Where(t => t.WorkflowId == c.WorkflowId && t.FromStageId == c.StageId).ToListAsync(ct);
-        var allowed = transitions
-            .Where(t => stages.TryGetValue(t.ToStageId, out var to) && to.IsActive && CaseAccess.CanRun(me, c, t))
-            .OrderByDescending(t => t.IsPrimary)
+        var activeKeys = stages.Values.Where(s => s.IsActive).Select(s => s.Key).ToHashSet();
+        var offered = transitions
+            .Where(t => stages.TryGetValue(t.ToStageId, out var to) && to.IsActive
+                        && (t.UnlessStageKey is null || !activeKeys.Contains(t.UnlessStageKey)))
+            .ToList();
+        // If the template's main step points at a switched-off stage, the next forward step becomes the main button.
+        var primaryId = offered.FirstOrDefault(t => t.IsPrimary)?.Id
+            ?? offered.Where(t => stages[t.ToStageId].Category is not (StageCategories.Cancelled or StageCategories.Waiting)
+                                  && stages[t.ToStageId].Order > stage.Order)
+                .OrderBy(t => stages[t.ToStageId].Order).FirstOrDefault()?.Id;
+        var allowed = offered
+            .Where(t => CaseAccess.CanRun(me, c, t))
+            .OrderByDescending(t => t.Id == primaryId)
             .Select(t => new
             {
-                t.Id, t.Label, t.IsPrimary, t.RequiresReason,
+                t.Id, t.Label, IsPrimary = t.Id == primaryId, t.RequiresReason,
                 ToStage = new { stages[t.ToStageId].Name, stages[t.ToStageId].Category, stages[t.ToStageId].Color },
             })
             .ToList();
@@ -421,6 +435,8 @@ public static class CaseEndpoints
         if (t.FromStageId != c.StageId)
             return Results.Problem(statusCode: 409, title: "وضعیت پرونده در این فاصله تغییر کرده است. صفحه را تازه کنید.");
         if (!CaseAccess.CanRun(m, c, t)) return Results.Problem(statusCode: 403, title: "اجازه این اقدام را ندارید.");
+        if (t.UnlessStageKey is { } unless && await db.Stages.AnyAsync(s => s.WorkflowId == c.WorkflowId && s.Key == unless && s.IsActive, ct))
+            return Results.Problem(statusCode: 409, title: "این اقدام در روند فعلی کسب‌وکار وجود ندارد.");
 
         var reason = req.Reason?.Trim();
         if (t.RequiresReason && string.IsNullOrEmpty(reason))
@@ -587,6 +603,8 @@ public static class CaseEndpoints
                 Stage = new { s.Id, s.Key, s.Name, s.Category, s.Color, s.IsTerminal },
                 AssigneeName = mem == null ? null : mem.User!.DisplayName ?? mem.User.Mobile,
                 c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.ReportedProblems, c.WaitReason, c.OpenedAt,
+                LastEvent = db.CaseEvents.Where(e => e.CaseId == c.Id).OrderByDescending(e => e.Id)
+                    .Select(e => new { e.Type, e.OccurredAt, e.Data }).FirstOrDefault(),
             })
             .Take(500).ToListAsync(ct);
 
@@ -597,7 +615,8 @@ public static class CaseEndpoints
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
             i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason, i.OpenedAt,
             Mine = i.AssigneeId == m.Id,
-            Reasons = CaseAlerts.All(i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now, seeAll),
+            LastEvent = i.LastEvent == null ? null : new { i.LastEvent.Type, i.LastEvent.OccurredAt, Data = i.LastEvent.Data?.RootElement },
+            Reasons = CaseAlerts.All(i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now, seeAll, i.Stage.Key),
             Alert = CaseAlerts.Primary(false, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
         }).ToList();
 

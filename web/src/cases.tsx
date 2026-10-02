@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { api, ApiError } from "./api";
 import { BillingSection, CreditSheet, MoneyBar, toman as tomanFmt, type Billing } from "./billing";
 import { useFeedback } from "./feedback";
-import { ALERT_ICON, MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, statusText, type Alert } from "./labels";
+import { ALERT_ICON, MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, caseCode, eventText, statusText, type Alert } from "./labels";
+import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SheetOption } from "./sheet";
 import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
-import { FUEL_LEVELS, PROBLEMS, SERVICE_CATEGORIES } from "./vehicles";
+import { ServicePicker } from "./services";
+import { FUEL_LEVELS, PROBLEMS } from "./vehicles";
 
 /* ───────── types ───────── */
 
@@ -16,6 +18,7 @@ export type CaseCardData = {
   assetIdentifier: string | null; stage: StageRef; assigneeName: string | null; stageEnteredAt: string;
   promisedAt: string | null; request: string; requestedServices: string[]; waitReason: string | null; alert?: Alert | null;
   reasons?: Alert[]; balanceRials?: number; openedAt?: string; reportedProblems?: string[];
+  lastEvent?: { type: string; occurredAt: string; data: Record<string, unknown> | null } | null;
 };
 type TransitionView = { id: string; label: string; isPrimary: boolean; requiresReason: boolean; toStage: { name: string; category: string; color: string } };
 type TimelineEntry = { id: number; type: string; occurredAt: string; actor: string | null; data: Record<string, unknown> | null };
@@ -37,7 +40,6 @@ export type CaseFilter = { category?: string; mine?: boolean; all?: boolean };
 
 const faDateTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const faWeekdayTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-const faNumber = new Intl.NumberFormat("fa-IR", { useGrouping: false });
 const faShort = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
 export function ago(iso: string) {
@@ -72,31 +74,68 @@ function AlertLine({ alert }: { alert: Alert }) {
 
 /* ───────── card ───────── */
 
+const maskMobile = (m: string) => (m.length === 11 ? `${m.slice(0, 4)}•••${m.slice(7)}` : m);
+
+/** "۲ ساعت مانده" / "۳ ساعت گذشته" until the promised delivery. */
+function slaText(promisedAt: string): { text: string; late: boolean } {
+  const ms = new Date(promisedAt).getTime() - Date.now();
+  const late = ms < 0;
+  const minutes = Math.round(Math.abs(ms) / 60000);
+  const span = minutes < 60 ? `${formatNumber(minutes)} دقیقه` : minutes < 1440 ? `${formatNumber(Math.round(minutes / 60))} ساعت` : `${formatNumber(Math.round(minutes / 1440))} روز`;
+  return { text: late ? `${span} از قول تحویل گذشته` : `${span} تا قول تحویل`, late };
+}
+
+function Progress({ stage }: { stage: StageRef }) {
+  const wf = useWorkflow();
+  if (!wf || stage.category === "cancelled") return null;
+  const { path, index } = progressOf(wf.stages, stage);
+  if (path.length < 2 || index < 0) return null;
+  return (
+    <span className="progress" role="img" aria-label={`مرحله ${formatNumber(index + 1)} از ${formatNumber(path.length)}: ${stage.name}`}>
+      <span className="progress-track">
+        {path.map((p, i) => (
+          <span key={p.id} className={`progress-step${i < index ? " done" : i === index ? ` now stage-bg-${stage.category === "waiting" ? "orange" : stage.color}` : ""}`} />
+        ))}
+      </span>
+      <span className="progress-caption muted small">مرحله {formatNumber(index + 1)} از {formatNumber(path.length)}</span>
+    </span>
+  );
+}
+
+/**
+ * One look: what is this, where is it now, whose is it, and what happened last.
+ * Everything else lives in the case page.
+ */
 export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) => void }) {
   // The status line already says "منتظر تصمیم استاد"; do not repeat it as a warning.
   const alerts = (c.reasons ?? (c.alert ? [c.alert] : [])).filter((a) => a.code !== "owner_decision");
+  const status = statusText(c.stage, c.waitReason, null);
+  const color = c.waitReason ? "orange" : c.stage.color;
+  const sla = c.promisedAt && !c.stage.isTerminal ? slaText(c.promisedAt) : null;
   return (
     <button className="case-card" onClick={() => onOpen(c.id)}>
       <span className="case-row-top">
-        <span className="case-row-title">
-          {c.assetTitle ?? "بدون وسیله"}
-          <span className="muted"> — {c.customerName ?? c.customerMobile}</span>
-        </span>
-        <span className="font-num muted small">#{faNumber.format(c.number)}</span>
+        <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
+        <span className={`status-badge stage-${color}`}><span className="dot" aria-hidden="true" />{status}</span>
       </span>
-      {c.assetIdentifier && <PlateView identifier={c.assetIdentifier} />}
-      <span className={`status-line stage-${c.waitReason ? "orange" : c.stage.color}`}>
-        {statusText(c.stage, c.waitReason, c.assigneeName)} · {ago(c.stageEnteredAt)}
+      <span className="case-title">
+        <strong>{c.assetTitle ?? "بدون وسیله"}</strong>
+        {c.assetIdentifier && <PlateView identifier={c.assetIdentifier} />}
       </span>
-      <span className="case-row-meta muted small">
-        {c.assigneeName ? `مسئول: ${c.assigneeName}` : "بدون مسئول"}
-        {c.openedAt && ` · پذیرش: ${faShort.format(new Date(c.openedAt))}`}
-        {c.promisedAt && ` · قول تحویل: ${promiseText(c.promisedAt)}`}
+      <span className="muted">{c.customerName ?? <span dir="ltr" className="font-num">{maskMobile(c.customerMobile)}</span>}</span>
+      <Progress stage={c.stage} />
+      <span className="case-facts small">
+        <span>👤 {c.assigneeName ?? "بدون مسئول"}</span>
+        <span>🕐 {c.lastEvent ? `${ago(c.lastEvent.occurredAt)} پیش` : `${ago(c.stageEnteredAt)} پیش`}</span>
+        {c.openedAt && <span className="muted">پذیرش {faShort.format(new Date(c.openedAt))}</span>}
       </span>
+      {sla && <span className={`alert-line ${sla.late ? "danger" : "warn"}`}>⏱ {sla.text}</span>}
+      {c.lastEvent && <span className="last-activity muted small">آخرین فعالیت: {eventText(c.lastEvent.type, c.lastEvent.data)}</span>}
       {c.stage.category === "done" && !!c.balanceRials && c.balanceRials > 0 && (
         <span className="alert-line warn">مانده: <span className="font-num">{tomanFmt(c.balanceRials)}</span></span>
       )}
-      {alerts.slice(0, 2).map((a) => <AlertLine key={a.code} alert={a} />)}
+      {alerts.filter((a) => !a.code.startsWith("due") && a.code !== "overdue").slice(0, 1).map((a) => <AlertLine key={a.code} alert={a} />)}
+      <span className="open-link small">باز کردن پرونده ‹</span>
     </button>
   );
 }
@@ -136,7 +175,7 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
   return (
     <section>
       <div className="toolbar">
-        <input type="search" placeholder="شماره پرونده، نام، موبایل، پلاک یا مدل" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جستجوی پرونده" />
+        <input type="search" placeholder="CASE-12، نام، موبایل، پلاک یا مدل" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جستجوی پرونده" />
         {canCreate && <button className="primary" onClick={onNewCase}>+ پذیرش</button>}
       </div>
       <div className="chips" role="tablist">
@@ -172,36 +211,6 @@ export function EmptyCases({ canCreate }: { canCreate: boolean }) {
 }
 
 /* ───────── detail ───────── */
-
-const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
-  "case.opened": () => "پرونده باز شد",
-  "case.stage_changed": (d) =>
-    `${d.action ?? "تغییر مرحله"}: از «${d.from}» به «${d.to}»`
-    + (d.waitReason ? ` — ${WAIT_REASONS[d.waitReason as string] ?? ""}` : "")
-    + (d.reason ? ` (دلیل: ${d.reason})` : ""),
-  "case.assigned": (d) => (d.to ? `سپرده شد به ${d.to}` : "مسئول برداشته شد"),
-  "case.updated": (d) => `ویرایش: ${Object.keys(d).map((k) => FIELD_NAMES[k] ?? k).join("، ")}`,
-  "case.note_added": (d) => `یادداشت: ${d.text}`,
-  "case.reopened": (d) => `پرونده دوباره باز شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
-  "case.delivered": () => "وسیله تحویل مشتری شد",
-  "case.cancelled": (d) => `پرونده لغو شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
-  "case.deleted": () => "پرونده حذف شد",
-  "case.restored": () => "پرونده بازگردانی شد",
-  "case.custody_changed": (d) => (d.custodyStatus === "in_shop" ? "وسیله در تعمیرگاه است" : "وسیله دست مشتری است"),
-  "case.wait_changed": (d) => (d.waitReason ? `کار متوقف شد: ${WAIT_REASONS[d.waitReason as string] ?? ""}` : "کار دوباره جریان گرفت"),
-  "case.item_added": (d) => d.restored ? `ردیف «${d.title}» بازگردانی شد` : `${ITEM_KIND[d.kind as string] ?? "ردیف"} ثبت شد: ${d.title}${d.quantity && Number(d.quantity) !== 1 ? ` × ${formatNumber(Number(d.quantity))}` : ""}${d.supplier === "customer" ? " (قطعه مشتری)" : ""}${d.status === "needed" ? " (هنوز نصب نشده)" : ""}`,
-  "case.item_updated": (d) => `ردیف «${d.title}» ویرایش شد`,
-  "case.item_removed": (d) => `ردیف «${d.title}» حذف شد`,
-  "payment.recorded": (d) => `پرداخت ${tomanFmt(Number(d.amountRials ?? 0))} (${METHOD[d.method as string] ?? ""})${d.note ? ` — ${d.note}` : ""}`,
-  "payment.voided": (d) => `پرداخت ${tomanFmt(Number(d.amountRials ?? 0))} باطل شد`,
-  "case.credit": (d) => `تحویل به‌صورت نسیه؛ مانده ${tomanFmt(Number(d.balanceRials ?? 0))}`,
-};
-const ITEM_KIND: Record<string, string> = { part: "قطعه", labor: "اجرت", service: "خدمت" };
-const METHOD: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
-const FIELD_NAMES: Record<string, string> = {
-  request: "توضیحات", requestedServices: "خدمات درخواستی", reportedProblems: "ایراد اعلامی", fuelLevel: "میزان سوخت", bodyStatus: "وضعیت بدنه", bodyNotes: "شرح آسیب",
-  diagnosis: "عیب‌یابی", odometerKm: "کیلومتر", estimatedAmountRials: "برآورد هزینه", promisedAt: "قول تحویل", intake: "همراه وسیله",
-};
 
 type Sheet = null | "actions" | "assign" | "note" | "wait" | "parts" | "promise" | "credit";
 
@@ -292,7 +301,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       {/* Header: only decision-making facts. */}
       <div className="card case-head">
         <div className="case-row-top">
-          <span className="font-num muted">پرونده #{faNumber.format(c.number)}</span>
+          <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
           <StageChip stage={c.stage} />
         </div>
         {c.asset && (
@@ -311,6 +320,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         <p className={`status-line stage-${c.waitReason ? "orange" : c.stage.color}`}>
           {statusText(c.stage, c.waitReason, c.assignee?.name)} · {ago(c.stageEnteredAt)}
         </p>
+        <Progress stage={c.stage} />
         <div className="head-facts">
           <button className="fact" onClick={() => c.canAssign && setSheet("assign")} disabled={!c.canAssign}>
             <span className="muted small">مسئول</span>
@@ -329,13 +339,13 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
             {c.creditDueAt && `موعد پرداخت نسیه: ${new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}`}
           </p>
         )}
-        {c.parentCase && <p className="muted small">برگشتی پرونده <span className="font-num">#{faNumber.format(c.parentCase.number)}</span></p>}
+        {c.parentCase && <p className="muted small">برگشتی پرونده <span dir="ltr">{caseCode(c.parentCase.number)}</span></p>}
       </div>
 
       {/* Next action: one big button; everything else in a sheet. */}
       {c.transitions.length > 0 && (
         <div className="next-actions">
-          {primary && <button className="primary block big" disabled={busy} onClick={() => run(primary)}>{primary.label}</button>}
+          {primary && <button className="primary block big" disabled={busy} aria-busy={busy} onClick={() => run(primary)}>{primary.label}</button>}
           <div className="quick-actions">
             {others.length > 0 && <button onClick={() => setSheet("actions")}>اقدام‌های دیگر</button>}
             {c.canEdit && !c.stage.isTerminal && (
@@ -382,7 +392,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         <ol className="timeline">
           {c.timeline.map((e) => (
             <li key={e.id}>
-              <span className="timeline-text">{(EVENT_TEXT[e.type] ?? (() => "تغییر در پرونده"))(e.data ?? {})}</span>
+              <span className="timeline-text">{eventText(e.type, e.data)}</span>
               <span className="muted small">{faDateTime.format(new Date(e.occurredAt))}{e.actor ? ` · ${e.actor}` : ""}</span>
             </li>
           ))}
@@ -402,7 +412,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
             <Field label="دلیل">
               <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
             </Field>
-            <button className="primary block" disabled={busy || !reason.trim()}>تأیید</button>
+            <button className="primary block" disabled={busy || !reason.trim()} aria-busy={busy}>تأیید</button>
           </form>
         ) : (
           others.map((t) => (
@@ -452,7 +462,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
           if (note.trim()) act(() => api(`/api/v1/cases/${id}/notes`, { body: { text: note } }), "یادداشت ثبت شد", async () => { setNote(""); await load(); });
         }}>
           <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} aria-label="متن یادداشت" placeholder="مثلاً قطعه سفارش داده شد" />
-          <button className="primary block" disabled={busy || !note.trim()}>ثبت یادداشت</button>
+          <button className="primary block" disabled={busy || !note.trim()} aria-busy={busy}>ثبت یادداشت</button>
         </form>
       </BottomSheet>
 
@@ -495,7 +505,7 @@ function PromisePicker({ onPick, busy }: { onPick: (iso: string) => void; busy: 
         </select>
       </Field>
       <p className="muted">{faWeekdayTime.format(picked)}</p>
-      <button className="primary block" disabled={busy} onClick={() => onPick(picked.toISOString())}>ثبت قول تحویل</button>
+      <button className="primary block" disabled={busy} aria-busy={busy} onClick={() => onPick(picked.toISOString())}>ثبت قول تحویل</button>
     </div>
   );
 }
@@ -531,7 +541,6 @@ function Detail({ label, value }: { label: string; value: string }) {
 function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: CaseDetailView | null) => void }) {
   const [problems, setProblems] = useState<string[]>(c.reportedProblems);
   const [services, setServices] = useState<string[]>(c.requestedServices);
-  const [category, setCategory] = useState(SERVICE_CATEGORIES[0].name);
   const [request, setRequest] = useState(c.request);
   const [diagnosis, setDiagnosis] = useState(c.diagnosis ?? "");
   const [odometer, setOdometer] = useState(c.odometerKm?.toString() ?? "");
@@ -571,22 +580,7 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
       </div>
       <div className="field">
         <span className="label">خدمات درخواستی</span>
-        <div className="category-tabs" role="tablist" aria-label="دسته خدمات">
-          {SERVICE_CATEGORIES.map((cat) => (
-            <button type="button" key={cat.name} role="tab" aria-selected={category === cat.name}
-              className={`category-tab${category === cat.name ? " on" : ""}`} onClick={() => setCategory(cat.name)}>
-              {cat.name}
-              {cat.services.some((x) => services.includes(x)) && <span className="count font-num">{formatNumber(cat.services.filter((x) => services.includes(x)).length)}</span>}
-            </button>
-          ))}
-        </div>
-        <div className="chips">
-          {(SERVICE_CATEGORIES.find((x) => x.name === category) ?? SERVICE_CATEGORIES[0]).services.map((x) => (
-            <button type="button" key={x} aria-pressed={services.includes(x)} className={`chip-button${services.includes(x) ? " active" : ""}`}
-              onClick={() => setServices(services.includes(x) ? services.filter((y) => y !== x) : [...services, x])}>{x}</button>
-          ))}
-        </div>
-        {services.length > 0 && <p className="picked muted small">انتخاب‌شده: {services.join("، ")}</p>}
+        <ServicePicker value={services} onChange={setServices} />
       </div>
       <Field label="شرح مشتری" error={errors.request}>
         <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={2000} rows={3} />
@@ -604,7 +598,7 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
       )}
       {errors.form && <span className="error" role="alert">{errors.form}</span>}
       <div className="actions">
-        <button className="primary" disabled={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+        <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
         <button type="button" onClick={() => onDone(null)}>انصراف</button>
       </div>
     </form>
