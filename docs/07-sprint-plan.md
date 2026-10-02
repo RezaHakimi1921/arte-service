@@ -36,7 +36,8 @@
 |--------|------|--------|---------|
 | P0 | اسکلت Solution (`Arte.Api`, `Arte.Core`, `Arte.Tests`)، Docker Compose با Postgres، EF Core + اولین Migration | ۳h | — |
 | P0 | Multi-tenancy: `Tenant`, `ITenantContext`, Global Query Filter + تست ایزوله‌بودن Tenantها | ۴h | اسکلت |
-| P0 | `User`, `Membership`، OTP (درخواست/تأیید، rate limit)، JWT + Refresh | ۵h | Tenancy |
+| P0 | `User`, `Membership` با Role + Permission per نفر، OTP (درخواست/تأیید، rate limit)، JWT + Refresh | ۶h | Tenancy |
+| P1 | دعوت شاگرد با شماره موبایل + تعیین Role/Permission توسط استاد | ۲h | Membership |
 | P0 | `ISmsProvider` + `FakeSmsProvider` (فقط OTP) | ۱.۵h | — |
 | P0 | Onboarding: ساخت Tenant از Template موتورسازی (Workflow/Stage/Transition seed می‌شود، UI تنظیم ندارد) | ۳h | Domain |
 | P0 | Customer API: ایجاد، جستجو (نام / موبایل / ۴ رقم آخر)، پروفایل | ۳h | Tenancy |
@@ -45,8 +46,8 @@
 | P1 | صفحه‌های ورود OTP، لیست/جستجوی مشتری، پروفایل مشتری + افزودن موتور | ۴h | APIها |
 | P2 | CI ساده (build + test روی GitHub Actions) | ۱.۵h | اسکلت |
 
-**بار برنامه‌ریزی‌شده:** P0 = ۲۱.۵h، P1 = ۸h → ۲۹.۵h (۹۸٪ از ۳۰h) | P2 کشش است.
-**اگر عقب افتادیم:** P2 حذف؛ صفحه پروفایل مشتری به S2 منتقل.
+**بار برنامه‌ریزی‌شده:** P0 = ۲۲.۵h، P1 = ۱۰h → ۳۲.۵h (۱۰۸٪ از ۳۰h) — **بیش از ظرفیت.** | P2 کشش است.
+**از اول کنار می‌گذاریم:** صفحه پروفایل مشتری به S2 منتقل می‌شود (−۲h) و P2 فقط اگر وقت ماند.
 
 ### Risks
 | ریسک | اثر | راه‌حل |
@@ -84,6 +85,8 @@
 
 ### S3 Money
 - CaseItem (product/service/labor، عنوان آزاد یا از کاتالوگ)، کاتالوگ ساده
+- قطعه مشتری (`Supplier = customer`) و لیست قطعه‌های لازم (`needed → used`)
+- بیعانه
 - Payment، مانده، هشدار نسیه هنگام تحویل
 - قبض/فاکتور قابل اشتراک (لینک یا تصویر)
 - گزارش فروش و دریافتی روزانه

@@ -9,6 +9,7 @@
 | `auth.otp` | ورود کارکنان | OTP / الگو | `کد ورود آرته: {code}` |
 | `case.opened` | ثبت پرونده (اختیاری per tenant) | خدماتی / الگو | `{customer} عزیز، موتور {asset} در {business} پذیرش شد. پیگیری: {link}` |
 | `case.approval` | ارسال برای تأیید | خدماتی / الگو | `هزینه تعمیر {asset}: {amount} تومان. تأیید یا رد: {link}` |
+| `case.parts_needed` | ورود به `awaiting_parts` با قطعه‌هایی که تهیه‌اش با مشتری است | خدماتی / الگو | `برای تعمیر {asset} این قطعات را تهیه کنید: {parts}. {business}` |
 | `case.ready` | ورود به Stage `ready` | خدماتی / الگو | `موتور {asset} آماده تحویل است. مبلغ قابل پرداخت: {balance} تومان. {business}` |
 | `case.stage_changed` | سایر Stageها (پیش‌فرض خاموش) | خدماتی / الگو | `وضعیت موتور {asset}: {stage}` |
 

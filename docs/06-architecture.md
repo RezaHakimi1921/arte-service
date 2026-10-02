@@ -76,4 +76,4 @@ GET/PUT /api/v1/settings/workflow      GET/PUT /api/v1/settings/notifications
 - OTP: ۵ رقمی، اعتبار ۲ دقیقه، حداکثر ۵ تلاش، hash شده در DB.
 - لینک تأیید مشتری: توکن تصادفی ۱۲۸ بیتی، یک‌بار مصرف، انقضا ۴۸ ساعت.
 - Webhook: امضای HMAC-SHA256.
-- نقش‌ها: `owner` همه چیز؛ `manager` همه به جز تنظیمات اشتراک؛ `reception` پرونده/مشتری/پرداخت؛ `technician` پرونده‌های خودش، Item، Transition مجاز.
+- دسترسی: Role (`owner` / `supervisor` / `technician`) فقط پیش‌تنظیم است؛ بررسی‌ها همیشه روی Permission انجام می‌شود (`RequirePermission("cases.assign")`) تا استاد بتواند per نفر دسترسی بدهد. جزئیات در [03-domain-model](03-domain-model.md).

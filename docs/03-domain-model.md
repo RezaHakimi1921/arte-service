@@ -36,8 +36,22 @@ erDiagram
 
 ### User / Membership
 - `User`: `Id, Mobile (unique), DisplayName` — ورود با OTP موبایل.
-- `Membership`: `TenantId, UserId, Role (owner | manager | reception | technician), IsActive`
+- `Membership`: `TenantId, UserId, Role, Permissions (text[]), IsActive`
 - یک User می‌تواند عضو چند Tenant باشد.
+
+**نقش واقعی در موتورسازی:** استاد خودش پرونده ثبت می‌کند، یا به یکی از شاگردها دسترسی «مدیر داخلی»
+می‌دهد که پرونده ثبت و به بقیه شاگردها تخصیص بدهد. پس دسترسی باید **per نفر قابل دادن** باشد، نه فقط نقش ثابت.
+
+| Role (پیش‌تنظیم) | کیست | Permissionهای پیش‌فرض |
+|------------------|------|----------------------|
+| `owner` | استاد / صاحب مغازه | همه |
+| `supervisor` | شاگرد ارشد (مدیر داخلی) | `cases.create`, `cases.assign`, `cases.view_all`, `cases.work` |
+| `technician` | شاگرد | `cases.work` (فقط پرونده‌های تخصیص‌یافته به خودش) |
+
+Permissionها: `cases.create`, `cases.assign`, `cases.view_all`, `cases.work`, `payments.record`,
+`reports.view`, `staff.manage`, `settings.manage`.
+Role فقط مقدار اولیه را می‌دهد؛ استاد می‌تواند per نفر یک Permission را روشن/خاموش کند
+(مثلاً به شاگرد ارشد `payments.record` بدهد یا ندهد، چون پول حساس است).
 
 ### Customer
 `Id, TenantId, Mobile, FullName, Notes, CreatedAt`
@@ -66,16 +80,31 @@ OpenedAt, ClosedAt?, StageEnteredAt, Version`
 - `Version` برای Optimistic Concurrency (دو نفر هم‌زمان Stage عوض نکنند).
 
 ### CaseItem (Line Item)
-`Id, CaseId, Kind (product | service | labor), CatalogItemId?, Title, Quantity, UnitPrice, Discount, AddedBy, AddedAt`
+`Id, CaseId, Kind (product | service | labor), CatalogItemId?, Title, Quantity, UnitPrice, Discount,
+Supplier (shop | customer), Status (needed | used), PerformedBy?, AddedBy, AddedAt`
 - **عنوان آزاد بدون کاتالوگ مجاز است** (قطعه‌ای که همان لحظه از بازار خریده شد).
 - مبالغ: `bigint` به **ریال**. نمایش به تومان در UI.
+
+**قطعه‌ای که مشتری خودش می‌خرد** (`Supplier = customer`):
+- در فاکتور با مبلغ صفر و برچسب «قطعه مشتری» نمایش داده می‌شود، ولی **در سابقه موتور ثبت می‌شود**
+  (دفعه بعد معلوم است چه قطعه‌ای و کی عوض شده).
+- اجرت نصب آن یک `labor` جداست.
+- برای بحث ضمانت مهم است: قطعه مشتری از ضمانت مغازه خارج است و این در Timeline و فاکتور دیده می‌شود.
+
+**لیست قطعه‌های لازم** (`Status = needed`):
+- حین عیب‌یابی، قطعه‌ها با وضعیت «لازم» ثبت می‌شوند و برای هر کدام مشخص می‌شود چه کسی تهیه می‌کند.
+- اگر تهیه با مشتری است → با رفتن به `awaiting_parts` لیست قطعه‌ها با SMS برای مشتری می‌رود.
+- وقتی قطعه رسید/نصب شد → `used`. فقط `used`ها در مبلغ نهایی حساب می‌شوند.
+
+`PerformedBy` روی `labor`: چه شاگردی این کار را انجام داد (پایه گزارش کارکرد و دستمزد درصدی شاگرد در آینده).
 
 ### CatalogItem
 `Id, TenantId, Kind, Title, DefaultPrice, IsActive` (موجودی/انبار خارج از MVP)
 
 ### Payment
 `Id, CaseId, Amount, Method (cash | card | transfer | other), PaidAt, RecordedBy, Note`
-- مانده = `Σ CaseItem − Σ Payment` (محاسبه‌ای، ذخیره نمی‌شود).
+- مانده = `Σ CaseItem(used) − Σ Payment` (محاسبه‌ای، ذخیره نمی‌شود).
+- پرداخت قبل از تحویل مجاز است (**بیعانه** برای خرید قطعه توسط مغازه)؛ مانده می‌تواند موقتاً منفی باشد (بستانکاری مشتری).
 
 ### Attachment
 `Id, CaseId, Kind (photo | file), StorageKey, ContentType, SizeBytes, CreatedBy, CreatedAt`
@@ -120,7 +149,8 @@ stateDiagram-v2
     diagnosing --> repairing: شروع تعمیر
     awaiting_approval --> repairing: مشتری تأیید کرد ★
     awaiting_approval --> cancelled: مشتری رد کرد (دلیل)
-    repairing --> awaiting_parts: منتظر قطعه
+    repairing --> awaiting_parts: منتظر قطعه (تهیه: مغازه / مشتری)
+    diagnosing --> awaiting_parts: منتظر قطعه (تهیه: مغازه / مشتری)
     awaiting_parts --> repairing: قطعه رسید ★
     repairing --> testing: پایان تعمیر ★
     testing --> repairing: نیاز به کار بیشتر
