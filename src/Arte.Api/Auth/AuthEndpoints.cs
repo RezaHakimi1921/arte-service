@@ -103,8 +103,8 @@ public static class AuthEndpoints
             return Results.Ok(ToSession(issued, selected, memberships));
         });
 
-        g.MapPost("/refresh",async (ArteDbContext db, TokenService tokens, HttpContext http,
-            IOptions<JwtOptions> jwt, CancellationToken ct) =>
+        g.MapPost("/refresh", async (ArteDbContext db, TokenService tokens, HttpContext http,
+            IOptions<JwtOptions> jwt, IConfiguration config, CancellationToken ct) =>
         {
             if (!http.Request.Cookies.TryGetValue(TokenService.RefreshCookie, out var presented) || presented.Length > 100)
                 return Results.Unauthorized();
@@ -116,7 +116,7 @@ public static class AuthEndpoints
                 selected = await db.Memberships.IgnoreQueryFilters().AsNoTracking()
                     .SingleOrDefaultAsync(m => m.UserId == userId && m.TenantId == tenantId && m.IsActive, ct);
                 return selected;
-            }, ct);
+            }, config.GetValue("Auth:OpenMode", false), ct);
 
             if (issued is null)
             {
@@ -164,7 +164,7 @@ public static class AuthEndpoints
         new(issued.AccessToken, issued.AccessExpiresAt, selected?.TenantId,
             all.Select(a => new MembershipView(a.Membership.TenantId, a.TenantName, a.Membership.Role)).ToList());
 
-    private static void SetRefreshCookie(HttpContext http, IssuedTokens issued, JwtOptions jwt) =>
+    internal static void SetRefreshCookie(HttpContext http, IssuedTokens issued, JwtOptions jwt) =>
         http.Response.Cookies.Append(TokenService.RefreshCookie, issued.RefreshToken, new CookieOptions
         {
             HttpOnly = true,

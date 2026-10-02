@@ -37,6 +37,7 @@ services:
       Otp__Pepper: ${OTP_PEPPER:?set in .env}
       Signup__InviteCode: ${SIGNUP_INVITE_CODE:?set in .env}
       Auth__PasswordLoginEnabled: ${PASSWORD_LOGIN:-false}
+      Auth__OpenMode: ${OPEN_MODE:-false}
       Sms__Provider: ${SMS_PROVIDER:-fake}
       Sms__AllowFakeInProduction: ${SMS_ALLOW_FAKE:-false}
       Sms__FakeAllowedMobiles__0: ${SMS_FAKE_MOBILE_1:-}

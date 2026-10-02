@@ -5,6 +5,7 @@ type Me = {
   id: string;
   mobile: string;
   displayName: string | null;
+  openMode: boolean;
   business: { tenantId: string; name: string; role: string; permissions: string[] } | null;
 };
 type Tab = "home" | "customers" | "staff" | "more";
@@ -28,6 +29,7 @@ export default function App() {
       setMe(null);
     });
     refresh()
+      .then(async (s) => s ?? (await openModeSession()))
       .then((s) => signIn(s))
       .catch(() => signIn(null))
       .finally(() => setBooting(false));
@@ -37,6 +39,15 @@ export default function App() {
   if (!session || !me) return <Login onDone={signIn} />;
   if (!me.business) return <ChooseBusiness session={session} onDone={signIn} />;
   return <Shell me={me} onSignOut={() => signIn(null)} />;
+}
+
+/** While sign-in is switched off on the server, everyone enters as the owner. Null when it is on. */
+async function openModeSession(): Promise<Session | null> {
+  try {
+    return await api<Session>("/api/v1/auth/open", { method: "POST" });
+  } catch {
+    return null;
+  }
 }
 
 /* ───────── Login ───────── */
@@ -209,6 +220,11 @@ function Shell({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
 
   return (
     <div className="shell">
+      {me.openMode && (
+        <div className="open-banner" role="status">
+          ورود فعلاً خاموش است و هر کسی با این آدرس وارد می‌شود. اطلاعات واقعی وارد نکنید.
+        </div>
+      )}
       <header className="topbar">
         <strong>{me.business!.name}</strong>
         <span className="muted small">{me.displayName ?? me.mobile}</span>
@@ -477,12 +493,93 @@ function More({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
         <p className="font-num" dir="ltr">{me.mobile}</p>
         <p className="muted">{ROLE_NAMES[me.business!.role] ?? me.business!.role}</p>
       </div>
+      <AccountSettings />
       <button className="row-button" onClick={toggleTheme}>
         <span>تم</span>
         <span className="muted">{theme === "dark" ? "تیره" : "روشن"}</span>
       </button>
-      <button className="row-button danger" onClick={logout}>خروج</button>
+      {!me.openMode && <button className="row-button danger" onClick={logout}>خروج</button>}
     </section>
+  );
+}
+
+type Account = { displayName: string | null; username: string | null; hasPassword: boolean };
+
+function AccountSettings() {
+  const [account, setAccount] = useState<Account | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api<Account>("/api/v1/account")
+      .then((a) => {
+        setAccount(a);
+        setDisplayName(a.displayName ?? "");
+        setUsername(a.username ?? "");
+      })
+      .catch(() => {});
+  }, []);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setSaved(false);
+    if (newPassword && newPassword !== repeat) {
+      setErrors({ repeat: "تکرار رمز یکسان نیست." });
+      return;
+    }
+    setErrors({});
+    setBusy(true);
+    try {
+      const body: Record<string, string> = { displayName };
+      if (username && username !== account?.username) body.username = username;
+      if (newPassword) body.newPassword = newPassword;
+      if (account?.hasPassword && (body.username || body.newPassword)) body.currentPassword = currentPassword;
+      setAccount(await api<Account>("/api/v1/account", { method: "PUT", body }));
+      setNewPassword("");
+      setRepeat("");
+      setCurrentPassword("");
+      setSaved(true);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const fields = Object.fromEntries(Object.entries(err.fields).map(([k, v]) => [k, v[0]]));
+        setErrors(Object.keys(fields).length ? fields : { form: err.message });
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!account) return null;
+  return (
+    <form className="card" onSubmit={save} noValidate>
+      <h2>تنظیمات حساب کاربری</h2>
+      <Field label="نام نمایشی" error={errors.displayName}>
+        <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={80} />
+      </Field>
+      <Field label="نام کاربری (انگلیسی)" error={errors.username}>
+        <input dir="ltr" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} maxLength={40} />
+      </Field>
+      <Field label={account.hasPassword ? "رمز جدید (خالی بگذارید تا عوض نشود)" : "رمز عبور (حداقل ۱۰ کاراکتر)"} error={errors.newPassword}>
+        <input type="password" dir="ltr" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+      </Field>
+      <Field label="تکرار رمز" error={errors.repeat}>
+        <input type="password" dir="ltr" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} />
+      </Field>
+      {account.hasPassword && (
+        <Field label="رمز فعلی" error={errors.currentPassword}>
+          <input type="password" dir="ltr" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+        </Field>
+      )}
+      {errors.form && <span className="error" role="alert">{errors.form}</span>}
+      {saved && <span className="success" role="status">ذخیره شد.</span>}
+      <button className="primary" disabled={busy}>ذخیره</button>
+    </form>
   );
 }
 

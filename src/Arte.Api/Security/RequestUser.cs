@@ -11,6 +11,8 @@ public static class ArteClaims
     public const string UserId = "sub";
     public const string TenantId = "tid";
     public const string MembershipId = "mid";
+    /// <summary>Present on tokens issued while sign-in was switched off.</summary>
+    public const string OpenMode = "om";
 }
 
 /// <summary>Who is calling, and as which member of which business. Filled once per request.</summary>
@@ -30,10 +32,16 @@ public sealed class RequestUser
 /// </summary>
 public sealed class TenantResolutionMiddleware(RequestDelegate next)
 {
-    public async Task InvokeAsync(HttpContext http, RequestUser user, TenantContext tenant, ArteDbContext db)
+    public async Task InvokeAsync(HttpContext http, RequestUser user, TenantContext tenant, ArteDbContext db, IConfiguration config)
     {
         if (http.User.Identity?.IsAuthenticated == true)
         {
+            if (http.User.HasClaim(c => c.Type == ArteClaims.OpenMode) && !config.GetValue("Auth:OpenMode", false))
+            {
+                http.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+
             if (!Guid.TryParse(http.User.FindFirstValue(ArteClaims.UserId), out var userId))
             {
                 http.Response.StatusCode = StatusCodes.Status401Unauthorized;

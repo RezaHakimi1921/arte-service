@@ -14,7 +14,7 @@ namespace Arte.Tests;
 /// and migrations are exercised exactly as in production.
 /// Set ARTE_TEST_DB to an existing connection string to skip the container.
 /// </summary>
-public sealed class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
+public class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string InviteCode = "test-invite-code";
 
@@ -50,7 +50,10 @@ public sealed class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifet
         builder.UseSetting("RateLimits:AuthPerMinute", "100000");
         builder.UseSetting("RateLimits:GlobalPerMinute", "100000");
         builder.UseSetting("Otp:MaxPerIpPerHour", "100000");
+        Configure(builder);
     }
+
+    protected virtual void Configure(IWebHostBuilder builder) { }
 
     public FakeSmsProvider Sms => Services.GetRequiredService<FakeSmsProvider>();
 
@@ -101,4 +104,16 @@ public sealed class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifet
 public sealed class ApiCollection : ICollectionFixture<ArteApiFactory>
 {
     public const string Name = "api";
+}
+
+/// <summary>Same API with sign-in switched off (Auth:OpenMode).</summary>
+public sealed class OpenModeApiFactory : ArteApiFactory
+{
+    protected override void Configure(IWebHostBuilder builder) => builder.UseSetting("Auth:OpenMode", "true");
+}
+
+[CollectionDefinition(Name)]
+public sealed class OpenModeCollection : ICollectionFixture<OpenModeApiFactory>
+{
+    public const string Name = "open-mode";
 }

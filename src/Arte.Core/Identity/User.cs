@@ -61,6 +61,8 @@ public sealed class RefreshToken
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public string? RevokedReason { get; set; }
+    /// <summary>Issued while sign-in was switched off; all such sessions die when open mode is turned off.</summary>
+    public bool IsOpenMode { get; set; }
     /// <summary>Postgres xmin: a token can be rotated only once.</summary>
     public uint Version { get; set; }
 }

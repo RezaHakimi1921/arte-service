@@ -18,7 +18,7 @@ public static class TenantEndpoints
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/v1/me", async (RequestUser me, ArteDbContext db, CancellationToken ct) =>
+        app.MapGet("/api/v1/me", async (RequestUser me, ArteDbContext db, IConfiguration config, CancellationToken ct) =>
         {
             var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == me.RequiredUserId, ct);
             var m = me.Membership;
@@ -27,6 +27,7 @@ public static class TenantEndpoints
                 user.Id,
                 user.Mobile,
                 user.DisplayName,
+                OpenMode = config.GetValue("Auth:OpenMode", false),
                 Business = m is null ? null : new
                 {
                     m.TenantId,
@@ -62,35 +63,43 @@ public static class TenantEndpoints
             if (owned >= signup.Value.MaxBusinessesPerUser)
                 return Results.Problem(statusCode: 403, title: "به سقف تعداد کسب‌وکار رسیده‌اید.");
 
-            // A fresh scope so the new tenant becomes the tenant of this unit of work only.
-            await using var scope = scopes.CreateAsyncScope();
-            var sp = scope.ServiceProvider;
-            var clock = sp.GetRequiredService<IClock>();
-            var tenantDb = sp.GetRequiredService<ArteDbContext>();
-            var tenant = new Tenant { Name = name!, Phone = phone, Vertical = WorkflowTemplates.MotorcycleRepair, CreatedAt = clock.UtcNow };
-            sp.GetRequiredService<TenantContext>().Set(tenant.Id);
-
-            tenantDb.Tenants.Add(tenant);
-            tenantDb.Memberships.Add(new Membership
-            {
-                TenantId = tenant.Id,
-                UserId = me.RequiredUserId,
-                Role = Roles.Owner,
-                Permissions = Roles.DefaultPermissions(Roles.Owner),
-                CreatedAt = clock.UtcNow,
-            });
-            tenantDb.Workflows.Add(WorkflowTemplates.Instantiate(WorkflowTemplates.MotorcycleRepair, tenant.Id));
-
-            if (!string.IsNullOrEmpty(ownerName))
-            {
-                var user = await tenantDb.Users.SingleAsync(u => u.Id == me.RequiredUserId, ct);
-                user.DisplayName ??= ownerName;
-            }
-            sp.GetRequiredService<Audit>().Record("tenant.created", tenant.Id, me.RequiredUserId, tenant.Name);
-            await tenantDb.SaveChangesAsync(ct);
+            var tenant = await ProvisionAsync(scopes, me.RequiredUserId, name!, phone, ownerName, ct);
 
             return Results.Created($"/api/v1/tenants/{tenant.Id}", new { tenant.Id, tenant.Name });
         }).RequireAuthorization().RequireRateLimiting("auth");
+    }
+
+    /// <summary>Creates a business with the motorcycle workflow and makes the user its owner.</summary>
+    public static async Task<Tenant> ProvisionAsync(IServiceScopeFactory scopes, Guid ownerUserId, string name,
+        string? phone, string? ownerName, CancellationToken ct)
+    {
+        // A fresh scope so the new tenant becomes the tenant of this unit of work only.
+        await using var scope = scopes.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+        var clock = sp.GetRequiredService<IClock>();
+        var db = sp.GetRequiredService<ArteDbContext>();
+        var tenant = new Tenant { Name = name, Phone = phone, Vertical = WorkflowTemplates.MotorcycleRepair, CreatedAt = clock.UtcNow };
+        sp.GetRequiredService<TenantContext>().Set(tenant.Id);
+
+        db.Tenants.Add(tenant);
+        db.Memberships.Add(new Membership
+        {
+            TenantId = tenant.Id,
+            UserId = ownerUserId,
+            Role = Roles.Owner,
+            Permissions = Roles.DefaultPermissions(Roles.Owner),
+            CreatedAt = clock.UtcNow,
+        });
+        db.Workflows.Add(WorkflowTemplates.Instantiate(WorkflowTemplates.MotorcycleRepair, tenant.Id));
+
+        if (!string.IsNullOrEmpty(ownerName))
+        {
+            var user = await db.Users.SingleAsync(u => u.Id == ownerUserId, ct);
+            user.DisplayName ??= ownerName;
+        }
+        sp.GetRequiredService<Audit>().Record("tenant.created", tenant.Id, ownerUserId, tenant.Name);
+        await db.SaveChangesAsync(ct);
+        return tenant;
     }
 
     private static bool InviteCodeMatches(string expected, string? presented)

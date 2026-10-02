@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Arte.Api.Account;
 using Arte.Api.Auth;
 using Arte.Api.Customers;
 using Arte.Api.Options;
@@ -125,6 +126,8 @@ app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).DisableRateLimiting();
 app.MapAuth();
+app.MapOpenMode();
+app.MapAccount();
 app.MapTenants();
 app.MapStaff();
 app.MapCustomers();
@@ -134,6 +137,17 @@ if (config.GetValue("Database:MigrateOnStartup", false))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Database.MigrateAsync();
+}
+
+if (!config.GetValue("Auth:OpenMode", false))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var revoked = await scope.ServiceProvider.GetRequiredService<TokenService>().RevokeOpenModeSessionsAsync(CancellationToken.None);
+    if (revoked > 0) app.Logger.LogWarning("Open mode is off: revoked {Count} open-mode sessions", revoked);
+}
+else
+{
+    app.Logger.LogWarning("OPEN MODE IS ON: anyone who opens the site acts as the business owner.");
 }
 
 if (args.Length > 0 && args[0] == "set-password")

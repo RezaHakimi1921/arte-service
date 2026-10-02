@@ -24,15 +24,15 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
     public static SymmetricSecurityKey SigningKey(JwtOptions jwt) => new(Convert.FromBase64String(jwt.Key));
 
     /// <summary>Starts a new refresh family (a fresh login).</summary>
-    public Task<IssuedTokens> IssueAsync(Guid userId, Membership? membership, CancellationToken ct) =>
-        IssueInFamilyAsync(userId, membership, Guid.CreateVersion7(), ct);
+    public Task<IssuedTokens> IssueAsync(Guid userId, Membership? membership, CancellationToken ct, bool openMode = false) =>
+        IssueInFamilyAsync(userId, membership, Guid.CreateVersion7(), openMode, ct);
 
     /// <summary>
     /// Exchanges a refresh token for new tokens. A token is single-use: presenting one that was already
     /// rotated means it was stolen or replayed, so the whole family is revoked.
     /// </summary>
     public async Task<IssuedTokens?> RotateAsync(string presented, Func<Guid, Guid?, Task<Membership?>> resolveMembership,
-        CancellationToken ct)
+        bool openModeOn, CancellationToken ct)
     {
         var hash = Hash(presented);
         var token = await db.RefreshTokens.SingleOrDefaultAsync(t => t.TokenHash == hash, ct);
@@ -50,6 +50,13 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
             return null;
         }
         if (token.ExpiresAt <= now) return null;
+        if (token.IsOpenMode && !openModeOn)
+        {
+            token.RevokedAt = now;
+            token.RevokedReason = "open_mode_closed";
+            await db.SaveChangesAsync(ct);
+            return null;
+        }
 
         token.RevokedAt = now;
         token.RevokedReason = "rotated";
@@ -57,7 +64,7 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
 
         try
         {
-            return await IssueInFamilyAsync(token.UserId, membership, token.FamilyId, ct);
+            return await IssueInFamilyAsync(token.UserId, membership, token.FamilyId, token.IsOpenMode, ct);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -82,6 +89,13 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, clock.UtcNow)
                                       .SetProperty(t => t.RevokedReason, "membership_changed"), ct);
 
+    /// <summary>Called at startup when open mode is off: no session from the open period survives.</summary>
+    public Task<int> RevokeOpenModeSessionsAsync(CancellationToken ct) =>
+        db.RefreshTokens
+            .Where(t => t.IsOpenMode && t.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, clock.UtcNow)
+                                      .SetProperty(t => t.RevokedReason, "open_mode_closed"), ct);
+
     private async Task RevokeFamilyAsync(Guid familyId, string reason, CancellationToken ct)
     {
         var now = clock.UtcNow;
@@ -93,7 +107,7 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
         }
     }
 
-    private async Task<IssuedTokens> IssueInFamilyAsync(Guid userId, Membership? membership, Guid familyId, CancellationToken ct)
+    private async Task<IssuedTokens> IssueInFamilyAsync(Guid userId, Membership? membership, Guid familyId, bool openMode, CancellationToken ct)
     {
         var now = clock.UtcNow;
         var refresh = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
@@ -104,6 +118,7 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
             FamilyId = familyId,
             TenantId = membership?.TenantId,
             TokenHash = Hash(refresh),
+            IsOpenMode = openMode,
             CreatedAt = now,
             ExpiresAt = refreshExpires,
         });
@@ -115,6 +130,7 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
             [ArteClaims.UserId] = userId.ToString(),
             [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString("N"),
         };
+        if (openMode) claims[ArteClaims.OpenMode] = "1";
         if (membership is not null)
         {
             claims[ArteClaims.TenantId] = membership.TenantId.ToString();
