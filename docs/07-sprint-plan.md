@@ -87,7 +87,10 @@
 - پرونده برگشتی (`ParentCaseId`) و بازگشایی پرونده تحویل‌شده
 
 ### S3 Money
-- CaseItem (product/service/labor، عنوان آزاد یا از کاتالوگ)، کاتالوگ ساده
+- **اجرت** (labor) با شاگرد انجام‌دهنده (`PerformedBy`) — پایه کارکرد و پورسانت
+- **قطعات مصرف‌شده** در پرونده: تعداد، **قیمت خرید** (`UnitCostRials`) و **قیمت فروش** (`UnitPriceRials`) هر قطعه،
+  سود هر قطعه و سود پرونده (فقط برای `reports.view` / مالک دیده شود، نه شاگرد و نه مشتری)
+- CaseItem (product/service/labor، عنوان آزاد یا از کاتالوگ)، کاتالوگ ساده با قیمت خرید و فروش پیش‌فرض
 - قطعه مشتری (`Supplier = customer`) و لیست قطعه‌های لازم (`needed → used`)
 - بیعانه
 - ضمانت (WarrantyDays، WarrantyUntil، اجرت ضمانتی)

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
 import { PlateInput, PlateView, emptyPlate } from "./plate";
-import { Field } from "./ui";
+import { Field, NumberInput, formatNumber } from "./ui";
 import { FUEL_LEVELS, formatPlate, type PlateParts } from "./vehicles";
 
 /* ───────── types ───────── */
@@ -345,7 +345,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
           {c.bodyStatus && <Detail label="وضعیت بدنه" value={c.bodyStatus === "ok" ? "سالم" : `آسیب: ${c.bodyNotes ?? "—"}`} />}
           {c.asset?.attributes && <VehicleAttributes attributes={c.asset.attributes} />}
           <Detail label="عیب‌یابی" value={c.diagnosis ?? "—"} />
-          <Detail label="کیلومتر" value={c.odometerKm != null ? faNumber.format(c.odometerKm) : "—"} />
+          <Detail label="کیلومتر" value={formatNumber(c.odometerKm)} />
           {c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
           {c.promisedAt && <Detail label="قول تحویل" value={faDateTime.format(new Date(c.promisedAt))} />}
           {c.intake && <Detail label="همراه وسیله" value={Object.entries(c.intake).map(([k, v]) => (v === "دارد" ? k : `${k}: ${v}`)).join("، ")} />}
@@ -470,11 +470,11 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
         <textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} maxLength={4000} rows={3} />
       </Field>
       <Field label="کیلومتر" error={errors.odometerKm}>
-        <input inputMode="numeric" dir="ltr" className="font-num" value={odometer} onChange={(e) => setOdometer(e.target.value.replace(/\D/g, "").slice(0, 7))} />
+        <NumberInput value={odometer} onChange={setOdometer} max={7} />
       </Field>
       {c.canManage && (
-        <Field label="برآورد هزینه (تومان)" error={errors.estimatedAmountRials}>
-          <input inputMode="numeric" dir="ltr" className="font-num" value={estimate} onChange={(e) => setEstimate(e.target.value.replace(/\D/g, "").slice(0, 12))} />
+        <Field label="برآورد هزینه" error={errors.estimatedAmountRials}>
+          <NumberInput value={estimate} onChange={setEstimate} max={12} suffix="تومان" />
         </Field>
       )}
       {errors.form && <span className="error" role="alert">{errors.form}</span>}

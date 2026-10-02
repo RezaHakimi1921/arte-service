@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
 import { PlateInput, emptyPlate } from "./plate";
-import { Field, MobileInput } from "./ui";
+import { Field, MobileInput, NumberInput } from "./ui";
 import {
-  ACCOMPANYING, BRANDS, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, SERVICES, VEHICLE_CATALOG,
-  currentJalaliYear, formatPlate, type PlateParts,
+  ACCOMPANYING, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, SERVICES, VEHICLE_CATALOG, VEHICLE_KINDS,
+  formatPlate, modelYears, type PlateParts, type VehicleKind,
 } from "./vehicles";
+
+const OTHER = "__other__";
 
 type CustomerHit = { id: string; mobile: string; fullName: string | null };
 type AssetOption = { id: string; title: string; identifier: string | null };
@@ -50,10 +52,14 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
   const [customerName, setCustomerName] = useState("");
   // vehicle
   const [assetId, setAssetId] = useState<string | "new">("new");
-  const [brand, setBrand] = useState("");
-  const [model, setModel] = useState("");
+  const [kind, setKind] = useState<VehicleKind | null>(null);
+  const [brandPick, setBrandPick] = useState("");
+  const [brandText, setBrandText] = useState("");
+  const [modelPick, setModelPick] = useState("");
+  const [modelText, setModelText] = useState("");
   const [calendar, setCalendar] = useState<"jalali" | "gregorian">("jalali");
   const [year, setYear] = useState("");
+  const [allYears, setAllYears] = useState(false);
   const [plate, setPlate] = useState<PlateParts>(emptyPlate());
   const [color, setColor] = useState("");
   const [vin, setVin] = useState("");
@@ -104,11 +110,20 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
     api<ParentSuggestion>(`/api/v1/cases/suggest-parent?assetId=${assetId}`).then(setParent).catch(() => {});
   }, [assetId]);
 
-  const models = useMemo(() => VEHICLE_CATALOG[brand] ?? [], [brand]);
-  const years = useMemo(() => {
-    const top = calendar === "jalali" ? currentJalaliYear() + 1 : new Date().getFullYear() + 1;
-    return Array.from({ length: 46 }, (_, i) => String(top - i));
-  }, [calendar]);
+  const brands = kind ? Object.keys(VEHICLE_CATALOG[kind]).filter((b) => b !== "سایر") : [];
+  const models = kind && brandPick && brandPick !== OTHER ? VEHICLE_CATALOG[kind][brandPick] ?? [] : [];
+  const brand = brandPick === OTHER ? brandText : brandPick;
+  const model = modelPick === OTHER || models.length === 0 ? modelText : modelPick;
+  const modelEntry = models.find((m) => m[0] === modelPick);
+  const years = useMemo(() => modelYears(modelEntry, calendar, allYears), [modelEntry, calendar, allYears]);
+
+  function pickKind(k: VehicleKind) {
+    setKind(k);
+    setBrandPick("");
+    setModelPick("");
+    setYear("");
+    setAllYears(false);
+  }
 
   const plateParts = formatPlate(plate);
   const plateStarted = plate.two || plate.letter || plate.three || plate.region;
@@ -122,7 +137,7 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
     e.preventDefault();
     const local: Record<string, string> = {};
     if (mobile.length !== 11) local.mobile = "شماره همراه باید ۱۱ رقم باشد.";
-    if (newVehicle && (brand.trim() || model.trim() || plateStarted) && !(brand.trim() && model.trim())) local.vehicle = "برند و مدل را انتخاب کنید.";
+    if (newVehicle && (kind || brand.trim() || model.trim() || plateStarted) && !(brand.trim() && model.trim())) local.vehicle = "نوع، برند و مدل را انتخاب کنید.";
     if (plateStarted && !plateParts) local.plate = "پلاک کامل نیست.";
     if (services.length === 0 && !notes.trim()) local.services = "حداقل یک سرویس انتخاب کنید یا توضیحی بنویسید.";
     if (Object.keys(local).length) {
@@ -151,7 +166,7 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
           customerName: customer?.fullName ? undefined : customerName.trim() || undefined,
           assetId: newVehicle ? undefined : assetId,
           newAsset: newVehicle && brand.trim() && model.trim()
-            ? { title: `${brand.trim()} ${model.trim()}`, identifier: plateParts, kind: "vehicle", attributes }
+            ? { title: `${brand.trim()} ${model.trim()}`, identifier: plateParts, kind: kind ?? "car", attributes }
             : undefined,
           requestedServices: services,
           request: notes.trim(),
@@ -214,32 +229,65 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
 
         {newVehicle && (
           <>
-            <div className="grid-2">
-              <Field label="برند" error={errors.vehicle}>
-                <input list="brand-list" value={brand} placeholder="انتخاب یا تایپ برند"
-                  onChange={(e) => { setBrand(e.target.value); setModel(""); }} maxLength={60} />
-                <datalist id="brand-list">{BRANDS.map((b) => <option key={b} value={b} />)}</datalist>
-              </Field>
-              <Field label="مدل">
-                <input list="model-list" value={model} placeholder={brand ? "انتخاب مدل" : "اول برند"} disabled={!brand.trim()}
-                  onChange={(e) => setModel(e.target.value)} maxLength={60} />
-                <datalist id="model-list">{models.map((m) => <option key={m} value={m} />)}</datalist>
-              </Field>
+            <div className="field">
+              <span className="label">نوع وسیله</span>
+              <div className="kinds" role="radiogroup" aria-label="نوع وسیله">
+                {VEHICLE_KINDS.map((k) => (
+                  <button type="button" key={k.key} role="radio" aria-checked={kind === k.key}
+                    className={`kind${kind === k.key ? " on" : ""}`} onClick={() => pickKind(k.key)}>
+                    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d={k.icon} /></svg>
+                    <span>{k.label}</span>
+                  </button>
+                ))}
+              </div>
+              {errors.vehicle && <span className="error">{errors.vehicle}</span>}
             </div>
 
-            <div className="field">
-              <div className="label-row">
-                <span className="label">سال ساخت</span>
-                <span className="segmented" role="radiogroup" aria-label="تقویم سال ساخت">
-                  <button type="button" role="radio" aria-checked={calendar === "jalali"} className={calendar === "jalali" ? "on" : ""} onClick={() => { setCalendar("jalali"); setYear(""); }}>شمسی</button>
-                  <button type="button" role="radio" aria-checked={calendar === "gregorian"} className={calendar === "gregorian" ? "on" : ""} onClick={() => { setCalendar("gregorian"); setYear(""); }}>میلادی</button>
-                </span>
+            {kind && (
+              <div className="grid-2">
+                <Field label="برند">
+                  <select value={brandPick} onChange={(e) => { setBrandPick(e.target.value); setModelPick(""); setYear(""); setAllYears(false); }}>
+                    <option value="">انتخاب برند</option>
+                    {brands.map((b) => <option key={b} value={b}>{b}</option>)}
+                    <option value={OTHER}>سایر (تایپ کنید)</option>
+                  </select>
+                  {brandPick === OTHER && (
+                    <input value={brandText} onChange={(e) => setBrandText(e.target.value)} maxLength={60} placeholder="نام برند" aria-label="نام برند" autoFocus />
+                  )}
+                </Field>
+                <Field label="مدل">
+                  {models.length > 0 ? (
+                    <select value={modelPick} onChange={(e) => { setModelPick(e.target.value); setYear(""); setAllYears(false); }}>
+                      <option value="">انتخاب مدل</option>
+                      {models.map((m) => <option key={m[0]} value={m[0]}>{m[0]}</option>)}
+                      <option value={OTHER}>سایر (تایپ کنید)</option>
+                    </select>
+                  ) : null}
+                  {(models.length === 0 || modelPick === OTHER) && (
+                    <input value={modelText} onChange={(e) => setModelText(e.target.value)} maxLength={60}
+                      placeholder={brand ? "نام مدل" : "اول برند"} disabled={!brand.trim()} aria-label="نام مدل" />
+                  )}
+                </Field>
               </div>
-              <select value={year} onChange={(e) => setYear(e.target.value)} aria-label="سال ساخت">
-                <option value="">انتخاب سال</option>
-                {years.map((y) => <option key={y} value={y}>{faNumber.format(Number(y)).replace(/٬/g, "")}</option>)}
-              </select>
-            </div>
+            )}
+
+            {kind && model.trim() && (
+              <div className="field">
+                <div className="label-row">
+                  <span className="label">سال ساخت</span>
+                  <span className="segmented" role="radiogroup" aria-label="تقویم سال ساخت">
+                    <button type="button" role="radio" aria-checked={calendar === "jalali"} className={calendar === "jalali" ? "on" : ""} onClick={() => { setCalendar("jalali"); setYear(""); }}>شمسی</button>
+                    <button type="button" role="radio" aria-checked={calendar === "gregorian"} className={calendar === "gregorian" ? "on" : ""} onClick={() => { setCalendar("gregorian"); setYear(""); }}>میلادی</button>
+                  </span>
+                </div>
+                <select value={year} aria-label="سال ساخت"
+                  onChange={(e) => { if (e.target.value === OTHER) { setAllYears(true); setYear(""); } else setYear(e.target.value); }}>
+                  <option value="">انتخاب سال</option>
+                  {years.map((y) => <option key={y} value={y}>{new Intl.NumberFormat("fa-IR", { useGrouping: false }).format(y)}</option>)}
+                  {!allYears && modelEntry?.[1] && <option value={OTHER}>سال دیگر…</option>}
+                </select>
+              </div>
+            )}
 
             <div className="field">
               <span className="label">پلاک</span>
@@ -259,8 +307,7 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
                     </select>
                   </Field>
                   <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
-                    <input inputMode="numeric" dir="ltr" className="font-num" value={odometer}
-                      onChange={(e) => setOdometer(e.target.value.replace(/\D/g, "").slice(0, 7))} />
+                    <NumberInput value={odometer} onChange={setOdometer} max={7} />
                   </Field>
                   <Field label="نوع سوخت">
                     <select value={fuelType} onChange={(e) => setFuelType(e.target.value)}>
@@ -286,8 +333,7 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
 
         {!newVehicle && (
           <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
-            <input inputMode="numeric" dir="ltr" className="font-num" value={odometer}
-              onChange={(e) => setOdometer(e.target.value.replace(/\D/g, "").slice(0, 7))} />
+            <NumberInput value={odometer} onChange={setOdometer} max={7} />
           </Field>
         )}
 
@@ -303,7 +349,7 @@ export function NewCaseView({ canAssign, onCreated, onCancel, onOpenStaff }: {
         <div className="fuel" role="radiogroup" aria-label="میزان سوخت">
           {FUEL_LEVELS.map((label, i) => (
             <button type="button" key={label} role="radio" aria-checked={fuel === i}
-              className={fuel !== null && i <= fuel ? "filled" : ""} onClick={() => setFuel(i)}>
+              className={fuel !== null && i <= fuel ? `filled level-${fuel}` : ""} onClick={() => setFuel(i)}>
               <span className="fuel-bar" />
               <span className="fuel-label">{label}</span>
             </button>

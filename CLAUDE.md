@@ -24,7 +24,13 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 
 - **Mobile numbers: at most 11 digits** (`09xxxxxxxxx`) everywhere — use the `MobileInput` component (strips non-digits,
   converts Persian/Arabic digits, `maxLength=11`, `inputMode="numeric"`). The server normalizes with `Mobile.TryNormalize`.
+- **Numbers are grouped by three** everywhere they are a quantity or amount (prices, km, counts, totals):
+  show `۲۳٬۴۰۰`, never `23400`. Inputs use `NumberInput` (stores raw digits, shows grouped); display uses
+  `formatNumber`. **Identifiers are never grouped**: mobile, plate, year, case number, VIN, codes.
 - Amounts and counts: `inputMode="numeric"`. Inputs ≥ 16px font (iOS zoom).
+- Vehicle intake order: type (سواری / شاسی‌بلند / ون / وانت / موتورسیکلت) → brand → model → model year
+  (from `web/src/vehicles.ts`; "سایر" allows free text). Production years there are approximate.
+- Fuel level colours run red (empty) → green (full) via `--fuel-0…4`.
 - Validate on the server, always; show the Persian error next to the field.
 - Text fields have explicit max lengths in both the EF model and the validator.
 

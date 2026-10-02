@@ -80,8 +80,10 @@ OpenedAt, ClosedAt?, StageEnteredAt, Version`
 - `Version` برای Optimistic Concurrency (دو نفر هم‌زمان Stage عوض نکنند).
 
 ### CaseItem (Line Item)
-`Id, CaseId, Kind (product | service | labor), CatalogItemId?, Title, Quantity, UnitPrice, Discount,
-Supplier (shop | customer), Status (needed | used), PerformedBy?, AddedBy, AddedAt`
+`Id, CaseId, Kind (product | service | labor), CatalogItemId?, Title, Quantity, UnitPriceRials (فروش),
+UnitCostRials? (خرید), Discount, Supplier (shop | customer), Status (needed | used), PerformedBy?, AddedBy, AddedAt`
+- سود هر ردیف = `(UnitPrice − UnitCost) × Quantity`. قیمت خرید فقط برای مالک / `reports.view` نمایش داده می‌شود؛
+  در فاکتور مشتری و صفحه شاگرد هرگز نمی‌آید.
 - **عنوان آزاد بدون کاتالوگ مجاز است** (قطعه‌ای که همان لحظه از بازار خریده شد).
 - مبالغ: `bigint` به **ریال**. نمایش به تومان در UI.
 

@@ -20,11 +20,15 @@ public sealed class Customer : ITenantOwned, ISoftDeletable
 
 public static class AssetKinds
 {
-    public const string Vehicle = "vehicle";
-    public const string Car = "car";
+    public const string Car = "car";            // سواری
+    public const string Suv = "suv";            // شاسی‌بلند
+    public const string Van = "van";            // ون
+    public const string Pickup = "pickup";      // وانت
     public const string Motorcycle = "motorcycle";
+    /// <summary>Legacy / unspecified.</summary>
+    public const string Vehicle = "vehicle";
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string> { Vehicle, Car, Motorcycle };
+    public static readonly IReadOnlySet<string> All = new HashSet<string> { Car, Suv, Van, Pickup, Motorcycle, Vehicle };
 }
 
 /// <summary>What the customer brings in: a vehicle today, any device later.</summary>

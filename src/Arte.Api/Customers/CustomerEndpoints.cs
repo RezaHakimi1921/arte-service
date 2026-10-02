@@ -200,6 +200,7 @@ public static class CustomerEndpoints
             var asset = await db.Assets.SingleOrDefaultAsync(a => a.Id == id, ct);
             if (asset is null) return Results.NotFound();
             if (req.Title is not null) asset.Title = req.Title.Trim();
+            if (req.Kind is not null) asset.Kind = req.Kind;
             if (req.Identifier is not null) asset.Identifier = Clean(req.Identifier);
             if (req.Attributes is not null) asset.Attributes = ToJson(req.Attributes);
             await db.SaveChangesAsync(ct);
