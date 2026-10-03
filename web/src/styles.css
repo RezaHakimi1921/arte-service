@@ -957,3 +957,69 @@ button[aria-busy="true"]::before {
 .settings-list .setting-row { border: none; border-radius: 0; }
 .plain-form { display: flex; flex-direction: column; gap: 0.85rem; }
 .version { text-align: center; margin-top: 2rem; }
+
+/* ── SelectSheet / SelectField: the single picker for dynamic lists ── */
+.select-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.select-group-title { margin: 0.4rem 0 0; }
+.select-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.6rem 0.9rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: start;
+}
+.select-field.empty { color: var(--muted); font-weight: 500; }
+.select-field.invalid { border-color: var(--danger); }
+.select-field .chev { color: var(--muted); }
+
+/* ── case photos ── */
+.photos { display: flex; flex-direction: column; gap: 0.6rem; }
+.photos-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.photos-head h3 { margin: 0; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 0.5rem; }
+.photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2, var(--bg));
+}
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-tag {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  padding: 0.15rem 0.35rem;
+  background: var(--scrim);
+  color: #fff;
+  text-align: center;
+}
+.photo-full { width: 100%; max-height: 65dvh; object-fit: contain; border-radius: 12px; background: #000; }
+
+/* ── a vertical list of explained choices (radio) ── */
+.choice-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.choice { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-height: 48px; padding: 0.55rem 0.9rem; text-align: start; font-weight: 600; }
+.choice.on { border-color: var(--accent); color: var(--accent); }
+
+/* ── reports ── */
+.report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.report-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.report-stat.wide { grid-column: 1 / -1; }
+.report-stat strong { font-size: 1.05rem; }
+.report-stat.warn strong { color: var(--warning-text); }
+.report-pay strong { white-space: nowrap; }

@@ -1,15 +1,17 @@
+import { SelectField, SelectSheet } from "./sheet";
+import { ROLE_NAMES } from "./labels";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
 import { MotoPlateInput, PlateInput, PlateView, emptyMotoPlate, emptyPlate } from "./plate";
 import { ServicePicker } from "./services";
 import { Combobox, Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import {
-  ACCOMPANYING, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, PROBLEMS, VEHICLE_CATALOG, VEHICLE_KINDS,
+  ACCOMPANYING, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, VEHICLE_CATALOG, VEHICLE_KINDS, problemsFor,
   formatMotoPlate, formatPlate, modelYears, type MotoPlateParts, type PlateParts, type VehicleKind,
 } from "./vehicles";
 
 type CustomerHit = { id: string; mobile: string; fullName: string | null };
-type AssetOption = { id: string; title: string; identifier: string | null };
+type AssetOption = { id: string; title: string; identifier: string | null; kind?: string };
 type CustomerFull = { id: string; fullName: string | null; assets: AssetOption[] };
 type ParentSuggestion = { id: string; number: number; closedAt: string; request: string } | null;
 type Assignable = { id: string; name: string; role: string };
@@ -83,6 +85,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
   const [notes, setNotes] = useState("");
   const [services, setServices] = useState<string[]>([]);
   const [assigneeId, setAssigneeId] = useState("");
+  const [pickAssignee, setPickAssignee] = useState(false);
   const [staff, setStaff] = useState<Assignable[] | null>(null);
   const [parent, setParent] = useState<ParentSuggestion>(null);
   const [linkParent, setLinkParent] = useState(true);
@@ -146,6 +149,8 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
   const years = useMemo(() => modelYears(modelEntry, calendar, allYears), [modelEntry, calendar, allYears]);
 
   const newVehicle = assetId === "new";
+  // Existing vehicles: the kind is not loaded with the chip list, so treat an unknown as a car.
+  const vehicleKind = newVehicle ? kind : customer?.assets.find((a) => a.id === assetId)?.kind ?? null;
   const isMoto = kind === "motorcycle";
   const plateId = isMoto ? formatMotoPlate(motoPlate) : formatPlate(plate);
   const plateStarted = isMoto ? !!(motoPlate.top || motoPlate.bottom) : !!(plate.two || plate.letter || plate.three || plate.region);
@@ -248,10 +253,12 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
   const sameOwner = plateOwner && plateOwner.customer.mobile === mobile;
   const assigneeSection = canAssign && (
     <Section icon="user" title={requireAssignee ? "مسئول پرونده" : "مسئول پرونده (اختیاری)"}>
-      <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} aria-label="مسئول پرونده" className={errors.assignee ? "invalid" : ""}>
-        <option value="">{requireAssignee ? "انتخاب همکار" : "بعداً تعیین می‌کنم"}</option>
-        {staff?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-      </select>
+      <SelectField label={staff?.find((s) => s.id === assigneeId)?.name} invalid={!!errors.assignee}
+        placeholder={staff === null ? "در حال بارگذاری…" : requireAssignee ? "انتخاب همکار" : "بعداً تعیین می‌کنم"} onOpen={() => setPickAssignee(true)} />
+      <SelectSheet open={pickAssignee} title="مسئول پرونده" value={assigneeId} noneLabel="بعداً تعیین می‌کنم"
+        items={(staff ?? []).map((s) => ({ value: s.id, label: s.name, group: ROLE_NAMES[s.role] ?? s.role }))}
+        onClose={() => setPickAssignee(false)}
+        onSelect={(v) => { setAssigneeId(v ?? ""); setPickAssignee(false); setErrors((e) => ({ ...e, assignee: "" })); }} />
       {errors.assignee && <span className="error">{errors.assignee}</span>}
       {staff && staff.filter((s) => s.role !== "owner").length === 0 && (
         <p className="hint">هنوز همکاری ثبت نکرده‌اید؛ می‌توانید پرونده را به خودتان بسپارید. <button type="button" className="link" onClick={onOpenStaff}>افزودن همکار</button></p>
@@ -433,7 +440,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
 
       <Section icon="problem" title="ایراد اعلامی مشتری">
         <div className="chips">
-          {PROBLEMS.map((p) => (
+          {problemsFor(vehicleKind).map((p) => (
             <button type="button" key={p} aria-pressed={problems.includes(p)} className={`chip-button${problems.includes(p) ? " active" : ""}`}
               onClick={() => toggle(problems, setProblems, p)}>{p}</button>
           ))}
@@ -444,7 +451,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
       </Section>
 
       <Section icon="list" title="خدمات درخواستی" badge={services.length > 0 && <span className="badge good">{formatNumber(services.length)} خدمت</span>}>
-        <ServicePicker value={services} onChange={setServices} />
+        <ServicePicker value={services} onChange={setServices} kind={vehicleKind} />
       </Section>
 
       {requireAssignee && assigneeSection}

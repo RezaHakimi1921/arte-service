@@ -64,16 +64,18 @@ async function fetchOrOffline(input: string, init: RequestInit): Promise<Respons
   }
 }
 
-export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+/** Authenticated request; refreshes the access token once on a 401. A FormData body is sent as multipart. */
+async function authorized(path: string, init: { method?: string; body?: unknown }): Promise<Response> {
+  const form = init.body instanceof FormData;
   const send = () =>
     fetchOrOffline(path, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
       credentials: "same-origin",
       headers: {
-        ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(init.body === undefined || form ? {} : { "Content-Type": "application/json" }),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.body === undefined ? undefined : form ? (init.body as FormData) : JSON.stringify(init.body),
     });
 
   let res = await send();
@@ -86,5 +88,16 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
     }
     res = await send();
   }
-  return parse(res) as Promise<T>;
+  return res;
+}
+
+export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  return parse(await authorized(path, init)) as Promise<T>;
+}
+
+/** Protected files (case photos) need the bearer token, so they are fetched as blobs rather than plain <img src>. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await authorized(path, {});
+  if (!res.ok) await parse(res);
+  return res.blob();
 }

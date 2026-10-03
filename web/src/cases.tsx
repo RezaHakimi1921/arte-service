@@ -5,10 +5,12 @@ import { useFeedback } from "./feedback";
 import { ALERT_ICON, MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, caseCode, eventText, statusText, type Alert } from "./labels";
 import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
-import { BottomSheet, SheetOption } from "./sheet";
+import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
+import { PhotoSection, type CasePhoto } from "./photos";
+import { ROLE_NAMES } from "./labels";
 import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { ServicePicker } from "./services";
-import { FUEL_LEVELS, PROBLEMS } from "./vehicles";
+import { FUEL_LEVELS, problemsFor } from "./vehicles";
 
 /* ───────── types ───────── */
 
@@ -28,8 +30,9 @@ type CaseDetailView = {
   estimatedAmountRials: number | null; promisedAt: string | null; custodyStatus: string; intake: Record<string, string> | null;
   relation: string | null; waitReason: string | null; openedAt: string; stageEnteredAt: string; closedAt: string | null;
   stage: StageRef; customer: { id: string; fullName: string | null; mobile: string };
-  asset: { id: string; title: string; identifier: string | null; attributes: Record<string, string> | null } | null;
+  asset: { id: string; title: string; identifier: string | null; kind: string; attributes: Record<string, string> | null } | null;
   assignee: { id: string; name: string } | null; parentCase: { id: string; number: number } | null;
+  photos: CasePhoto[];
   transitions: TransitionView[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
 };
@@ -200,10 +203,10 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
 export function EmptyCases({ canCreate }: { canCreate: boolean }) {
   return (
     <div className="empty-state">
-      <h3>هنوز پرونده‌ای ثبت نشده</h3>
+      <h3>پرونده بازی ندارید</h3>
       <p className="muted">
         {canCreate
-          ? "با دکمه «پذیرش» اولین وسیله را ثبت کنید تا مراحل تعمیر، مسئول کار و تحویل آن را یک‌جا مدیریت کنید."
+          ? "با دکمه «پذیرش» وسیله تازه را ثبت کنید. پرونده‌های تحویل‌شده در فیلتر «همه» هستند."
           : "وقتی کاری به شما سپرده شود، این‌جا می‌بینید و مرحله به مرحله جلو می‌برید."}
       </p>
     </div>
@@ -291,6 +294,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
   if (notFound) return <section><button className="link back" onClick={onBack}>→ پرونده‌ها</button><p className="empty muted">پرونده پیدا نشد.</p></section>;
   if (!c) return <div className="splash" aria-busy="true" />;
 
+  const photoSection = <PhotoSection caseId={c.id} photos={c.photos ?? []} stageKey={c.stage.key} canAdd={c.canEdit && c.stage.key !== "cancelled"} onChange={load} />;
   const primary = c.transitions.find((t) => t.isPrimary);
   const others = c.transitions.filter((t) => t !== primary);
 
@@ -356,8 +360,12 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         </div>
       )}
 
+      {/* In review the master looks at the work photos first; otherwise they sit below the bill. */}
+      {c.stage.key === "review" && photoSection}
       <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal}
         onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
+
+      {c.stage.key !== "review" && photoSection}
 
       {/* Secondary details, collapsible. */}
       <Collapsible title="درخواست مشتری" open>
@@ -432,17 +440,10 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         ))}
       </BottomSheet>
 
-      <BottomSheet open={sheet === "assign"} title="مسئول پرونده" onClose={close}>
-        {staff.map((s) => (
-          <SheetOption key={s.id} label={s.name} hint={s.id === c.assignee?.id ? "مسئول فعلی" : undefined} disabled={busy}
-            tone={s.id === c.assignee?.id ? "primary" : undefined}
-            onClick={() => act(() => api<CaseDetailView>(`/api/v1/cases/${id}/assign`, { body: { assigneeId: s.id } }), `سپرده شد به ${s.name}`, setC)} />
-        ))}
-        {c.assignee && (
-          <SheetOption label="برداشتن مسئول" disabled={busy}
-            onClick={() => act(() => api<CaseDetailView>(`/api/v1/cases/${id}/assign`, { body: { assigneeId: null } }), "مسئول برداشته شد", setC)} />
-        )}
-      </BottomSheet>
+      <SelectSheet open={sheet === "assign"} title="مسئول پرونده" onClose={close} busy={busy} value={c.assignee?.id}
+        items={staff.map((s) => ({ value: s.id, label: s.name, group: ROLE_NAMES[s.role] ?? s.role }))} noneLabel="برداشتن مسئول"
+        onSelect={(v) => act(() => api<CaseDetailView>(`/api/v1/cases/${id}/assign`, { body: { assigneeId: v } }),
+          v ? `سپرده شد به ${staff.find((s) => s.id === v)?.name ?? ""}` : "مسئول برداشته شد", setC)} />
 
       <BottomSheet open={sheet === "wait"} title={c.waitReason ? "کار دوباره جریان دارد؟" : "چرا کار متوقف است؟"} onClose={close}>
         {c.waitReason ? (
@@ -572,7 +573,7 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
       <div className="field">
         <span className="label">ایراد اعلامی</span>
         <div className="chips">
-          {[...new Set([...PROBLEMS, ...problems])].map((p) => (
+          {[...new Set([...problemsFor(c.asset?.kind), ...problems])].map((p) => (
             <button type="button" key={p} aria-pressed={problems.includes(p)} className={`chip-button${problems.includes(p) ? " active" : ""}`}
               onClick={() => setProblems(problems.includes(p) ? problems.filter((x) => x !== p) : [...problems, p])}>{p}</button>
           ))}
@@ -580,7 +581,7 @@ function CaseEditForm({ c, onDone }: { c: CaseDetailView; onDone: (updated: Case
       </div>
       <div className="field">
         <span className="label">خدمات درخواستی</span>
-        <ServicePicker value={services} onChange={setServices} />
+        <ServicePicker value={services} onChange={setServices} kind={c.asset?.kind} />
       </div>
       <Field label="شرح مشتری" error={errors.request}>
         <textarea value={request} onChange={(e) => setRequest(e.target.value)} maxLength={2000} rows={3} />

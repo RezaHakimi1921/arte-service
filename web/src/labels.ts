@@ -52,6 +52,7 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "case.assigned": (d) => (d.to ? `سپرده شد به ${d.to}` : "مسئول برداشته شد"),
   "case.updated": (d) => `ویرایش: ${Object.keys(d).map((k) => FIELD_NAMES[k] ?? k).join("، ")}`,
   "case.note_added": (d) => `یادداشت: ${d.text}`,
+  "case.photo_added": () => "عکس اضافه شد",
   "case.reopened": (d) => `پرونده دوباره باز شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
   "case.delivered": () => "وسیله تحویل مشتری شد",
   "case.cancelled": (d) => `پرونده لغو شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
@@ -73,3 +74,5 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
 export function eventText(type: string, data: Record<string, unknown> | null | undefined): string {
   return (EVENT_TEXT[type] ?? (() => "تغییر در پرونده"))(data ?? {});
 }
+
+export const ROLE_NAMES: Record<string, string> = { owner: "استاد (مالک)", supervisor: "مدیر داخلی", technician: "شاگرد" };

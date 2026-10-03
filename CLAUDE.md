@@ -36,7 +36,16 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 - Long pick lists (brand, model) use the searchable `Combobox`; typed text is kept if not in the list.
 - Plates: car plate `12ب345-11` (`PlateInput`), motorcycle plate `123-45678` (`MotoPlateInput`). The plate is optional.
 - Reported problems («ایراد اعلامی») and requested services («خدمات درخواستی») are separate lists; services come only
-  from the categorised list (`SERVICE_CATEGORIES`), never free text.
+  from the categorised list, never free text. Both depend on the vehicle kind (`serviceCategoriesFor(kind)`,
+  `problemsFor(kind)`): a motorcycle never offers A/C or wheel alignment, and does offer chain, carburettor, CVT.
+- **One picker pattern for dynamic lists** (assignee, staff, anything that grows): `SelectField` (looks like an input)
+  opens `SelectSheet` (bottom sheet; search appears above 6 rows; optional group headings; current choice marked;
+  optional "none" row). No native `<select>` and no ad-hoc lists for these. Short fixed choices with an explanation
+  (wait reason, parts supplier) stay `SheetOption`s; static vocabularies (brand, model) stay `Combobox`.
+- **Purchase price comes before sale price** in every form, and a shop item's purchase price may not exceed its sale
+  price (checked inline on the client and enforced by the server). Customer-supplied parts are not checked.
+- Photos: `PhotoSection` on the case (camera opens directly; compressed to 1600px JPEG on the client); the stage is
+  recorded with the photo, so no extra workflow step is needed. Photos are served only through the authenticated API.
 - Never copy a competitor's wording or rules; take ideas, write our own.
 - **Loading is always visible**: every button that submits sets `disabled` + `aria-busy` while waiting (CSS draws a
   spinner) and says what it is doing («در حال ثبت پذیرش…»); every page that loads data shows `.splash` (spinner) until

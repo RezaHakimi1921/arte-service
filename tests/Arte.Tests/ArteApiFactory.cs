@@ -46,6 +46,7 @@ public class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Otp:Pepper", "test-pepper-test-pepper-test-pepper-1234");
         builder.UseSetting("Signup:InviteCode", InviteCode);
         builder.UseSetting("Auth:PasswordLoginEnabled", "true");
+        builder.UseSetting("Storage:Root", Path.Combine(Path.GetTempPath(), "arte-test-uploads"));
         // Tests log in many users from one IP; the per-IP limits have their own test.
         builder.UseSetting("RateLimits:AuthPerMinute", "100000");
         builder.UseSetting("RateLimits:SessionPerMinute", "100000");

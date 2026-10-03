@@ -4,6 +4,7 @@ import { CaseDetail, CasesView, type CaseFilter } from "./cases";
 import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
+import { ReportsPage } from "./reports";
 import { AccountPage, AppearancePage, BusinessPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
@@ -290,6 +291,7 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     else if (morePage === "business") page = <BusinessPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "intake") page = <IntakeRulesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "staff") page = <StaffPage onBack={back} />;
+    else if (morePage === "reports") page = <ReportsPage onBack={back} />;
     else if (morePage === "appearance") page = <AppearancePage onBack={back} applyTheme={applyTheme} />;
     else page = <SettingsHome name={me.displayName ?? me.mobile} mobile={me.mobile} role={me.business!.role} can={can}
       onOpen={setMorePage} onSignOut={onSignOut} openMode={me.openMode} />;

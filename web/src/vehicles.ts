@@ -203,6 +203,32 @@ export const SERVICE_CATEGORIES: { name: string; services: string[] }[] = [
   { name: "لاستیک و رینگ", services: ["تعویض لاستیک", "پنچرگیری", "تعمیر رینگ"] },
 ];
 
+/** Two-wheelers have no A/C, gearbox oil change or wheel alignment; they have a chain, carburettor, CVT… */
+export const MOTO_SERVICE_CATEGORIES: { name: string; services: string[] }[] = [
+  { name: "سرویس دوره‌ای", services: ["تعویض روغن", "تعویض فیلتر روغن", "تعویض فیلتر هوا", "تعویض شمع", "سرویس کامل دوره‌ای", "تنظیم و روغن‌کاری زنجیر"] },
+  { name: "فنی و مکانیکی", services: ["عیب‌یابی فنی", "تنظیم کاربراتور", "سرویس انژکتور", "تعمیر سرسیلندر", "تعمیر اساسی", "تعویض بلبرینگ‌ها"] },
+  { name: "انتقال قدرت", services: ["تعویض زنجیر و دنده", "تعویض کلاچ", "سرویس CVT و تسمه (اسکوتر)", "تعمیر گیربکس"] },
+  { name: "ترمز", services: ["تعویض لنت جلو", "تعویض لنت عقب", "تعویض روغن ترمز", "تعمیر کالیپر", "تنظیم ترمز کفشکی"] },
+  { name: "تعلیق و فرمان", services: ["تعمیر کمک جلو", "تعویض کاسه نمد کمک", "تعمیر کمک عقب", "تنظیم فرمان"] },
+  { name: "برق", services: ["تعویض باتری", "تعمیر استارت", "تعمیر برق و سیم‌کشی", "چراغ و راهنما", "عیب‌یابی با دیاگ"] },
+  { name: "بدنه و قاب", services: ["تعمیر یا تعویض قاب", "رنگ و نقاشی", "شستشو", "پولیش"] },
+  { name: "لاستیک و رینگ", services: ["تعویض لاستیک", "پنچرگیری", "تعمیر رینگ", "تعویض پره"] },
+];
+
+export const MOTO_PROBLEMS = [
+  "روشن نمی‌شود", "دیر روشن می‌شود", "خاموش می‌کند", "صدای غیرعادی", "لرزش", "دود", "نشتی روغن",
+  "ترمز ضعیف یا صدا دارد", "زنجیر صدا می‌دهد", "کلاچ می‌گیرد یا سُر می‌خورد", "مصرف سوخت بالا", "کم‌قدرت شده",
+  "مشکل برق و باتری", "تصادف یا آسیب قاب",
+];
+
+export function serviceCategoriesFor(kind: string | null | undefined) {
+  return kind === "motorcycle" ? MOTO_SERVICE_CATEGORIES : SERVICE_CATEGORIES;
+}
+
+export function problemsFor(kind: string | null | undefined) {
+  return kind === "motorcycle" ? MOTO_PROBLEMS : PROBLEMS;
+}
+
 export const ALL_SERVICES = SERVICE_CATEGORIES.flatMap((c) => c.services);
 
 export const ACCOMPANYING = ["سوئیچ یدک", "کارت و مدارک", "زاپاس", "جک و آچار", "ریموت / دزدگیر", "ضبط یا پنل"];

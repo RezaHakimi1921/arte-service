@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
 import { useFeedback } from "./feedback";
-import { Field, MobileInput } from "./ui";
+import { BottomSheet } from "./sheet";
+import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { resetWorkflow } from "./workflow";
 
-export type SettingsPage = "account" | "business" | "intake" | "catalog" | "receivables" | "staff" | "appearance";
+export type SettingsPage = "account" | "business" | "intake" | "catalog" | "receivables" | "staff" | "appearance" | "reports";
 
-export const ROLE_NAMES: Record<string, string> = { owner: "استاد (مالک)", supervisor: "مدیر داخلی", technician: "شاگرد" };
+export { ROLE_NAMES } from "./labels";
+import { ROLE_NAMES } from "./labels";
 
 const APP_VERSION = "۰٫۵";
 
@@ -20,6 +22,7 @@ const ICON = {
   credit: "M3 7h18v12H3zM3 11h18M7 15h4",
   staff: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
   theme: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
+  report: "M3 3v18h18M7 15l4-4 3 3 5-6",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
 };
 
@@ -68,6 +71,7 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
       )}
       {(can("cases.create") || can("payments.record") || can("reports.view")) && (
         <Group title="فروش">
+          {can("reports.view") && <Row icon="report" title="گزارش‌ها" sub="فروش، دریافتی، دستمزد کارکنان" onClick={() => onOpen("reports")} />}
           {can("cases.create") && <Row icon="price" title="فهرست قیمت" sub="قطعه، اجرت، خدمت" onClick={() => onOpen("catalog")} />}
           {(can("payments.record") || can("reports.view")) && <Row icon="credit" title="نسیه‌ها" sub="طلب از مشتریان" onClick={() => onOpen("receivables")} />}
         </Group>
@@ -267,7 +271,153 @@ export function AppearancePage({ onBack, applyTheme }: { onBack: () => void; app
 
 /* ───────── staff ───────── */
 
-type StaffRow = { id: string; mobile: string; displayName: string | null; role: string; isActive: boolean };
+type StaffRow = {
+  id: string; mobile: string; displayName: string | null; role: string; isActive: boolean;
+  fixedMonthlyRials: number | null; commissionType: string; commissionPercent: number | null;
+  commissionFixedRials: number | null; commissionBase: string;
+};
+
+const COMMISSION_BASES: { value: string; label: string; hint: string }[] = [
+  { value: "case_total", label: "کل مبلغ پرونده", hint: "قطعه + اجرت + خدمات" },
+  { value: "labor", label: "فقط اجرت و خدمات", hint: "بدون قطعه" },
+  { value: "labor_plus_parts_profit", label: "اجرت + سود قطعه", hint: "فروش قطعه منهای خرید آن" },
+];
+const tomanDigits = (rials: number | null | undefined) => (rials ? String(Math.round(rials / 10)) : "");
+
+/** Pay settings for one staff member: fixed monthly salary and/or a commission per delivered case. */
+function StaffSheet({ row, onClose, onSaved }: { row: StaffRow | null; onClose: () => void; onSaved: () => void }) {
+  const { notify } = useFeedback();
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("technician");
+  const [salary, setSalary] = useState("");
+  const [type, setType] = useState("none");
+  const [percent, setPercent] = useState("");
+  const [fixed, setFixed] = useState("");
+  const [base, setBase] = useState("case_total");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!row) return;
+    setName(row.displayName ?? "");
+    setRole(row.role);
+    setSalary(tomanDigits(row.fixedMonthlyRials));
+    setType(row.commissionType || "none");
+    setPercent(row.commissionPercent != null ? String(row.commissionPercent) : "");
+    setFixed(tomanDigits(row.commissionFixedRials));
+    setBase(row.commissionBase || "case_total");
+    setError(null);
+  }, [row]);
+
+  const pct = Number(percent || 0);
+  // Worked example: parts sold 3,000,000 (bought 2,500,000) + labor 1,000,000 toman.
+  const exampleBase = base === "labor" ? 1_000_000 : base === "labor_plus_parts_profit" ? 1_500_000 : 4_000_000;
+  const example = type === "percent" ? Math.round((exampleBase * pct) / 100) : type === "fixed_per_case" ? Number(fixed || 0) : 0;
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!row || busy) return;
+    if (type === "percent" && !(pct > 0 && pct <= 100)) { setError("درصد باید بین ۱ تا ۱۰۰ باشد."); return; }
+    if (type === "fixed_per_case" && !fixed) { setError("مبلغ ثابت هر پرونده را بنویسید."); return; }
+    setBusy(true);
+    try {
+      const body: Record<string, unknown> = {
+        displayName: name.trim(), fixedMonthlyRials: Number(salary || 0) * 10,
+        commissionType: type, commissionBase: base,
+        commissionFixedRials: Number(fixed || 0) * 10,
+      };
+      if (type === "percent") body.commissionPercent = pct;
+      if (row.role !== "owner") body.role = role;
+      await api(`/api/v1/staff/${row.id}`, { method: "PATCH", body });
+      notify("ذخیره شد");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "خطا");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleActive() {
+    if (!row) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/staff/${row.id}`, { method: "PATCH", body: { isActive: !row.isActive } });
+      notify(row.isActive ? "غیرفعال شد" : "فعال شد");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "خطا");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <BottomSheet open={!!row} title={row ? `ویرایش ${row.displayName ?? row.mobile}` : "ویرایش همکار"} onClose={onClose}>
+      {row && (
+        <form onSubmit={save} noValidate>
+          <Field label="نام"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
+          {row.role !== "owner" && (
+            <Field label="نقش">
+              <select value={role} onChange={(e) => setRole(e.target.value)}>
+                <option value="technician">شاگرد: فقط پرونده‌های خودش</option>
+                <option value="supervisor">مدیر داخلی: ثبت پرونده و تخصیص</option>
+              </select>
+            </Field>
+          )}
+          <Field label="حقوق ثابت ماهانه (اختیاری)"><NumberInput value={salary} onChange={setSalary} max={11} suffix="تومان" /></Field>
+
+          <span className="label">پورسانت هر پرونده تحویل‌شده</span>
+          <div className="segmented wide" role="radiogroup" aria-label="نوع پورسانت">
+            {[["none", "ندارد"], ["percent", "درصدی"], ["fixed_per_case", "مبلغ ثابت"]].map(([v, l]) => (
+              <button type="button" key={v} role="radio" aria-checked={type === v} className={type === v ? "on" : ""} onClick={() => setType(v)}>{l}</button>
+            ))}
+          </div>
+          {type === "percent" && (
+            <>
+              <Field label="درصد">
+                <input inputMode="decimal" dir="ltr" className="font-num" value={percent}
+                  onChange={(e) => setPercent(toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 5))} />
+              </Field>
+              <span className="label">درصد از چه مبلغی؟</span>
+              <div className="choice-list" role="radiogroup" aria-label="مبنای پورسانت">
+                {COMMISSION_BASES.map((b) => (
+                  <button type="button" key={b.value} role="radio" aria-checked={base === b.value} className={`choice${base === b.value ? " on" : ""}`} onClick={() => setBase(b.value)}>
+                    <span>{b.label}</span><span className="muted small">{b.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {type === "fixed_per_case" && (
+            <Field label="مبلغ برای هر پرونده"><NumberInput value={fixed} onChange={setFixed} max={11} suffix="تومان" /></Field>
+          )}
+          {type !== "none" && (
+            <p className="hint">
+              مثال: پرونده‌ای با <span className="font-num">۳٬۰۰۰٬۰۰۰</span> تومان قطعه (سود <span className="font-num">۵۰۰٬۰۰۰</span>) و <span className="font-num">۱٬۰۰۰٬۰۰۰</span> تومان اجرت
+              ← سهم این همکار <strong className="font-num">{formatNumber(example)}</strong> تومان.
+            </p>
+          )}
+          {error && <span className="error" role="alert">{error}</span>}
+          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+          {row.role !== "owner" && (
+            <button type="button" disabled={busy} onClick={toggleActive}>
+              {row.isActive ? "غیرفعال کردن همکار" : "فعال کردن دوباره"}
+            </button>
+          )}
+        </form>
+      )}
+    </BottomSheet>
+  );
+}
+
+function payText(s: StaffRow) {
+  const parts: string[] = [];
+  if (s.fixedMonthlyRials) parts.push(`حقوق ${formatNumber(Math.round(s.fixedMonthlyRials / 10))} تومان`);
+  if (s.commissionType === "percent" && s.commissionPercent) parts.push(`${formatNumber(s.commissionPercent)}٪ از ${COMMISSION_BASES.find((b) => b.value === s.commissionBase)?.label ?? ""}`);
+  if (s.commissionType === "fixed_per_case" && s.commissionFixedRials) parts.push(`${formatNumber(Math.round(s.commissionFixedRials / 10))} تومان هر پرونده`);
+  return parts.join(" · ");
+}
 
 export function StaffPage({ onBack }: { onBack: () => void }) {
   const { notify } = useFeedback();
@@ -277,6 +427,7 @@ export function StaffPage({ onBack }: { onBack: () => void }) {
   const [role, setRole] = useState("technician");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<StaffRow | null>(null);
 
   const load = useCallback(async () => setRows(await api<StaffRow[]>("/api/v1/staff")), []);
   useEffect(() => { load().catch(() => setRows([])); }, [load]);
@@ -299,27 +450,24 @@ export function StaffPage({ onBack }: { onBack: () => void }) {
     }
   }
 
-  async function toggle(s: StaffRow) {
-    await api(`/api/v1/staff/${s.id}`, { method: "PATCH", body: { isActive: !s.isActive } }).catch(() => {});
-    notify(s.isActive ? "غیرفعال شد" : "فعال شد");
-    await load();
-  }
 
   return (
     <SubPage title="کارکنان و دسترسی‌ها" onBack={onBack}>
       {!rows ? <div className="splash" aria-busy="true" /> : (
         <div className="settings-list">
           {rows.map((s) => (
-            <div key={s.id} className={`settings-row static${s.isActive ? "" : " inactive"}`}>
+            <button type="button" key={s.id} className={`settings-row${s.isActive ? "" : " inactive"}`} onClick={() => setEditing(s)}>
               <span className="settings-row-text">
                 <span>{s.displayName ?? s.mobile}</span>
                 <span className="muted small">{ROLE_NAMES[s.role] ?? s.role}{s.isActive ? "" : " · غیرفعال"}</span>
+                {payText(s) && <span className="muted small">{payText(s)}</span>}
               </span>
-              {s.role !== "owner" && <button onClick={() => toggle(s)}>{s.isActive ? "غیرفعال" : "فعال"}</button>}
-            </div>
+              <span className="muted" aria-hidden="true">‹</span>
+            </button>
           ))}
         </div>
       )}
+      <StaffSheet row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       <h3>افزودن همکار</h3>
       <form className="plain-form" onSubmit={add}>
         <Field label="شماره موبایل" error={error}><MobileInput value={mobile} onChange={setMobile} /></Field>

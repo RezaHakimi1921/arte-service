@@ -235,8 +235,12 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     setSuggestions([]);
   }
 
+  const showCost = canSeeCost && supplier === "shop";
+  const costError = showCost && cost && price && toRials(cost) > toRials(price) ? "قیمت فروش نباید از قیمت خرید کمتر باشد." : null;
+
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (costError) return;
     if (!title.trim()) { setError("عنوان را بنویسید."); return; }
     const q = Number(toLatinDigits(qty).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, ""));
     if (!(q > 0)) { setError("تعداد نامعتبر است."); return; }
@@ -281,22 +285,23 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
           </div>
         )}
 
+        {/* Purchase price first, then the sale price it must not undercut. */}
+        {showCost && (
+          <Field label="قیمت خرید هر عدد (فقط شما می‌بینید)">
+            <NumberInput value={cost} onChange={setCost} max={11} suffix="تومان" />
+          </Field>
+        )}
+        <Field label={supplier === "customer" && kind === "part" ? "قیمت (برای سابقه)" : "قیمت فروش هر عدد"} error={costError}>
+          <NumberInput value={price} onChange={setPrice} max={11} suffix="تومان" />
+        </Field>
         <div className="grid-2">
           <Field label="تعداد">
             <input inputMode="decimal" dir="ltr" className="font-num" value={qty} onChange={(e) => setQty(toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 7))} />
           </Field>
-          <Field label={supplier === "customer" && kind === "part" ? "قیمت (برای سابقه)" : "قیمت فروش (هر عدد)"}>
-            <NumberInput value={price} onChange={setPrice} max={11} suffix="تومان" />
+          <Field label="تخفیف این ردیف">
+            <NumberInput value={discount} onChange={setDiscount} max={11} suffix="تومان" />
           </Field>
         </div>
-        {canSeeCost && supplier === "shop" && (
-          <Field label="قیمت خرید (فقط شما می‌بینید)">
-            <NumberInput value={cost} onChange={setCost} max={11} suffix="تومان" />
-          </Field>
-        )}
-        <Field label="تخفیف این ردیف">
-          <NumberInput value={discount} onChange={setDiscount} max={11} suffix="تومان" />
-        </Field>
 
         {kind === "part" && (
           <label className="check">
@@ -483,8 +488,11 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
     setWarranty(row === "new" ? 0 : row.defaultWarrantyDays ?? 0);
   }
 
+  const catalogCostError = canSeeCost && cost && price && toRials(cost) > toRials(price) ? "قیمت فروش نباید از قیمت خرید کمتر باشد." : null;
+
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (catalogCostError) return;
     const body: Record<string, unknown> = { kind, title, defaultPriceRials: toRials(price), defaultWarrantyDays: warranty };
     if (canSeeCost && cost) body.defaultCostRials = toRials(cost);
     try {
@@ -528,8 +536,8 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
             ))}
           </div>
           <Field label="عنوان"><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required /></Field>
-          <Field label="قیمت فروش"><NumberInput value={price} onChange={setPrice} max={11} suffix="تومان" /></Field>
           {canSeeCost && <Field label="قیمت خرید"><NumberInput value={cost} onChange={setCost} max={11} suffix="تومان" /></Field>}
+          <Field label="قیمت فروش" error={catalogCostError}><NumberInput value={price} onChange={setPrice} max={11} suffix="تومان" /></Field>
           <div className="chips">
             {WARRANTY_OPTIONS.map((d) => (
               <button type="button" key={d} className={`chip-button${warranty === d ? " active" : ""}`} onClick={() => setWarranty(d)}>
