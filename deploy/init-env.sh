@@ -13,6 +13,10 @@ SMS_PROVIDER=fake
 SMS_ALLOW_FAKE=true
 SMS_FAKE_MOBILE_1=${1:-}
 SMS_FAKE_MOBILE_2=
+# sms.ir: set SMS_PROVIDER=smsir once the OTP template is approved.
+SMSIR_API_KEY=
+SMSIR_OTP_TEMPLATE_ID=
+SMSIR_OTP_PARAM=CODE
 ENV
 echo "Wrote $(pwd)/.env (mode 600)."
 echo "Signup invite code: $(grep SIGNUP_INVITE_CODE .env | cut -d= -f2)"

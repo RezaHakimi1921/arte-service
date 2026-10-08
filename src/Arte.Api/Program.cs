@@ -49,7 +49,20 @@ builder.Services.AddScoped<Audit>();
 builder.Services.AddScoped<OtpService>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<FakeSmsProvider>();
-builder.Services.AddSingleton<ISmsProvider>(sp => sp.GetRequiredService<FakeSmsProvider>());
+if (smsOptions.Provider == "smsir")
+{
+    builder.Services.AddHttpClient<ISmsProvider, SmsIrProvider>(SmsIrProvider.HttpClientName, c =>
+    {
+        c.BaseAddress = new Uri(smsOptions.SmsIr.BaseUrl);
+        c.Timeout = TimeSpan.FromSeconds(15);
+        c.DefaultRequestHeaders.Add("x-api-key", smsOptions.SmsIr.ApiKey);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+}
+else
+{
+    builder.Services.AddSingleton<ISmsProvider>(sp => sp.GetRequiredService<FakeSmsProvider>());
+}
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -205,6 +218,9 @@ static class StartupChecks
         if (string.IsNullOrEmpty(connectionString)) problems.Add("ConnectionStrings:Default is missing.");
         if (env.IsProduction() && sms.Provider == "fake" && !sms.AllowFakeInProduction)
             problems.Add("Sms:Provider is 'fake' in production. Set Sms:AllowFakeInProduction with Sms:FakeAllowedMobiles, or configure a real provider.");
+        if (sms.Provider is not ("fake" or "smsir")) problems.Add($"Sms:Provider '{sms.Provider}' is unknown (use fake or smsir).");
+        if (sms.Provider == "smsir" && sms.SmsIr.ApiKey.Length < 20) problems.Add("Sms:SmsIr:ApiKey is missing.");
+        if (sms.Provider == "smsir" && (!sms.SmsIr.Templates.TryGetValue("auth_otp", out var otpTemplate) || otpTemplate <= 0)) problems.Add("Sms:SmsIr:Templates:auth_otp (template id) is missing.");
 
         if (problems.Count > 0)
             throw new InvalidOperationException("Configuration is not safe to start:\n- " + string.Join("\n- ", problems));

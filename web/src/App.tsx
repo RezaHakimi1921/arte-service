@@ -181,6 +181,20 @@ function OtpLogin({ onDone, onPassword }: { onDone: (s: Session) => void; onPass
           <button type="button" className="link" onClick={onPassword}>ورود با نام کاربری</button>
         )}
       </form>
+      {/* Public description: anyone opening the site (including an SMS provider's reviewer) sees what it is before logging in. */}
+      <section className="card about" aria-labelledby="about-title">
+        <h2 id="about-title">آرته سرویس چیست؟</h2>
+        <p>
+          سامانه‌ی آنلاین مدیریت تعمیرگاه برای تعمیرگاه‌های موتورسیکلت و خودرو: پذیرش وسیله، پرونده‌ی تعمیر هر مشتری،
+          سپردن کار به همکاران، ثبت قطعه و اجرت، صورت‌حساب، پرداخت و تحویل وسیله؛ همه روی گوشی.
+        </p>
+        <ul>
+          <li>کاربران: صاحب تعمیرگاه و کارکنانی که خودش اضافه می‌کند.</li>
+          <li>ورود با شماره موبایل؛ برای هر ورود یک کد یک‌بار مصرف پیامک می‌شود.</li>
+          <li>اطلاعات هر تعمیرگاه جدا و فقط برای کارکنان همان تعمیرگاه قابل دیدن است.</li>
+        </ul>
+        <p className="muted small">آرته سرویس محصولی از <a href="https://artepersia.com" rel="noopener">آرته</a> است.</p>
+      </section>
     </main>
   );
 }

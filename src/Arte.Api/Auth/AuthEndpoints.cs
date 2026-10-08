@@ -29,6 +29,7 @@ public static class AuthEndpoints
             return await otp.RequestAsync(mobile, http.Connection.RemoteIpAddress?.ToString(), ct) switch
             {
                 OtpRequestResult.Sent => Results.Accepted(value: new { expiresInSeconds = 120 }),
+                OtpRequestResult.SendFailed => Results.Problem(statusCode: 503, title: "ارسال پیامک انجام نشد. یک دقیقه بعد دوباره تلاش کنید."),
                 OtpRequestResult.TooSoon => Results.Problem(statusCode: 429, title: "کمی صبر کنید و دوباره درخواست دهید."),
                 _ => Results.Problem(statusCode: 429, title: "تعداد درخواست‌ها زیاد است. بعداً تلاش کنید."),
             };

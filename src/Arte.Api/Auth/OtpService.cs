@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace Arte.Api.Auth;
 
-public enum OtpRequestResult { Sent, TooSoon, TooMany }
+public enum OtpRequestResult { Sent, TooSoon, TooMany, SendFailed }
 
 public sealed class OtpService(
     ArteDbContext db,
@@ -69,7 +69,14 @@ public sealed class OtpService(
         });
         await db.SaveChangesAsync(ct);
 
-        await sms.SendTemplateAsync(mobile, MessageKeys.AuthOtp, new Dictionary<string, string> { ["code"] = code }, ct);
+        var sent = await sms.SendTemplateAsync(mobile, MessageKeys.AuthOtp, new Dictionary<string, string> { ["code"] = code }, ct);
+        if (!sent.Accepted)
+        {
+            // The code never left the server: kill it, and tell the user instead of making them wait for nothing.
+            await db.OtpChallenges.Where(c => c.Mobile == mobile && c.ConsumedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.ConsumedAt, now), ct);
+            return OtpRequestResult.SendFailed;
+        }
         return OtpRequestResult.Sent;
     }
 

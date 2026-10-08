@@ -42,12 +42,16 @@ services:
       Sms__AllowFakeInProduction: ${SMS_ALLOW_FAKE:-false}
       Sms__FakeAllowedMobiles__0: ${SMS_FAKE_MOBILE_1:-}
       Sms__FakeAllowedMobiles__1: ${SMS_FAKE_MOBILE_2:-}
-    # No internet egress yet. When a real SMS provider is added, attach an egress network here.
+      Sms__SmsIr__ApiKey: ${SMSIR_API_KEY:-}
+      Sms__SmsIr__Templates__auth_otp: ${SMSIR_OTP_TEMPLATE_ID:-0}
+      Sms__SmsIr__ParamNames__code: ${SMSIR_OTP_PARAM:-CODE}
+    # "egress" is the only route out (to the SMS provider); the database stays on the internal-only network.
     # Unique alias: the web container also sits on the edge network, where plain "api"
     # resolves to the PersonalWallet API.
     networks:
       internal:
         aliases: [arte-api]
+      egress: {}
     read_only: true
     tmpfs: ["/tmp"]
     volumes:
@@ -78,6 +82,7 @@ services:
 networks:
   internal:
     internal: true
+  egress: {}
   edge:
     external: true
     name: ${EDGE_NETWORK:-personalwallet_default}

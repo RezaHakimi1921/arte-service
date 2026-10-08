@@ -45,4 +45,16 @@ public sealed class SmsOptions
     /// </summary>
     public bool AllowFakeInProduction { get; set; }
     public string[] FakeAllowedMobiles { get; set; } = [];
+    public SmsIrOptions SmsIr { get; set; } = new();
+}
+
+/// <summary>sms.ir settings. The API key comes only from the server's environment (deploy/.env).</summary>
+public sealed class SmsIrOptions
+{
+    public string BaseUrl { get; set; } = "https://api.sms.ir/";
+    public string ApiKey { get; set; } = "";
+    /// <summary>Message key with '.' replaced by '_' (e.g. "auth_otp") → sms.ir template id.</summary>
+    public Dictionary<string, int> Templates { get; set; } = [];
+    /// <summary>Our token name → the template's parameter name; default is the token name upper-cased ("code" → "CODE").</summary>
+    public Dictionary<string, string> ParamNames { get; set; } = [];
 }

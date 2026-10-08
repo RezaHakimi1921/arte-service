@@ -1023,3 +1023,9 @@ button[aria-busy="true"]::before {
 .report-stat strong { font-size: 1.05rem; }
 .report-stat.warn strong { color: var(--warning-text); }
 .report-pay strong { white-space: nowrap; }
+
+/* ── public description under the login form ── */
+.auth .about { display: flex; flex-direction: column; gap: 0.5rem; line-height: 1.8; }
+.auth .about h2 { margin: 0; font-size: 1.05rem; }
+.auth .about p, .auth .about ul { margin: 0; }
+.auth .about ul { padding-inline-start: 1.2rem; }
