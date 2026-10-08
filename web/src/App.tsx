@@ -316,7 +316,7 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     <div className="shell">
       {me.openMode && (
         <div className="open-banner" role="status">
-          ورود فعلاً خاموش است و هر کسی با این آدرس وارد می‌شود. اطلاعات واقعی وارد نکنید.
+          این نسخه‌ی نمایشی آرته سرویس است و هر بازدیدکننده‌ای آن را می‌بیند؛ اطلاعات واقعی وارد نکنید.
         </div>
       )}
       <header className="topbar">

@@ -118,3 +118,13 @@
 - ادغام پرونده (Merge)
 - استقرار Production، بکاپ خودکار DB
 - Onboarding اولین مغازه Pilot و اندازه‌گیری «% پرونده‌های end-to-end در Arte»
+
+## Backlog: platform admin panel (requested ۱۴۰۵/۰۷/۱۷, not started)
+
+A separate admin area for the platform owner (not a business owner), to control things across all businesses.
+To be scoped before building; first ideas:
+- Switch sign-in modes (OTP / password / open demo) and the SMS provider without editing `.env`.
+- List businesses: status, created date, usage; activate/deactivate (never hard delete).
+- SMS: provider credit, sent/failed counts, template status.
+- Signup invite codes.
+Access: a platform-level permission separate from tenant roles, with its own audit log.

@@ -83,7 +83,9 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
       )}
       <Group title="سیستم">
         <Row icon="theme" title="ظاهر" sub="روشن یا تیره" onClick={() => onOpen("appearance")} />
-        {!openMode && <Row icon="logout" title="خروج از حساب" onClick={logout} danger />}
+        {openMode
+          ? <Row icon="user" title="ورود با حساب خودم" sub="خروج از نسخه‌ی نمایشی" onClick={logout} />
+          : <Row icon="logout" title="خروج از حساب" onClick={logout} danger />}
       </Group>
       <p className="muted small version">آرته سرویس · نسخه {APP_VERSION} · <span dir="ltr" className="font-num">{mobile}</span></p>
     </section>
