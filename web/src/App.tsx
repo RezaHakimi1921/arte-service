@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
 import { CaseDetail, CasesView, type CaseFilter } from "./cases";
 import { FeedbackProvider } from "./feedback";
@@ -339,7 +339,9 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
   const [morePage, setMorePage] = useState<SettingsPage | null>(null);
   const can = (p: string) => me.business!.permissions.includes(p);
   const { notify } = useFeedback();
-  const [touring, setTouring] = useState(!me.business!.tourDone);
+  // Businesses from before the tour have no sample yet: it is created first, then the tour opens.
+  const needsSample = !me.business!.tourDone && can("cases.create") && !me.business!.sampleCaseId;
+  const [touring, setTouring] = useState(!me.business!.tourDone && !needsSample);
   const [sampleId, setSampleId] = useState<string | null>(me.business!.sampleCaseId);
   const [homeKey, setHomeKey] = useState(0);
 
@@ -355,6 +357,15 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     go("home");
     setTouring(true);
   }
+
+  // Ref guard: React's development double-run must not create two samples.
+  const sampleRequested = useRef(false);
+  useEffect(() => {
+    if (needsSample && !sampleRequested.current) {
+      sampleRequested.current = true;
+      void startTour();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function removeSample() {
     try {
