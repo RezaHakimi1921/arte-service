@@ -95,7 +95,7 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange }: {
     : stageKey === "ready" ? "هنگام تحویل از وضعیت وسیله عکس بگیرید." : null;
 
   return (
-    <section className="card photos" aria-label="عکس‌ها">
+    <section className="card photos" aria-label="عکس‌ها" data-tour="photos">
       <div className="photos-head">
         <h3>عکس‌ها{photos.length > 0 && <span className="muted small font-num"> ({formatNumber(photos.length)})</span>}</h3>
         {canAdd && (

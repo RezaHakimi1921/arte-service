@@ -36,6 +36,8 @@ public sealed class Membership : ITenantOwned
     public string CommissionBase { get; set; } = "case_total";
     public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>When this member finished or skipped the intro tour; null shows it on next sign-in.</summary>
+    public DateTimeOffset? TourDoneAt { get; set; }
 
     public bool Has(string permission) => Role == Roles.Owner || Permissions.Contains(permission);
 }

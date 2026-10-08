@@ -5,6 +5,8 @@ import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
+import { Tour, type TourStep } from "./tour";
+import { useFeedback } from "./feedback";
 import { AccountPage, AppearancePage, BusinessPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
@@ -15,7 +17,10 @@ type Me = {
   mobile: string;
   displayName: string | null;
   openMode: boolean;
-  business: { tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean } | null;
+  business: {
+    tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean;
+    tourDone: boolean; sampleCaseId: string | null;
+  } | null;
 };
 type Tab = "home" | "cases" | "customers" | "settings";
 
@@ -333,6 +338,76 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
   const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
   const [morePage, setMorePage] = useState<SettingsPage | null>(null);
   const can = (p: string) => me.business!.permissions.includes(p);
+  const { notify } = useFeedback();
+  const [touring, setTouring] = useState(!me.business!.tourDone);
+  const [sampleId, setSampleId] = useState<string | null>(me.business!.sampleCaseId);
+  const [homeKey, setHomeKey] = useState(0);
+
+  async function startTour() {
+    if (can("cases.create") && !sampleId) {
+      try {
+        setSampleId((await api<{ caseId: string }>("/api/v1/onboarding/sample", { method: "POST" })).caseId);
+      } catch (err) {
+        notify(err instanceof ApiError ? err.message : "پرونده‌ی نمونه ساخته نشد", "error");
+        return;
+      }
+    }
+    go("home");
+    setTouring(true);
+  }
+
+  async function removeSample() {
+    try {
+      await api("/api/v1/onboarding/sample", { method: "DELETE" });
+      setSampleId(null);
+      setHomeKey((k) => k + 1);
+      notify("داده‌های نمونه حذف شد");
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "حذف نشد", "error");
+    }
+  }
+
+  async function finishTour(remove: boolean) {
+    setTouring(false);
+    go("home");
+    api("/api/v1/onboarding/tour-done", { method: "POST" }).catch(() => {});
+    if (remove) await removeSample();
+  }
+
+  function openSample() {
+    setTab("cases");
+    setNewCase(false);
+    setMorePage(null);
+    setCaseId(sampleId);
+  }
+
+  // Owners and managers walk through the sample case; technicians get the short version.
+  const tourSteps: TourStep[] = can("cases.create") && sampleId ? [
+    { title: "صف کار امروز", target: "queue", go: () => go("home"),
+      body: "هر بار که برنامه را باز می‌کنید، این‌جا می‌بینید چه کاری مانده: پرونده‌های باز، کارهای متوقف، آماده‌ی تحویل و بی‌مسئول. روی هر خانه بزنید تا فهرستش باز شود." },
+    { title: "پذیرش جدید", target: "new-case", go: () => go("home"),
+      body: "وسیله که رسید، از این‌جا ثبتش کنید: شماره‌ی مشتری، نوع و مدل وسیله و ایراد. کمتر از یک دقیقه طول می‌کشد و بقیه را بعداً هم می‌شود کامل کرد." },
+    { title: "پرونده‌ی نمونه", target: "case-head", go: openSample,
+      body: "برای آشنایی یک پرونده‌ی نمونه ساخته‌ایم. مشتری و تماس، وسیله و پلاک، مرحله‌ی فعلی، مسئول و قول تحویل همه بالای صفحه‌اند." },
+    { title: "قدم بعدی", target: "next-action", go: openSample,
+      body: "دکمه‌ی بزرگ همیشه کار بعدی پرونده است. کارهای دیگر مثل «کار متوقف است» یا یادداشت، در دکمه‌های کوچک‌تر زیر آن هستند." },
+    { title: "قطعه، اجرت و پرداخت", target: "billing", go: openSample,
+      body: "هر قطعه و اجرتی که ثبت شود در صورت‌حساب می‌آید. قیمت خرید فقط برای شما دیده می‌شود و سود پرونده را حساب می‌کند. بیعانه و پرداخت‌ها هم همین‌جا ثبت می‌شوند." },
+    { title: "عکس کار", target: "photos", go: openSample,
+      body: "از وسیله و کار انجام‌شده عکس بگیرید؛ دوربین گوشی مستقیم باز می‌شود و عکس با مرحله‌ی کار در پرونده می‌ماند." },
+    { title: "تاریخچه", target: "timeline", go: openSample,
+      body: "هر تغییری با نام انجام‌دهنده و ساعتش ثبت می‌شود؛ هیچ اتفاقی در پرونده گم نمی‌شود." },
+    { title: "همکاران و تنظیمات", target: "staff", go: () => go("settings"),
+      body: "همکاران، نقش و دستمزدشان این‌جا تعریف می‌شود. فهرست قیمت، قوانین پذیرش، گزارش‌ها و نسیه‌ها هم در همین صفحه‌اند و این راهنما را هم از همین‌جا دوباره می‌بینید." },
+    { title: "آماده‌اید", go: () => go("home"),
+      body: "پرونده‌ی نمونه فقط برای آشنایی است. همین حالا حذفش کنید، یا بعداً از تنظیمات ← «حذف داده‌های نمونه»." },
+  ] : [
+    { title: "کارهای شما", target: "queue", go: () => go("home"),
+      body: "این‌جا می‌بینید چه کارهایی به شما سپرده شده و کدام منتظر یا آماده‌ی تحویل است." },
+    { title: "پرونده‌ها", target: "nav",
+      body: "پرونده‌هایتان در «پرونده‌ها» هستند. داخل هر پرونده، دکمه‌ی بزرگ قدم بعدی کار است و از کار انجام‌شده عکس می‌گیرید." },
+    { title: "آماده‌اید", body: "هر وقت خواستید، این راهنما از تنظیمات ← «راهنمای برنامه» دوباره باز می‌شود." },
+  ];
 
   // A new page starts at the top, not at the previous page's scroll position.
   useEffect(() => { window.scrollTo(0, 0); }, [tab, caseId, newCase, morePage]);
@@ -379,9 +454,10 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     else if (morePage === "reports") page = <ReportsPage onBack={back} />;
     else if (morePage === "appearance") page = <AppearancePage onBack={back} applyTheme={applyTheme} />;
     else page = <SettingsHome name={me.displayName ?? me.mobile} mobile={me.mobile} role={me.business!.role} can={can}
-      onOpen={setMorePage} onSignOut={onSignOut} openMode={me.openMode} />;
+      onOpen={setMorePage} onSignOut={onSignOut} openMode={me.openMode}
+      onTour={startTour} onRemoveSample={sampleId && can("cases.create") ? removeSample : undefined} />;
   }
-  else page = <HomeView key={String(caseId)} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
+  else page = <HomeView key={`${caseId}-${homeKey}`} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
 
   return (
     <div className="shell">
@@ -403,7 +479,8 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
         )}
         {page}
       </main>
-      <nav className="bottom-nav" aria-label="بخش‌ها">
+      {touring && <Tour steps={tourSteps} canRemoveSample={!!sampleId && can("cases.create")} onFinish={finishTour} />}
+      <nav className="bottom-nav" aria-label="بخش‌ها" data-tour="nav">
         <NavButton active={tab === "home"} onClick={() => go("home")} label="خانه" icon="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
         <NavButton active={tab === "cases"} onClick={() => { setCaseFilter({}); go("cases"); }} label="پرونده‌ها" icon="M9 3h6l1 2h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3zM8 11h8M8 15h5" />
         {(can("cases.create") || can("cases.view_all")) && (

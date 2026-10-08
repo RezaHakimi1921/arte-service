@@ -37,6 +37,8 @@ public static class TenantEndpoints
                     RequireAssigneeOnIntake = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.RequireAssigneeOnIntake).SingleAsync(ct),
                     m.Role,
                     Permissions = m.Role == Roles.Owner ? [.. Permissions.All] : m.Permissions,
+                    TourDone = await db.Memberships.Where(x => x.Id == m.Id).Select(x => x.TourDoneAt != null).SingleAsync(ct),
+                    SampleCaseId = await db.Cases.Where(c => c.IsSample).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct),
                 },
             });
         }).RequireAuthorization();
@@ -120,14 +122,15 @@ public static class TenantEndpoints
         sp.GetRequiredService<TenantContext>().Set(tenant.Id);
 
         db.Tenants.Add(tenant);
-        db.Memberships.Add(new Membership
+        var owner = new Membership
         {
             TenantId = tenant.Id,
             UserId = ownerUserId,
             Role = Roles.Owner,
             Permissions = Roles.DefaultPermissions(Roles.Owner),
             CreatedAt = clock.UtcNow,
-        });
+        };
+        db.Memberships.Add(owner);
         db.Workflows.Add(WorkflowTemplates.Instantiate(WorkflowTemplates.MotorcycleRepair, tenant.Id, tenant));
 
         if (!string.IsNullOrEmpty(ownerName))
@@ -137,6 +140,10 @@ public static class TenantEndpoints
         }
         sp.GetRequiredService<Audit>().Record("tenant.created", tenant.Id, ownerUserId, tenant.Name);
         await db.SaveChangesAsync(ct);
+
+        // Every new business starts with the sample case the intro tour walks through.
+        if (sp.GetRequiredService<IConfiguration>().GetValue("Onboarding:SampleData", true))
+            await Arte.Api.Onboarding.OnboardingEndpoints.EnsureSampleAsync(db, owner, clock, ct);
         return tenant;
     }
 

@@ -303,7 +303,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       <button className="link back" onClick={onBack}>→ پرونده‌ها</button>
 
       {/* Header: only decision-making facts. */}
-      <div className="card case-head">
+      <div className="card case-head" data-tour="case-head">
         <div className="case-row-top">
           <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
           <StageChip stage={c.stage} />
@@ -348,7 +348,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
 
       {/* Next action: one big button; everything else in a sheet. */}
       {c.transitions.length > 0 && (
-        <div className="next-actions">
+        <div className="next-actions" data-tour="next-action">
           {primary && <button className="primary block big" disabled={busy} aria-busy={busy} onClick={() => run(primary)}>{primary.label}</button>}
           <div className="quick-actions">
             {others.length > 0 && <button onClick={() => setSheet("actions")}>اقدام‌های دیگر</button>}
@@ -396,7 +396,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         )}
       </Collapsible>
 
-      <Collapsible title={`تاریخچه (${formatNumber(c.timeline.length)})`}>
+      <Collapsible title={`تاریخچه (${formatNumber(c.timeline.length)})`} tour="timeline">
         <ol className="timeline">
           {c.timeline.map((e) => (
             <li key={e.id}>
@@ -511,9 +511,9 @@ function PromisePicker({ onPick, busy }: { onPick: (iso: string) => void; busy: 
   );
 }
 
-function Collapsible({ title, open, children }: { title: string; open?: boolean; children: ReactNode }) {
+function Collapsible({ title, open, children, tour }: { title: string; open?: boolean; children: ReactNode; tour?: string }) {
   return (
-    <details className="card collapsible" open={open}>
+    <details className="card collapsible" open={open} data-tour={tour}>
       <summary>{title}</summary>
       <div className="collapsible-body">{children}</div>
     </details>

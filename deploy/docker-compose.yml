@@ -46,6 +46,7 @@ services:
       Sms__SmsIr__ApiKey: ${SMSIR_API_KEY:-}
       Sms__SmsIr__Templates__auth_otp: ${SMSIR_OTP_TEMPLATE_ID:-0}
       Sms__SmsIr__ParamNames__code: ${SMSIR_OTP_PARAM:-CODE}
+      Sentry__Dsn: ${SENTRY_DSN:-}
     # "egress" is the only route out (to the SMS provider); the database stays on the internal-only network.
     # Unique alias: the web container also sits on the edge network, where plain "api"
     # resolves to the PersonalWallet API.
@@ -58,6 +59,27 @@ services:
     volumes:
       - uploads:/app/uploads
     cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # Error tracking (Sentry-compatible). Internal network only: the API reports to it, nothing on the
+  # internet can reach it. Its web UI is bound to the server's localhost; open it through an SSH tunnel.
+  bugsink:
+    image: bugsink/bugsink:latest
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${BUGSINK_SECRET_KEY:?set in .env}
+      CREATE_SUPERUSER: ${BUGSINK_ADMIN:?set in .env}
+      BASE_URL: http://localhost:8000
+      PORT: 8000
+      SINGLE_USER: "True"
+      SITE_TITLE: Arte errors
+    volumes:
+      - bugsink_data:/data
+    networks:
+      internal:
+        aliases: [arte-bugsink]
+    ports: ["127.0.0.1:8000:8000"]
+    mem_limit: 512m
     security_opt: ["no-new-privileges:true"]
 
   web:
@@ -91,3 +113,4 @@ networks:
 volumes:
   db_data:
   uploads:
+  bugsink_data:

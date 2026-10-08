@@ -264,7 +264,9 @@ public static class BillingEndpoints
         if (!m.Has(Permissions.PaymentsRecord) && !m.Has(Permissions.ReportsView))
             return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
 
+        // Deleted cases excluded by hand: the IgnoreQueryFilters on the customer join applies to the whole query.
         var delivered = await (from c in db.Cases.AsNoTracking()
+                               where c.DeletedAt == null
                                join s in db.Stages on c.StageId equals s.Id
                                where s.Key == "delivered"
                                join cu in db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.CustomerId equals cu.Id

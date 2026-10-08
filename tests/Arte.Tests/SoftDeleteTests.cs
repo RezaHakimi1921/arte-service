@@ -79,4 +79,19 @@ public sealed class SoftDeleteTests(ArteApiFactory api)
 
         Assert.Equal(HttpStatusCode.Forbidden, (await tech.DeleteAsync($"/api/v1/customers/{id}")).StatusCode);
     }
+
+    [Fact]
+    public async Task Deleted_case_leaves_the_list_the_home_inbox_and_receivables()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var id = await Id(await owner.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), request = "صدا می‌دهد" }));
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/api/v1/cases/{id}")).StatusCode);
+
+        var list = await owner.GetStringAsync("/api/v1/cases");
+        var inbox = await owner.GetFromJsonAsync<JsonElement>("/api/v1/inbox");
+        var receivables = await owner.GetStringAsync("/api/v1/receivables");
+        Assert.DoesNotContain(id.ToString(), list);
+        Assert.Equal(0, inbox.GetProperty("stats").GetProperty("open").GetInt32());
+        Assert.DoesNotContain(id.ToString(), receivables);
+    }
 }

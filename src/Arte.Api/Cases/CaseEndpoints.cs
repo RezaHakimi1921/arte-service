@@ -81,8 +81,11 @@ public static class CaseEndpoints
         var cases = db.Cases.AsNoTracking();
         if (!CaseAccess.CanSeeAll(m) || mine == true) cases = cases.Where(c => c.AssigneeId == m.Id);
 
+        // IgnoreQueryFilters on a joined set switches the soft-delete filter off for the whole query,
+        // so deleted cases are excluded by hand (the customer join must still show deleted customers' names).
         var rows =
             from c in cases
+            where c.DeletedAt == null
             join s in db.Stages on c.StageId equals s.Id
             join cu in db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.CustomerId equals cu.Id
             join a in db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.AssetId equals a.Id into aj
@@ -588,8 +591,10 @@ public static class CaseEndpoints
         var seeAll = CaseAccess.CanSeeAll(m);
         if (!seeAll) cases = cases.Where(c => c.AssigneeId == m.Id);
 
+        // Deleted cases excluded by hand: the IgnoreQueryFilters on the joins applies to the whole query.
         var open = await (
             from c in cases
+            where c.DeletedAt == null
             join s in db.Stages on c.StageId equals s.Id
             where !s.IsTerminal
             join cu in db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.CustomerId equals cu.Id

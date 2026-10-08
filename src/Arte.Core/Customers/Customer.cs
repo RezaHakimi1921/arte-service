@@ -11,6 +11,8 @@ public sealed class Customer : ITenantOwned, ISoftDeletable
     public required string Mobile { get; set; }
     public string? FullName { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Created for the first-run tour; removable in one go, never counted for licences or reports.</summary>
+    public bool IsSample { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

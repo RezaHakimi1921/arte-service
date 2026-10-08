@@ -34,9 +34,9 @@ export function HomeView({ canCreate, onOpen, onNewCase, onOpenCases }: {
 
   return (
     <section>
-      {canCreate && <button className="primary block big" onClick={onNewCase}>+ پذیرش جدید</button>}
+      {canCreate && <button className="primary block big" onClick={onNewCase} data-tour="new-case">+ پذیرش جدید</button>}
 
-      <div className="tiles">
+      <div className="tiles" data-tour="queue">
         <Tile label={manager ? "پرونده‌های باز" : "کارهای من"} value={st.open} onClick={() => onOpenCases({})} />
         <Tile label="در حال کار" value={st.active} onClick={() => onOpenCases({ category: "active" })} />
         <Tile label="منتظر / متوقف" value={st.waiting} tone={st.waiting > 0 ? "warn" : undefined} onClick={() => onOpenCases({ category: "waiting" })} />

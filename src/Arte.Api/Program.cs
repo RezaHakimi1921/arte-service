@@ -1,3 +1,5 @@
+using Arte.Api.Onboarding;
+using Arte.Api.Diagnostics;
 using System.Threading.RateLimiting;
 using Arte.Api.Account;
 using Arte.Api.Auth;
@@ -27,6 +29,21 @@ builder.WebHost.ConfigureKestrel(k =>
     k.AddServerHeader = false;
     k.Limits.MaxRequestBodySize = 1 * 1024 * 1024;
 });
+
+// Error tracking (Bugsink, Sentry protocol) only when a DSN is configured. No request bodies, cookies or
+// user data are sent, and SMS logs (which hold codes in development) never become breadcrumbs.
+if (!string.IsNullOrWhiteSpace(builder.Configuration["Sentry:Dsn"]))
+{
+    builder.WebHost.UseSentry(o =>
+    {
+        o.Dsn = builder.Configuration["Sentry:Dsn"];
+        o.Environment = builder.Environment.EnvironmentName.ToLowerInvariant();
+        o.SendDefaultPii = false;
+        o.MaxRequestBodySize = Sentry.Extensibility.RequestSize.None;
+        o.MinimumEventLevel = LogLevel.Error;
+        o.SetBeforeBreadcrumb(b => b.Category?.Contains("Sms", StringComparison.OrdinalIgnoreCase) == true ? null : b);
+    });
+}
 
 var config = builder.Configuration;
 builder.Services.Configure<JwtOptions>(config.GetSection(JwtOptions.Section));
@@ -158,6 +175,8 @@ app.MapWorkflows();
 app.MapCases();
 app.MapBilling();
 app.MapAttachments();
+app.MapClientErrors();
+app.MapOnboarding();
 app.MapReports();
 
 if (config.GetValue("Database:MigrateOnStartup", false))

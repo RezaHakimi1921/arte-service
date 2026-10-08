@@ -23,6 +23,7 @@ const ICON = {
   staff: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
   theme: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
   report: "M3 3v18h18M7 15l4-4 3 3 5-6",
+  help: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
 };
 
@@ -39,9 +40,9 @@ function Row({ icon, title, sub, onClick, danger }: { icon: keyof typeof ICON; t
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+function Group({ title, children, tour }: { title: string; children: ReactNode; tour?: string }) {
   return (
-    <section className="settings-group">
+    <section className="settings-group" data-tour={tour}>
       <h3>{title}</h3>
       <div className="settings-list">{children}</div>
     </section>
@@ -49,9 +50,9 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** One simple list; every item opens its own page with one job. */
-export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openMode }: {
+export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openMode, onTour, onRemoveSample }: {
   name: string; mobile: string; role: string; can: (p: string) => boolean; onOpen: (p: SettingsPage) => void;
-  onSignOut: () => void; openMode: boolean;
+  onSignOut: () => void; openMode: boolean; onTour: () => void; onRemoveSample?: () => void;
 }) {
   async function logout() {
     await api("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
@@ -77,12 +78,14 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
         </Group>
       )}
       {can("staff.manage") && (
-        <Group title="مدیریت">
+        <Group title="مدیریت" tour="staff">
           <Row icon="staff" title="کارکنان و دسترسی‌ها" onClick={() => onOpen("staff")} />
         </Group>
       )}
       <Group title="سیستم">
         <Row icon="theme" title="ظاهر" sub="روشن یا تیره" onClick={() => onOpen("appearance")} />
+        <Row icon="help" title="راهنمای برنامه" sub="تور معرفی روی پرونده‌ی نمونه" onClick={onTour} />
+        {onRemoveSample && <Row icon="rules" title="حذف داده‌های نمونه" sub="مشتری و پرونده‌ای که برای آشنایی ساخته شد" onClick={onRemoveSample} />}
         {openMode
           ? <Row icon="user" title="ورود با حساب خودم" sub="خروج از نسخه‌ی نمایشی" onClick={logout} />
           : <Row icon="logout" title="خروج از حساب" onClick={logout} danger />}

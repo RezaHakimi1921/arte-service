@@ -73,6 +73,8 @@ public sealed class Case : ITenantOwned, ISoftDeletable
 
     /// <summary>Why the job is stopped (any stage), null when it is moving. See WaitReasons.</summary>
     public string? WaitReason { get; set; }
+    /// <summary>Created for the first-run tour (see Customer.IsSample).</summary>
+    public bool IsSample { get; set; }
 
     public string CustodyStatus { get; set; } = CustodyStatuses.InShop;
     /// <summary>What came in with the motorcycle: helmet, key, papers, visible damage…</summary>

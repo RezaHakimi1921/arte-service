@@ -79,7 +79,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
   const m = billing.money;
   return (
     <>
-      <details className="card collapsible" open>
+      <details className="card collapsible" open data-tour="billing">
         <summary>قطعات و اجرت {billing.items.length > 0 && <span className="count font-num">{formatNumber(billing.items.length)}</span>}</summary>
         <div className="collapsible-body">
           {billing.items.length === 0 && <p className="muted">هنوز قطعه یا اجرتی ثبت نشده. هر قطعه‌ای که مصرف شد و هر کاری که انجام شد را این‌جا ثبت کنید تا در صورت‌حساب فراموش نشود.</p>}

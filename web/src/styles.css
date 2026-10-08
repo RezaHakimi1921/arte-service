@@ -1029,3 +1029,47 @@ button[aria-busy="true"]::before {
 .auth .about h2 { margin: 0; font-size: 1.05rem; }
 .auth .about p, .auth .about ul { margin: 0; }
 .auth .about ul { padding-inline-start: 1.2rem; }
+
+/* ── intro tour (coach marks) ── */
+.tour-root { position: fixed; inset: 0; z-index: 70; }
+.tour-scrim { position: absolute; inset: 0; background: var(--scrim); }
+.tour-spot {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px var(--scrim);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  pointer-events: none;
+}
+.tour-card {
+  position: fixed;
+  inset-inline: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: 480px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  line-height: 1.8;
+  transition: opacity var(--dur-sheet-in) var(--ease-out), transform var(--dur-sheet-in) var(--ease-out);
+}
+@starting-style { .tour-card { opacity: 0; transform: translateY(12px); } }
+.tour-card h3 { margin: 0; font-size: 1.05rem; }
+.tour-card p { margin: 0; }
+.tour-count { margin: 0; }
+.tour-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+.tour-actions.row { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.tour-actions.row .link { margin-inline-start: auto; }
+@media (prefers-reduced-motion: reduce) {
+  @starting-style { .tour-card { transform: none; } }
+}
+@media (prefers-contrast: more) {
+  .tour-spot { outline-width: 3px; }
+}
+
+.touring .content { padding-bottom: 70dvh; }
