@@ -94,6 +94,12 @@ build → test → commit → push → deploy → health check → summary
   Arte publishes **no** host ports. On the shared network use unique aliases (`arte-api`, `arte-web`) — plain `api` is PersonalWallet's.
 - Editing PersonalWallet's Caddyfile: back up, append **in place** (bind-mounted single file), `caddy validate`, then `caddy reload`.
 - SSH: `ssh -i ~/.ssh/arte_service_deploy -p 2238 cluadai@78.39.51.105`. No sudo.
+- **Errors (Bugsink, Sentry-compatible)**: container `bugsink` on the internal network, UI bound to the server's
+  `127.0.0.1:8000` only. Open it with a tunnel: `ssh -i ~/.ssh/arte_service_deploy -p 2238 -L 8000:127.0.0.1:8000 cluadai@78.39.51.105`
+  then http://localhost:8000 (user `admin@artepersia.com`, password in `.env` → `BUGSINK_ADMIN`). The API reports via
+  `Sentry:Dsn` (`SENTRY_DSN`); browser errors go through `POST /api/v1/client-errors`, never straight to Bugsink.
+- **IgnoreQueryFilters is query-wide**: ignoring the soft-delete filter on a joined set (to show a deleted customer's
+  name) also un-filters the main set. Add `where c.DeletedAt == null` by hand in such queries.
 
 ## UX principles (from the product consultation, ۱۴۰۵/۰۷)
 

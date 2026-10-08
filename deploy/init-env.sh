@@ -17,6 +17,11 @@ SMS_FAKE_MOBILE_2=
 SMSIR_API_KEY=
 SMSIR_OTP_TEMPLATE_ID=
 SMSIR_OTP_PARAM=CODE
+# Bugsink error tracking: log in as admin@artepersia.com with the password after "admin@artepersia.com:".
+BUGSINK_SECRET_KEY=$(openssl rand -hex 40)
+BUGSINK_ADMIN=admin@artepersia.com:$(openssl rand -hex 12)
+# Filled after creating the project in Bugsink (see CLAUDE.md, Server notes).
+SENTRY_DSN=
 ENV
 echo "Wrote $(pwd)/.env (mode 600)."
 echo "Signup invite code: $(grep SIGNUP_INVITE_CODE .env | cut -d= -f2)"
