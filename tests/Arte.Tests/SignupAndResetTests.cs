@@ -23,7 +23,7 @@ public sealed class SignupAndResetTests(ArteApiFactory api)
         var res = await client.PostAsJsonAsync("/api/v1/tenants", new { ownerName = "علی رضایی" });
         Assert.Equal(HttpStatusCode.Created, res.StatusCode);
         var tenant = await res.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("تعمیرگاه علی رضایی", tenant.GetProperty("name").GetString());
+        Assert.Equal("تعمیرگاه رضایی", tenant.GetProperty("name").GetString());
 
         var session = await (await client.PostAsJsonAsync("/api/v1/auth/select-tenant", new { tenantId = tenant.GetProperty("id").GetGuid() }))
             .Content.ReadFromJsonAsync<JsonElement>();

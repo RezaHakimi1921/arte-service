@@ -314,7 +314,8 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
         </Field>
         <Field label="نام تعمیرگاه (اختیاری)" error={errors.name ?? errors.form}>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120}
-            placeholder={ownerName.trim() ? `تعمیرگاه ${ownerName.trim()}` : "بعداً هم می‌توانید بنویسید"} />
+            placeholder={ownerName.trim() ? `تعمیرگاه ${ownerName.trim().split(/\s+/).pop()}` : "بعداً هم می‌توانید بنویسید"} />
+          <span className="hint">اگر خالی بماند، نام خانوادگی شما گذاشته می‌شود؛ در تنظیمات ← اطلاعات کسب‌وکار قابل تغییر است.</span>
         </Field>
         <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت‌نام…" : "ثبت‌نام و ورود"}</button>
       </form>

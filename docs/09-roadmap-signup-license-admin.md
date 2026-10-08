@@ -43,3 +43,14 @@ organization level sees all its branches, staff stay per branch. Nothing today m
   server, speaks the Sentry SDK protocol, for server and browser errors.
 - **Microsoft Clarity** answers from the server, so recording can work; the dashboard may need a non-Iranian
   connection. It records screens, so it must run with **strict masking** (customer names, mobiles and amounts hidden).
+
+## Decisions (۱۴۰۵/۰۷/۱۷, owner)
+- Sign-up without a shop name → «تعمیرگاه {family name}», editable in Settings → اطلاعات کسب‌وکار.
+- After the licence ends the branch becomes **read-only** (agreed).
+- Admin panel: every **branch** has an **active** switch; the platform owner can switch a branch off completely.
+- Licences are granted **per branch** (today's tenant = one branch).
+- Payment: manual for now (no gateway until eNamad); the admin extends the licence.
+- Proposed prices (toman): 1 month 1,000,000 · 3 months 2,500,000 · 6 months 5,000,000 · 9 months 7,500,000 · 12 months 10,000,000.
+  Prices live in the admin panel (editable), not in code.
+- Monitoring after licences: **Bugsink** (Sentry-SDK compatible, one container) for errors; no Elasticsearch —
+  the server has 2 cores / 4 GB with ~1.4 GB free, and Elasticsearch alone wants 1–2 GB.

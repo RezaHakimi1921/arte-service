@@ -83,7 +83,9 @@ public static class TenantEndpoints
             else if (ownerName.Length > 80) errors["ownerName"] = ["نام حداکثر ۸۰ حرف."];
             // The business name is optional at sign-up; it can be changed later in Settings.
             var name = req.Name?.Trim();
-            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(ownerName)) name = $"تعمیرگاه {ownerName}";
+            // Empty → named after the owner's family name (the last word of the full name); editable in Settings.
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(ownerName))
+                name = $"تعمیرگاه {ownerName.Split(' ', StringSplitOptions.RemoveEmptyEntries)[^1]}";
             if (string.IsNullOrEmpty(name) || name.Length > 120) errors["name"] = ["نام کسب‌وکار حداکثر ۱۲۰ حرف."];
             string? phone = null;
             if (!string.IsNullOrWhiteSpace(req.Phone))
