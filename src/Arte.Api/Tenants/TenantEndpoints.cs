@@ -72,12 +72,19 @@ public static class TenantEndpoints
         app.MapPost("/api/v1/tenants", async (CreateTenant req, RequestUser me, IServiceScopeFactory scopes,
             IOptions<SignupOptions> signup, ArteDbContext db, CancellationToken ct) =>
         {
-            if (!InviteCodeMatches(signup.Value.InviteCode, req.InviteCode))
+            if (signup.Value.RequireInviteCode && !InviteCodeMatches(signup.Value.InviteCode, req.InviteCode))
                 return Results.Problem(statusCode: 403, title: "کد دعوت معتبر نیست.");
 
             var errors = new Dictionary<string, string[]>();
+            var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == me.RequiredUserId, ct);
+            var ownerName = req.OwnerName?.Trim();
+            if (string.IsNullOrEmpty(ownerName)) ownerName = user.DisplayName;
+            if (string.IsNullOrEmpty(ownerName) || ownerName.Length < 2) errors["ownerName"] = ["نام و نام خانوادگی را بنویسید."];
+            else if (ownerName.Length > 80) errors["ownerName"] = ["نام حداکثر ۸۰ حرف."];
+            // The business name is optional at sign-up; it can be changed later in Settings.
             var name = req.Name?.Trim();
-            if (string.IsNullOrEmpty(name) || name.Length > 120) errors["name"] = ["نام کسب‌وکار لازم است (حداکثر ۱۲۰ حرف)."];
+            if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(ownerName)) name = $"تعمیرگاه {ownerName}";
+            if (string.IsNullOrEmpty(name) || name.Length > 120) errors["name"] = ["نام کسب‌وکار حداکثر ۱۲۰ حرف."];
             string? phone = null;
             if (!string.IsNullOrWhiteSpace(req.Phone))
             {
@@ -85,8 +92,6 @@ public static class TenantEndpoints
                 if (phone.Length > 20 || !phone.All(c => char.IsAsciiDigit(c) || c is '-' or ' ' or '+'))
                     errors["phone"] = ["شماره تلفن معتبر نیست."];
             }
-            var ownerName = req.OwnerName?.Trim();
-            if (ownerName is { Length: > 80 }) errors["ownerName"] = ["نام حداکثر ۸۰ حرف."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var owned = await db.Memberships.IgnoreQueryFilters()
@@ -126,7 +131,7 @@ public static class TenantEndpoints
         if (!string.IsNullOrEmpty(ownerName))
         {
             var user = await db.Users.SingleAsync(u => u.Id == ownerUserId, ct);
-            user.DisplayName ??= ownerName;
+            user.DisplayName = ownerName;
         }
         sp.GetRequiredService<Audit>().Record("tenant.created", tenant.Id, ownerUserId, tenant.Name);
         await db.SaveChangesAsync(ct);

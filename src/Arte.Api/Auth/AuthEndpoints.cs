@@ -14,6 +14,7 @@ public static class AuthEndpoints
     public sealed record OtpVerify(string? Mobile, string? Code);
     public sealed record SelectTenant(Guid TenantId);
     public sealed record PasswordLogin(string? Username, string? Password);
+    public sealed record PasswordReset(string? Mobile, string? Code, string? NewPassword);
     public sealed record MembershipView(Guid TenantId, string TenantName, string Role);
     public sealed record SessionView(string AccessToken, DateTimeOffset ExpiresAt, Guid? TenantId, IReadOnlyList<MembershipView> Memberships);
 
@@ -68,8 +69,11 @@ public static class AuthEndpoints
             if (string.IsNullOrEmpty(username) || username.Length > 40 || string.IsNullOrEmpty(req.Password) || req.Password.Length > 200)
                 return failed;
 
+            // The identifier is a username or the mobile number (Persian digits allowed).
             var now = clock.UtcNow;
-            var user = await db.Users.SingleOrDefaultAsync(u => u.Username == username, ct);
+            var user = Mobile.TryNormalize(username, out var asMobile)
+                ? await db.Users.SingleOrDefaultAsync(u => u.Mobile == asMobile, ct)
+                : await db.Users.SingleOrDefaultAsync(u => u.Username == username, ct);
             if (user?.PasswordHash is null)
             {
                 PasswordHasher.Verify(req.Password, PasswordHasher.Dummy);
@@ -96,6 +100,38 @@ public static class AuthEndpoints
             user.LastLoginAt = now;
             audit.Record("auth.login_password", null, user.Id);
             await db.SaveChangesAsync(ct);
+
+            var memberships = await ActiveMemberships(db, user.Id, ct);
+            var selected = memberships.Count == 1 ? memberships[0].Membership : null;
+            var issued = await tokens.IssueAsync(user.Id, selected, ct);
+            SetRefreshCookie(http, issued, jwt.Value);
+            return Results.Ok(ToSession(issued, selected, memberships));
+        }).RequireRateLimiting("auth");
+
+        // Forgotten password: the SMS code proves the mobile; the new password is set and the user is signed in.
+        // Every other session of the user ends, in case the old password leaked.
+        g.MapPost("/password/reset", async (PasswordReset req, OtpService otp, ArteDbContext db, TokenService tokens,
+            Audit audit, IClock clock, HttpContext http, IOptions<JwtOptions> jwt, IConfiguration config, CancellationToken ct) =>
+        {
+            if (!config.GetValue("Auth:PasswordLoginEnabled", false)) return Results.NotFound();
+            if (req.NewPassword is not { } pw || pw.Length < PasswordHasher.MinLength || pw.Length > 200)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                    { ["newPassword"] = [$"رمز باید دست‌کم {PasswordHasher.MinLength} حرف باشد."] });
+            if (!Mobile.TryNormalize(req.Mobile, out var mobile) || string.IsNullOrEmpty(req.Code)
+                || !await otp.VerifyAsync(mobile, req.Code.Trim(), ct))
+                return Results.Problem(statusCode: 400, title: "کد نادرست است یا منقضی شده.");
+
+            var user = await db.Users.SingleOrDefaultAsync(u => u.Mobile == mobile, ct);
+            if (user is null) return Results.Problem(statusCode: 400, title: "حسابی با این شماره ثبت نشده است.");
+
+            var now = clock.UtcNow;
+            user.PasswordHash = PasswordHasher.Hash(pw);
+            user.FailedPasswordAttempts = 0;
+            user.PasswordLockedUntil = null;
+            user.LastLoginAt = now;
+            audit.Record("auth.password_reset", null, user.Id);
+            await db.SaveChangesAsync(ct);
+            await tokens.RevokeAllForUserAsync(user.Id, "password_reset", ct);
 
             var memberships = await ActiveMemberships(db, user.Id, ct);
             var selected = memberships.Count == 1 ? memberships[0].Membership : null;

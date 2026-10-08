@@ -27,11 +27,10 @@ public sealed class TenancyAndPermissionTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Creating_a_business_needs_the_invite_code()
+    public async Task Creating_a_business_needs_a_signed_in_user()
     {
-        var (client, _) = await api.LoginAsync(ArteApiFactory.NewMobile());
-        var res = await client.PostAsJsonAsync("/api/v1/tenants", new { name = "x", inviteCode = "wrong" });
-        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
+        var res = await api.Client().PostAsJsonAsync("/api/v1/tenants", new { name = "x", ownerName = "علی رضایی" });
+        Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
     }
 
     [Fact]

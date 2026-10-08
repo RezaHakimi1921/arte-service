@@ -89,7 +89,7 @@ public class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public async Task<(HttpClient Client, Guid TenantId)> NewBusinessAsync(string? mobile = null, bool requireAssignee = false)
     {
         var (client, _) = await LoginAsync(mobile ?? NewMobile());
-        var res = await client.PostAsJsonAsync("/api/v1/tenants", new { name = "تعمیرگاه تست", inviteCode = InviteCode });
+        var res = await client.PostAsJsonAsync("/api/v1/tenants", new { name = "تعمیرگاه تست", ownerName = "مالک تست" });
         res.EnsureSuccessStatusCode();
         var tenantId = (await res.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         await SelectAsync(client, tenantId);

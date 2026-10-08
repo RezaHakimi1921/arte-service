@@ -8,7 +8,7 @@ import { ReportsPage } from "./reports";
 import { AccountPage, AppearancePage, BusinessPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
-import { Field, MobileInput } from "./ui";
+import { Field, MobileInput, toLatinDigits } from "./ui";
 
 type Me = {
   id: string;
@@ -82,12 +82,13 @@ async function openModeSession(): Promise<Session | null> {
 /* ───────── Login ───────── */
 
 function Login({ onDone }: { onDone: (s: Session) => void }) {
-  const [mode, setMode] = useState<"otp" | "password">("otp");
-  if (mode === "password") return <PasswordLogin onDone={onDone} onBack={() => setMode("otp")} />;
+  const [mode, setMode] = useState<"otp" | "password" | "reset">("otp");
+  if (mode === "reset") return <ResetPassword onDone={onDone} onBack={() => setMode("password")} />;
+  if (mode === "password") return <PasswordLogin onDone={onDone} onBack={() => setMode("otp")} onForgot={() => setMode("reset")} />;
   return <OtpLogin onDone={onDone} onPassword={() => setMode("password")} />;
 }
 
-function PasswordLogin({ onDone, onBack }: { onDone: (s: Session) => void; onBack: () => void }) {
+function PasswordLogin({ onDone, onBack, onForgot }: { onDone: (s: Session) => void; onBack: () => void; onForgot: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -113,14 +114,77 @@ function PasswordLogin({ onDone, onBack }: { onDone: (s: Session) => void; onBac
         <h1>آرته سرویس</h1>
       </div>
       <form className="card" onSubmit={submit} noValidate>
-        <Field label="نام کاربری">
-          <input dir="ltr" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus />
+        <Field label="نام کاربری یا شماره موبایل">
+          <input dir="ltr" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(toLatinDigits(e.target.value))} required autoFocus />
         </Field>
         <Field label="رمز عبور" error={error}>
           <input type="password" dir="ltr" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </Field>
-        <button className="primary" disabled={busy}>ورود</button>
+        <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ورود…" : "ورود"}</button>
+        <button type="button" className="link" onClick={onForgot}>رمز را فراموش کرده‌ام</button>
         <button type="button" className="link" onClick={onBack}>ورود با کد پیامکی</button>
+      </form>
+    </main>
+  );
+}
+
+/** Forgotten password: a code is sent by SMS to the mobile, then the new password is set and the user is signed in. */
+function ResetPassword({ onDone, onBack }: { onDone: (s: Session) => void; onBack: () => void }) {
+  const [step, setStep] = useState<"mobile" | "code">("mobile");
+  const [mobile, setMobile] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setErrors({});
+    if (step === "code" && password.length < 10) { setErrors({ newPassword: "رمز باید دست‌کم ۱۰ حرف باشد." }); return; }
+    setBusy(true);
+    try {
+      if (step === "mobile") {
+        await api("/api/v1/auth/otp/request", { body: { mobile } });
+        setStep("code");
+      } else {
+        onDone(await api<Session>("/api/v1/auth/password/reset", { body: { mobile, code: toLatinDigits(code), newPassword: password } }));
+      }
+    } catch (err) {
+      const fields = err instanceof ApiError ? err.fields : {};
+      setErrors(fields.newPassword ? { newPassword: fields.newPassword[0] } : { form: err instanceof ApiError ? err.message : "خطا در ارتباط با سرور" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="auth">
+      <div className="brand">
+        <img src="/icon.svg" alt="" width={56} height={56} />
+        <h1>بازیابی رمز عبور</h1>
+        <p className="muted">کد تأیید به شماره‌ی موبایل حساب پیامک می‌شود.</p>
+      </div>
+      <form className="card" onSubmit={submit} noValidate>
+        {step === "mobile" ? (
+          <Field label="شماره موبایل" error={errors.form}>
+            <MobileInput value={mobile} onChange={setMobile} autoFocus />
+          </Field>
+        ) : (
+          <>
+            <Field label={`کد ارسال‌شده به ${mobile}`} error={errors.form}>
+              <input inputMode="numeric" autoComplete="one-time-code" dir="ltr" className="font-num code"
+                maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} required autoFocus />
+            </Field>
+            <Field label="رمز عبور تازه (دست‌کم ۱۰ حرف)" error={errors.newPassword}>
+              <input type="password" dir="ltr" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </Field>
+          </>
+        )}
+        <button className="primary" disabled={busy} aria-busy={busy}>
+          {busy ? "لطفاً صبر کنید…" : step === "mobile" ? "ارسال کد" : "ذخیره رمز و ورود"}
+        </button>
+        {step === "code" && <button type="button" className="link" onClick={() => { setStep("mobile"); setCode(""); }}>تغییر شماره</button>}
+        <button type="button" className="link" onClick={onBack}>بازگشت به ورود</button>
       </form>
     </main>
   );
@@ -202,9 +266,9 @@ function OtpLogin({ onDone, onPassword }: { onDone: (s: Session) => void; onPass
 /* ───────── Business ───────── */
 
 function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Session) => void }) {
+  const [ownerName, setOwnerName] = useState("");
   const [name, setName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   async function select(tenantId: string) {
@@ -213,13 +277,17 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
 
   async function create(e: FormEvent) {
     e.preventDefault();
+    if (ownerName.trim().length < 2) { setErrors({ ownerName: "نام و نام خانوادگی را بنویسید." }); return; }
     setBusy(true);
-    setError(null);
+    setErrors({});
     try {
-      const t = await api<{ id: string }>("/api/v1/tenants", { body: { name, inviteCode } });
+      const t = await api<{ id: string }>("/api/v1/tenants", { body: { ownerName: ownerName.trim(), name: name.trim() || undefined } });
       await select(t.id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "خطا");
+      const fields = err instanceof ApiError ? err.fields : {};
+      setErrors(Object.keys(fields).length
+        ? Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v[0]]))
+        : { form: err instanceof ApiError ? err.message : "خطا" });
     } finally {
       setBusy(false);
     }
@@ -238,15 +306,17 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
           ))}
         </section>
       )}
-      <form className="card" onSubmit={create}>
-        <h2>ثبت تعمیرگاه جدید</h2>
-        <Field label="نام مغازه">
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required />
+      <form className="card" onSubmit={create} noValidate>
+        <h2>{session.memberships.length > 0 ? "ثبت تعمیرگاه جدید" : "ثبت‌نام در آرته سرویس"}</h2>
+        {session.memberships.length === 0 && <p className="muted small">شماره‌ی شما تأیید شد. فقط نامتان را بنویسید تا وارد شوید.</p>}
+        <Field label="نام و نام خانوادگی" error={errors.ownerName}>
+          <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} maxLength={80} autoComplete="name" required autoFocus />
         </Field>
-        <Field label="کد دعوت" error={error}>
-          <input value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} dir="ltr" autoComplete="off" required />
+        <Field label="نام تعمیرگاه (اختیاری)" error={errors.name ?? errors.form}>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120}
+            placeholder={ownerName.trim() ? `تعمیرگاه ${ownerName.trim()}` : "بعداً هم می‌توانید بنویسید"} />
         </Field>
-        <button className="primary" disabled={busy}>ساخت و شروع</button>
+        <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت‌نام…" : "ثبت‌نام و ورود"}</button>
       </form>
     </main>
   );

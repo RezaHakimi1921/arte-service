@@ -100,6 +100,13 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, clock.UtcNow)
                                       .SetProperty(t => t.RevokedReason, "membership_changed"), ct);
 
+    /// <summary>Signs a user out everywhere (password reset).</summary>
+    public Task<int> RevokeAllForUserAsync(Guid userId, string reason, CancellationToken ct) =>
+        db.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, clock.UtcNow)
+                                      .SetProperty(t => t.RevokedReason, reason), ct);
+
     /// <summary>Called at startup when open mode is off: no session from the open period survives.</summary>
     public Task<int> RevokeOpenModeSessionsAsync(CancellationToken ct) =>
         db.RefreshTokens

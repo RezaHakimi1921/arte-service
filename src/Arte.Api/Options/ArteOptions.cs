@@ -29,8 +29,10 @@ public sealed class OtpOptions
 public sealed class SignupOptions
 {
     public const string Section = "Signup";
-    /// <summary>While in pilot, creating a business needs this code. Empty disables sign-up.</summary>
+    /// <summary>Only checked when <see cref="RequireInviteCode"/> is on.</summary>
     public string InviteCode { get; set; } = "";
+    /// <summary>Off: anyone who verified their mobile can register a business (self sign-up with a trial).</summary>
+    public bool RequireInviteCode { get; set; }
     public int MaxBusinessesPerUser { get; set; } = 3;
 }
 

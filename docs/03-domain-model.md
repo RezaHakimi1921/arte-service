@@ -227,3 +227,8 @@ stateDiagram-v2
 | `case.merged` | sourceCaseId, targetCaseId |
 | `case.custody_changed` | caseId, custodyStatus |
 | `message.sent` / `message.failed` | messageId, caseId?, template |
+
+## Future: brands and branches (decided ۱۴۰۵/۰۷/۱۷, not built)
+`Tenant` is **one branch** and remains the isolation boundary. Later an `Organization` (owner account) holds
+`Brand`s, each with branches (= tenants); owner membership at organization level sees all branches.
+Do not add code that assumes one owner has exactly one shop. See `docs/09-roadmap-signup-license-admin.md`.
