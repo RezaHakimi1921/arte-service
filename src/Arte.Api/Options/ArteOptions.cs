@@ -48,6 +48,20 @@ public sealed class SmsOptions
     public bool AllowFakeInProduction { get; set; }
     public string[] FakeAllowedMobiles { get; set; } = [];
     public SmsIrOptions SmsIr { get; set; } = new();
+    public IranPayamakOptions IranPayamak { get; set; } = new();
+}
+
+/// <summary>Faraz SMS / Iran Payamak. The API key comes only from the server's environment (deploy/.env).</summary>
+public sealed class IranPayamakOptions
+{
+    public string BaseUrl { get; set; } = "https://api.iranpayamak.com/";
+    public string ApiKey { get; set; } = "";
+    /// <summary>Sender line (digits only) that the patterns are sent from.</summary>
+    public string LineNumber { get; set; } = "";
+    /// <summary>Message key with '.' replaced by '_' (e.g. "auth_otp") → approved pattern code.</summary>
+    public Dictionary<string, string> Templates { get; set; } = [];
+    /// <summary>Our token name → the pattern's variable name (default: same name, e.g. "code").</summary>
+    public Dictionary<string, string> ParamNames { get; set; } = [];
 }
 
 /// <summary>sms.ir settings. The API key comes only from the server's environment (deploy/.env).</summary>

@@ -46,6 +46,10 @@ services:
       Sms__SmsIr__ApiKey: ${SMSIR_API_KEY:-}
       Sms__SmsIr__Templates__auth_otp: ${SMSIR_OTP_TEMPLATE_ID:-0}
       Sms__SmsIr__ParamNames__code: ${SMSIR_OTP_PARAM:-CODE}
+      Sms__IranPayamak__ApiKey: ${IRANPAYAMAK_API_KEY:-}
+      Sms__IranPayamak__LineNumber: ${IRANPAYAMAK_LINE:-}
+      Sms__IranPayamak__Templates__auth_otp: ${IRANPAYAMAK_OTP_PATTERN:-}
+      Sms__IranPayamak__ParamNames__code: ${IRANPAYAMAK_OTP_PARAM:-code}
       Sentry__Dsn: ${SENTRY_DSN:-}
     # "egress" is the only route out (to the SMS provider); the database stays on the internal-only network.
     # Unique alias: the web container also sits on the edge network, where plain "api"

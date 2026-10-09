@@ -76,6 +76,16 @@ if (smsOptions.Provider == "smsir")
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     });
 }
+else if (smsOptions.Provider == "iranpayamak")
+{
+    builder.Services.AddHttpClient<ISmsProvider, IranPayamakProvider>(c =>
+    {
+        c.BaseAddress = new Uri(smsOptions.IranPayamak.BaseUrl);
+        c.Timeout = TimeSpan.FromSeconds(15);
+        c.DefaultRequestHeaders.Add("Api-Key", smsOptions.IranPayamak.ApiKey);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+}
 else
 {
     builder.Services.AddSingleton<ISmsProvider>(sp => sp.GetRequiredService<FakeSmsProvider>());
@@ -251,7 +261,15 @@ static class StartupChecks
         if (string.IsNullOrEmpty(connectionString)) problems.Add("ConnectionStrings:Default is missing.");
         if (env.IsProduction() && sms.Provider == "fake" && !sms.AllowFakeInProduction)
             problems.Add("Sms:Provider is 'fake' in production. Set Sms:AllowFakeInProduction with Sms:FakeAllowedMobiles, or configure a real provider.");
-        if (sms.Provider is not ("fake" or "smsir")) problems.Add($"Sms:Provider '{sms.Provider}' is unknown (use fake or smsir).");
+        if (sms.Provider is not ("fake" or "smsir" or "iranpayamak")) problems.Add($"Sms:Provider '{sms.Provider}' is unknown (use fake, smsir or iranpayamak).");
+        if (sms.Provider == "iranpayamak")
+        {
+            var ip = sms.IranPayamak;
+            if (ip.ApiKey.Length < 10) problems.Add("Sms:IranPayamak:ApiKey is missing.");
+            if (ip.LineNumber.Length == 0 || !ip.LineNumber.All(char.IsAsciiDigit)) problems.Add("Sms:IranPayamak:LineNumber (digits) is missing.");
+            if (!ip.Templates.TryGetValue("auth_otp", out var otpPattern) || string.IsNullOrWhiteSpace(otpPattern))
+                problems.Add("Sms:IranPayamak:Templates:auth_otp (pattern code) is missing.");
+        }
         if (sms.Provider == "smsir" && sms.SmsIr.ApiKey.Length < 20) problems.Add("Sms:SmsIr:ApiKey is missing.");
         if (sms.Provider == "smsir" && (!sms.SmsIr.Templates.TryGetValue("auth_otp", out var otpTemplate) || otpTemplate <= 0)) problems.Add("Sms:SmsIr:Templates:auth_otp (template id) is missing.");
 
