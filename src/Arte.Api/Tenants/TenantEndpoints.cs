@@ -108,7 +108,7 @@ public static class TenantEndpoints
 
             var tenant = await ProvisionAsync(scopes, me.RequiredUserId, name!, phone, ownerName, ct);
 
-            return Results.Created($"/api/v1/tenants/{tenant.Id}", new { tenant.Id, tenant.Name });
+            return Results.Created($"/api/v1/tenants/{tenant.Id}", new { tenant.Id, tenant.Name, TrialDays = Arte.Core.Licensing.LicensePolicy.TrialDays });
         }).RequireAuthorization().RequireRateLimiting("auth");
     }
 

@@ -22,14 +22,19 @@ public static class AuthEndpoints
     {
         var g = app.MapGroup("/api/v1/auth");
 
-        g.MapPost("/otp/request", async (OtpRequest req, OtpService otp, HttpContext http, CancellationToken ct) =>
+        g.MapPost("/otp/request", async (OtpRequest req, OtpService otp, HttpContext http, IOptions<OtpOptions> otpOptions, CancellationToken ct) =>
         {
             if (!Mobile.TryNormalize(req.Mobile, out var mobile))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["mobile"] = ["شماره موبایل معتبر نیست."] });
 
             return await otp.RequestAsync(mobile, http.Connection.RemoteIpAddress?.ToString(), ct) switch
             {
-                OtpRequestResult.Sent => Results.Accepted(value: new { expiresInSeconds = 120 }),
+                // The form needs the code length (it follows the SMS pattern) and when it may ask again.
+                OtpRequestResult.Sent => Results.Accepted(value: new
+                {
+                    expiresInSeconds = otpOptions.Value.TtlSeconds, codeLength = otpOptions.Value.Digits,
+                    resendInSeconds = otpOptions.Value.ResendCooldownSeconds,
+                }),
                 OtpRequestResult.SendFailed => Results.Problem(statusCode: 503, title: "ارسال پیامک انجام نشد. یک دقیقه بعد دوباره تلاش کنید."),
                 OtpRequestResult.TooSoon => Results.Problem(statusCode: 429, title: "کمی صبر کنید و دوباره درخواست دهید."),
                 _ => Results.Problem(statusCode: 429, title: "تعداد درخواست‌ها زیاد است. بعداً تلاش کنید."),

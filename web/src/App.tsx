@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
 import { CaseDetail, CasesView, type CaseFilter } from "./cases";
 import { FeedbackProvider } from "./feedback";
@@ -6,13 +6,13 @@ import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
 import { Tour, type TourStep } from "./tour";
+import { AuthLayout, Login, SignupView, TrialWelcome } from "./login";
 import { BranchBlocked, LicenseBanner, LicensePage, type LicenseStatus } from "./license";
 import { AdminPanel } from "./admin";
 import { useFeedback } from "./feedback";
 import { AccountPage, AppearancePage, BusinessPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
-import { Field, MobileInput, toLatinDigits } from "./ui";
 
 type Me = {
   id: string;
@@ -155,247 +155,42 @@ async function openModeSession(): Promise<Session | null> {
   }
 }
 
-/* ───────── Login ───────── */
-
-function Login({ onDone }: { onDone: (s: Session) => void }) {
-  const [mode, setMode] = useState<"otp" | "password" | "reset">("otp");
-  if (mode === "reset") return <ResetPassword onDone={onDone} onBack={() => setMode("password")} />;
-  if (mode === "password") return <PasswordLogin onDone={onDone} onBack={() => setMode("otp")} onForgot={() => setMode("reset")} />;
-  return <OtpLogin onDone={onDone} onPassword={() => setMode("password")} />;
-}
-
-function PasswordLogin({ onDone, onBack, onForgot }: { onDone: (s: Session) => void; onBack: () => void; onForgot: () => void }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      onDone(await api<Session>("/api/v1/auth/password", { body: { username, password } }));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "خطا در ارتباط با سرور");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="auth">
-      <div className="brand">
-        <img src="/icon.svg" alt="" width={56} height={56} />
-        <h1>آرته سرویس</h1>
-      </div>
-      <form className="card" onSubmit={submit} noValidate>
-        <Field label="نام کاربری یا شماره موبایل">
-          <input dir="ltr" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(toLatinDigits(e.target.value))} required autoFocus />
-        </Field>
-        <Field label="رمز عبور" error={error}>
-          <input type="password" dir="ltr" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </Field>
-        <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ورود…" : "ورود"}</button>
-        <button type="button" className="link" onClick={onForgot}>رمز را فراموش کرده‌ام</button>
-        <button type="button" className="link" onClick={onBack}>ورود با کد پیامکی</button>
-      </form>
-    </main>
-  );
-}
-
-/** Forgotten password: a code is sent by SMS to the mobile, then the new password is set and the user is signed in. */
-function ResetPassword({ onDone, onBack }: { onDone: (s: Session) => void; onBack: () => void }) {
-  const [step, setStep] = useState<"mobile" | "code">("mobile");
-  const [mobile, setMobile] = useState("");
-  const [code, setCode] = useState("");
-  const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setErrors({});
-    if (step === "code" && password.length < 10) { setErrors({ newPassword: "رمز باید دست‌کم ۱۰ حرف باشد." }); return; }
-    setBusy(true);
-    try {
-      if (step === "mobile") {
-        await api("/api/v1/auth/otp/request", { body: { mobile } });
-        setStep("code");
-      } else {
-        onDone(await api<Session>("/api/v1/auth/password/reset", { body: { mobile, code: toLatinDigits(code), newPassword: password } }));
-      }
-    } catch (err) {
-      const fields = err instanceof ApiError ? err.fields : {};
-      setErrors(fields.newPassword ? { newPassword: fields.newPassword[0] } : { form: err instanceof ApiError ? err.message : "خطا در ارتباط با سرور" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="auth">
-      <div className="brand">
-        <img src="/icon.svg" alt="" width={56} height={56} />
-        <h1>بازیابی رمز عبور</h1>
-        <p className="muted">کد تأیید به شماره‌ی موبایل حساب پیامک می‌شود.</p>
-      </div>
-      <form className="card" onSubmit={submit} noValidate>
-        {step === "mobile" ? (
-          <Field label="شماره موبایل" error={errors.form}>
-            <MobileInput value={mobile} onChange={setMobile} autoFocus />
-          </Field>
-        ) : (
-          <>
-            <Field label={`کد ارسال‌شده به ${mobile}`} error={errors.form}>
-              <input inputMode="numeric" autoComplete="one-time-code" dir="ltr" className="font-num code"
-                maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} required autoFocus />
-            </Field>
-            <Field label="رمز عبور تازه (دست‌کم ۱۰ حرف)" error={errors.newPassword}>
-              <input type="password" dir="ltr" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </Field>
-          </>
-        )}
-        <button className="primary" disabled={busy} aria-busy={busy}>
-          {busy ? "لطفاً صبر کنید…" : step === "mobile" ? "ارسال کد" : "ذخیره رمز و ورود"}
-        </button>
-        {step === "code" && <button type="button" className="link" onClick={() => { setStep("mobile"); setCode(""); }}>تغییر شماره</button>}
-        <button type="button" className="link" onClick={onBack}>بازگشت به ورود</button>
-      </form>
-    </main>
-  );
-}
-
-function OtpLogin({ onDone, onPassword }: { onDone: (s: Session) => void; onPassword: () => void }) {
-  const [mobile, setMobile] = useState("");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState<"mobile" | "code">("mobile");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      if (step === "mobile") {
-        await api("/api/v1/auth/otp/request", { body: { mobile } });
-        setStep("code");
-      } else {
-        onDone(await api<Session>("/api/v1/auth/otp/verify", { body: { mobile, code } }));
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "خطا در ارتباط با سرور");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="auth">
-      <div className="brand">
-        <img src="/icon.svg" alt="" width={56} height={56} />
-        <h1>آرته سرویس</h1>
-        <p className="muted">مدیریت پذیرش و پرونده‌های تعمیرگاه</p>
-      </div>
-      <form className="card" onSubmit={submit} noValidate>
-        {step === "mobile" ? (
-          <Field label="شماره موبایل" error={error}>
-            <MobileInput value={mobile} onChange={setMobile} autoFocus />
-          </Field>
-        ) : (
-          <Field label={`کد ارسال‌شده به ${mobile}`} error={error}>
-            <input
-              inputMode="numeric" autoComplete="one-time-code" dir="ltr" className="font-num code"
-              maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} required autoFocus
-            />
-          </Field>
-        )}
-        <button className="primary" disabled={busy}>{step === "mobile" ? "دریافت کد" : "ورود"}</button>
-        {step === "code" && (
-          <button type="button" className="link" onClick={() => { setStep("mobile"); setCode(""); setError(null); }}>
-            تغییر شماره
-          </button>
-        )}
-        {step === "mobile" && (
-          <button type="button" className="link" onClick={onPassword}>ورود با نام کاربری</button>
-        )}
-      </form>
-      {/* Public description: anyone opening the site (including an SMS provider's reviewer) sees what it is before logging in. */}
-      <section className="card about" aria-labelledby="about-title">
-        <h2 id="about-title">آرته سرویس چیست؟</h2>
-        <p>
-          سامانه‌ی آنلاین مدیریت تعمیرگاه برای تعمیرگاه‌های موتورسیکلت و خودرو: پذیرش وسیله، پرونده‌ی تعمیر هر مشتری،
-          سپردن کار به همکاران، ثبت قطعه و اجرت، صورت‌حساب، پرداخت و تحویل وسیله؛ همه روی گوشی.
-        </p>
-        <ul>
-          <li>کاربران: صاحب تعمیرگاه و کارکنانی که خودش اضافه می‌کند.</li>
-          <li>ورود با شماره موبایل؛ برای هر ورود یک کد یک‌بار مصرف پیامک می‌شود.</li>
-          <li>اطلاعات هر تعمیرگاه جدا و فقط برای کارکنان همان تعمیرگاه قابل دیدن است.</li>
-        </ul>
-        <p className="muted small">آرته سرویس محصولی از <a href="https://artepersia.com" rel="noopener">آرته</a> است.</p>
-      </section>
-    </main>
-  );
-}
-
 /* ───────── Business ───────── */
 
+/**
+ * After the code is verified: a new number signs up (then sees the trial welcome); someone in several
+ * businesses picks one, or registers another.
+ */
 function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Session) => void }) {
-  const [ownerName, setOwnerName] = useState("");
-  const [name, setName] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
+  const [welcome, setWelcome] = useState<{ session: Session; days: number } | null>(null);
+  const [adding, setAdding] = useState(session.memberships.length === 0);
 
-  async function select(tenantId: string) {
-    onDone(await api<Session>("/api/v1/auth/select-tenant", { body: { tenantId } }));
+  const select = (tenantId: string) => api<Session>("/api/v1/auth/select-tenant", { body: { tenantId } });
+
+  async function create(ownerName: string, shopName: string) {
+    const t = await api<{ id: string; trialDays: number }>("/api/v1/tenants", { body: { ownerName, name: shopName || undefined } });
+    setWelcome({ session: await select(t.id), days: t.trialDays });
+    return t.trialDays;
   }
 
-  async function create(e: FormEvent) {
-    e.preventDefault();
-    if (ownerName.trim().length < 2) { setErrors({ ownerName: "نام و نام خانوادگی را بنویسید." }); return; }
-    setBusy(true);
-    setErrors({});
-    try {
-      const t = await api<{ id: string }>("/api/v1/tenants", { body: { ownerName: ownerName.trim(), name: name.trim() || undefined } });
-      await select(t.id);
-    } catch (err) {
-      const fields = err instanceof ApiError ? err.fields : {};
-      setErrors(Object.keys(fields).length
-        ? Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v[0]]))
-        : { form: err instanceof ApiError ? err.message : "خطا" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  if (welcome) return <TrialWelcome days={welcome.days} onContinue={() => onDone(welcome.session)} />;
+  if (adding) return <SignupView onCreate={create} />;
   return (
-    <main className="auth">
-      {session.memberships.length > 0 && (
-        <section className="card">
-          <h2>کسب‌وکار را انتخاب کنید</h2>
-          {session.memberships.map((m) => (
-            <button key={m.tenantId} className="row-button" onClick={() => select(m.tenantId)}>
-              <span>{m.tenantName}</span>
-              <span className="muted">{ROLE_NAMES[m.role] ?? m.role}</span>
-            </button>
-          ))}
-        </section>
-      )}
-      <form className="card" onSubmit={create} noValidate>
-        <h2>{session.memberships.length > 0 ? "ثبت تعمیرگاه جدید" : "ثبت‌نام در آرته سرویس"}</h2>
-        {session.memberships.length === 0 && <p className="muted small">شماره‌ی شما تأیید شد. فقط نامتان را بنویسید تا وارد شوید.</p>}
-        <Field label="نام و نام خانوادگی" error={errors.ownerName}>
-          <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} maxLength={80} autoComplete="name" required autoFocus />
-        </Field>
-        <Field label="نام تعمیرگاه (اختیاری)" error={errors.name ?? errors.form}>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120}
-            placeholder={ownerName.trim() ? `تعمیرگاه ${ownerName.trim().split(/\s+/).pop()}` : "بعداً هم می‌توانید بنویسید"} />
-          <span className="hint">اگر خالی بماند، نام خانوادگی شما گذاشته می‌شود؛ در تنظیمات ← اطلاعات کسب‌وکار قابل تغییر است.</span>
-        </Field>
-        <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت‌نام…" : "ثبت‌نام و ورود"}</button>
-      </form>
-    </main>
+    <AuthLayout>
+      <div className="lg-heading">
+        <span className="lg-overline">انتخاب کسب‌وکار</span>
+        <h2>با کدام تعمیرگاه وارد می‌شوید؟</h2>
+      </div>
+      <div className="settings-list">
+        {session.memberships.map((m) => (
+          <button key={m.tenantId} className="settings-row" onClick={async () => onDone(await select(m.tenantId))}>
+            <span className="settings-row-text"><span>{m.tenantName}</span><span className="muted small">{ROLE_NAMES[m.role] ?? m.role}</span></span>
+            <span className="muted" aria-hidden="true">‹</span>
+          </button>
+        ))}
+      </div>
+      <div className="lg-support"><button type="button" className="lg-text" onClick={() => setAdding(true)}>ثبت تعمیرگاه جدید</button></div>
+    </AuthLayout>
   );
 }
 

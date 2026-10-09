@@ -21,6 +21,9 @@
   --accent: #6c9bf5;
   --accent-soft: rgba(108, 155, 245, 0.14);
   --accent-text: #0b1220;
+  --accent-hover: #82aaf7;
+  --soft-text: #737d8e;
+  --border-strong: #3b424f;
   --danger: #fa5252;
   --success: #51cf66;
   --good-bg: rgba(81, 207, 102, 0.12);
@@ -66,6 +69,9 @@
   --accent-soft: #e8eefb;
   --scrim: rgba(15, 23, 42, 0.45);
   --accent-text: #ffffff;
+  --accent-hover: #172e70;
+  --soft-text: #8a94a6;
+  --border-strong: #cbd3de;
   --danger: #c92a2a;
   --success: #2b8a3e;
   --good-bg: #ebfbee;
@@ -1138,4 +1144,290 @@ a.button.primary { background: var(--accent); color: #fff; }
   .admin-main .admin-row { min-height: 56px; }
   /* Business detail: facts and history side by side. */
   .admin-main .admin > .license-status, .admin-main .admin > .admin-facts { max-width: 560px; }
+}
+
+/* ───────── sign-in (lg-*): brand story on desktop, compact on phones ───────── */
+.lg-page {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(480px, 1.04fr) minmax(480px, 0.96fr);
+  min-height: 100dvh;
+  background: var(--bg);
+}
+.lg-story {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: clamp(34px, 5vw, 68px);
+  overflow: hidden;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(104, 150, 245, 0.22), transparent 29%),
+    radial-gradient(circle at 82% 86%, rgba(69, 104, 191, 0.22), transparent 32%),
+    linear-gradient(145deg, #142b6a 0%, #102356 48%, #0c1940 100%);
+}
+.lg-story::before {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.026) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px);
+  background-size: 48px 48px;
+  content: "";
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+}
+.lg-story > * { position: relative; z-index: 1; }
+.lg-story-top { display: flex; align-items: center; gap: 12px; font-size: 1.1rem; font-weight: 700; }
+.lg-logo {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  color: #ffffff;
+  border-radius: 14px;
+  background: var(--accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+.lg-story-top .lg-logo { color: #173474; background: #ffffff; }
+.lg-logo svg { width: 30px; height: 30px; }
+.lg-story-copy { margin: auto 0 7vh; max-width: 580px; }
+.lg-eyebrow { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 24px; color: #b9cdfc; font-size: 0.85rem; font-weight: 500; }
+.lg-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #72e59a; box-shadow: 0 0 0 5px rgba(114, 229, 154, 0.12); }
+.lg-story-copy h1 { margin: 0; font-size: clamp(2.5rem, 4.9vw, 4.25rem); font-weight: 700; line-height: 1.45; }
+.lg-story-copy h1 em { color: #8eb2ff; font-style: normal; }
+.lg-story-copy p { max-width: 470px; margin: 22px 0 0; color: rgba(255, 255, 255, 0.7); font-size: 1rem; font-weight: 300; line-height: 2; }
+.lg-workflow {
+  max-width: 560px;
+  padding: 21px 22px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 23px;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px);
+}
+.lg-workflow-head, .lg-workflow-row, .lg-workflow-meta, .lg-story-foot { display: flex; align-items: center; }
+.lg-workflow-head { justify-content: space-between; margin-bottom: 20px; }
+.lg-workflow-head > div { display: flex; flex-direction: column; gap: 2px; }
+.lg-workflow-head span, .lg-workflow-info span { color: rgba(255, 255, 255, 0.55); font-size: 0.72rem; }
+.lg-workflow-head strong { font-size: 0.9rem; font-weight: 600; }
+.lg-live { padding: 5px 10px; color: #9de6b5 !important; border-radius: 999px; background: rgba(81, 207, 102, 0.12); }
+.lg-workflow-row { gap: 12px; }
+.lg-workflow-icon { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; color: #9cbcff; border-radius: 12px; background: rgba(255, 255, 255, 0.08); }
+.lg-workflow-icon svg { width: 20px; }
+.lg-workflow-info { display: flex; flex: 1; flex-direction: column; }
+.lg-workflow-info strong { font-size: 0.85rem; font-weight: 600; }
+.lg-workflow-state { color: #aac3fa; font-size: 0.72rem; }
+.lg-track { height: 3px; margin: 18px 0 12px; overflow: hidden; border-radius: 10px; background: rgba(255, 255, 255, 0.09); }
+.lg-track span { display: block; width: 61%; height: 100%; border-radius: inherit; background: #7da6fa; }
+.lg-workflow-meta { justify-content: space-between; color: rgba(255, 255, 255, 0.5); font-size: 0.68rem; }
+.lg-workflow-meta span { display: flex; align-items: center; gap: 6px; }
+.lg-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
+.lg-dot.done { background: #72e59a; }
+.lg-dot.active { background: #8eb2ff; box-shadow: 0 0 0 3px rgba(142, 178, 255, 0.15); }
+.lg-story-foot { margin-top: 26px; color: rgba(255, 255, 255, 0.45); font-size: 0.72rem; }
+.lg-story-foot span { display: flex; align-items: center; gap: 7px; }
+.lg-story-foot svg { width: 15px; }
+
+.lg-auth { position: relative; display: flex; flex-direction: column; min-height: 100dvh; padding: 32px clamp(36px, 6vw, 104px) 24px; }
+.lg-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 0.8rem;
+  transition: border-color var(--dur-fade) var(--ease-out), color var(--dur-fade) var(--ease-out);
+}
+.lg-theme svg { width: 18px; height: 18px; }
+@media (hover: hover) and (pointer: fine) {
+  .lg-theme:hover { color: var(--text); border-color: var(--border-strong); }
+  .lg-submit:hover { background: var(--accent-hover); }
+}
+.lg-desktop-theme { display: flex; justify-content: flex-end; }
+.lg-mobile-header { display: none; }
+.lg-content { width: 100%; max-width: 440px; margin: auto; padding: 44px 0; }
+.lg-welcome-icon { display: none; }
+.lg-heading { margin-bottom: 28px; }
+.lg-overline { display: block; margin-bottom: 8px; color: var(--accent); font-size: 0.8rem; font-weight: 700; }
+.lg-heading h2 { margin: 0 0 10px; color: var(--text); font-size: 1.7rem; font-weight: 800; line-height: 1.55; }
+.lg-heading p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.9; }
+.lg-segment { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 26px; padding: 4px; border-radius: 13px; background: var(--surface-2); }
+.lg-segment button {
+  min-height: 42px;
+  border: 0;
+  color: var(--muted);
+  border-radius: 10px;
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background-color var(--dur-fade) var(--ease-out), color var(--dur-fade) var(--ease-out);
+}
+.lg-segment button.active { color: var(--text); background: var(--surface); box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07); font-weight: 700; }
+.lg-label { display: block; margin: 0 2px 8px; color: var(--text); font-size: 0.85rem; font-weight: 600; }
+.lg-label.lg-gap { margin-top: 20px; }
+.lg-label-row { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; }
+.lg-text { min-height: 36px; padding: 0 2px; border: 0; color: var(--accent); background: transparent; font-size: 0.8rem; font-weight: 600; }
+.lg-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 56px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  transition: border-color var(--dur-fade) var(--ease-out), box-shadow var(--dur-fade) var(--ease-out);
+}
+.lg-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lg-input.invalid { border-color: var(--danger); }
+/* Digits and usernames are Latin: tracking and left alignment are fine here, never on Persian text. */
+.lg-input input {
+  width: 100%;
+  height: 100%;
+  padding: 0 50px;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-align: left;
+}
+.lg-input input.lg-text-input { letter-spacing: 0; text-align: right; }
+.lg-input input::placeholder, .lg-code::placeholder { color: var(--soft-text); opacity: 0.8; }
+.lg-input-icon { position: absolute; inset-inline-start: 16px; display: grid; color: var(--soft-text); pointer-events: none; }
+.lg-input-icon svg, .lg-valid svg, .lg-reveal svg { width: 19px; height: 19px; }
+.lg-valid { position: absolute; inset-inline-end: 16px; display: grid; width: 21px; height: 21px; place-items: center; color: #ffffff; border-radius: 50%; background: var(--success); }
+.lg-valid svg { width: 13px; }
+.lg-reveal { position: absolute; inset-inline-end: 8px; display: grid; width: 40px; height: 40px; padding: 0; place-items: center; border: 0; color: var(--soft-text); border-radius: 10px; background: transparent; }
+.lg-code-area { margin-top: 4px; }
+.lg-code {
+  width: 100%;
+  height: 66px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  outline: 0;
+  color: var(--text);
+  border-radius: 15px;
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.6em;
+  text-align: center;
+  transition: border-color var(--dur-fade) var(--ease-out), box-shadow var(--dur-fade) var(--ease-out);
+}
+.lg-code:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lg-code-actions { display: flex; justify-content: space-between; align-items: center; margin: 8px 2px 0; }
+.lg-resend:disabled { color: var(--muted); cursor: default; font-weight: 400; }
+.lg-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: 11px;
+  background: var(--bad-bg);
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+.lg-error svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 3px; }
+.lg-hint { margin: 8px 2px 0; color: var(--muted); font-size: 0.8rem; line-height: 1.8; }
+.lg-submit {
+  display: flex;
+  width: 100%;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+  border: 0;
+  color: var(--accent-text);
+  border-radius: 14px;
+  background: var(--accent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 25%, transparent);
+  font-size: 0.95rem;
+  font-weight: 700;
+  transition: background-color var(--dur-fade) var(--ease-out), transform var(--dur-press) var(--ease-out);
+}
+.lg-submit:disabled { cursor: wait; opacity: 0.85; }
+/* The arrow points the way forward in RTL. */
+.lg-submit svg { width: 18px; height: 18px; }
+.lg-submit svg[data-icon="arrow"] { transform: rotate(180deg); }
+.lg-spinner { width: 18px; height: 18px; border: 2px solid color-mix(in srgb, var(--accent-text) 30%, transparent); border-top-color: var(--accent-text); border-radius: 50%; animation: lg-spin 700ms linear infinite; }
+.lg-support { display: flex; justify-content: center; margin-top: 22px; }
+.lg-content .settings-list { margin-top: 4px; }
+
+.lg-success { display: flex; align-items: center; flex-direction: column; max-width: 400px; margin: 0 auto; text-align: center; }
+.lg-success-mark {
+  position: relative;
+  display: grid;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 25px;
+  place-items: center;
+  color: #ffffff;
+  border-radius: 24px;
+  background: var(--success);
+  box-shadow: 0 15px 35px color-mix(in srgb, var(--success) 25%, transparent);
+  transition: opacity var(--dur-sheet-in) var(--ease-out), transform var(--dur-sheet-in) var(--ease-out);
+}
+/* A rare moment (once per business): a small, crisp entrance. */
+@starting-style { .lg-success-mark { opacity: 0; transform: translateY(8px) scale(0.95); } }
+.lg-success-mark svg { width: 34px; height: 34px; stroke-width: 2; }
+.lg-success-ring { position: absolute; inset: -8px; border: 1px solid color-mix(in srgb, var(--success) 25%, transparent); border-radius: 29px; }
+.lg-success h2 { margin: 0 0 10px; font-size: 1.55rem; font-weight: 800; line-height: 1.6; }
+.lg-success > p { max-width: 340px; margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 2; }
+.lg-success-progress { width: 100%; height: 3px; margin: 28px 0 0; overflow: hidden; border-radius: 10px; background: var(--surface-2); }
+/* Fills once over the 6 seconds before it continues by itself. */
+.lg-success-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+  transform-origin: right;
+  animation: lg-fill 6s linear both;
+}
+@keyframes lg-spin { to { transform: rotate(360deg); } }
+@keyframes lg-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+@media (max-width: 960px) {
+  .lg-page { display: block; }
+  .lg-story { display: none; }
+  .lg-auth { padding: max(18px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-bottom, 0px)); }
+  .lg-desktop-theme { display: none; }
+  .lg-mobile-header { display: flex; align-items: center; justify-content: space-between; }
+  .lg-mobile-brand { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; font-weight: 700; }
+  .lg-mobile-brand .lg-logo { width: 40px; height: 40px; border-radius: 12px; }
+  .lg-mobile-brand .lg-logo svg { width: 26px; }
+  .lg-content { max-width: 460px; padding: clamp(36px, 8dvh, 76px) 0 24px; }
+  .lg-welcome-icon { display: grid; width: 48px; height: 48px; margin-bottom: 18px; place-items: center; color: var(--accent); border-radius: 15px; background: var(--accent-soft); }
+  .lg-welcome-icon svg { width: 23px; }
+}
+@media (max-width: 520px) {
+  .lg-auth { padding-inline: 18px; }
+  .lg-content { display: flex; flex: 1; flex-direction: column; justify-content: center; padding: 24px 0; }
+  .lg-heading h2 { font-size: 1.5rem; }
+}
+@media (max-height: 700px) and (max-width: 960px) {
+  .lg-welcome-icon { display: none; }
+  .lg-heading { margin-bottom: 18px; }
+  .lg-segment { margin-bottom: 18px; }
+  .lg-submit { margin-top: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  @starting-style { .lg-success-mark { transform: none; } }
+  .lg-success-progress span { animation: none; transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .lg-workflow { backdrop-filter: none; background: #18306f; }
+}
+@media (prefers-contrast: more) {
+  .lg-input, .lg-code { border-width: 2px; }
 }
