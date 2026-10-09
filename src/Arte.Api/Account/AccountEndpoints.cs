@@ -17,7 +17,7 @@ public static class AccountEndpoints
         g.MapGet("/", async (RequestUser me, ArteDbContext db, CancellationToken ct) =>
         {
             var u = await db.Users.AsNoTracking().SingleAsync(x => x.Id == me.RequiredUserId, ct);
-            return Results.Ok(new { u.DisplayName, u.Username, HasPassword = u.PasswordHash != null });
+            return Results.Ok(new { u.DisplayName, u.Username, u.Mobile, HasPassword = u.PasswordHash != null });
         });
 
         g.MapPut("/", async (UpdateAccount req, RequestUser me, ArteDbContext db, Audit audit, IClock clock, CancellationToken ct) =>
@@ -38,10 +38,10 @@ public static class AccountEndpoints
             {
                 if (pw.Length < PasswordHasher.MinLength || pw.Length > 200)
                     errors["newPassword"] = [$"رمز باید حداقل {PasswordHasher.MinLength} کاراکتر باشد."];
-                else if (string.Equals(pw, username ?? user.Username, StringComparison.OrdinalIgnoreCase))
-                    errors["newPassword"] = ["رمز نباید با نام کاربری یکی باشد."];
+                else if (string.Equals(pw, username ?? user.Username, StringComparison.OrdinalIgnoreCase) || pw == user.Mobile)
+                    errors["newPassword"] = ["رمز نباید با شماره موبایل یا نام کاربری یکی باشد."];
             }
-            if (changingCredentials && (username ?? user.Username) is null) errors["username"] = ["نام کاربری لازم است."];
+            // The mobile number is the sign-in name; a username is optional (kept for older accounts).
             if (changingCredentials && user.PasswordHash is null && req.NewPassword is null) errors["newPassword"] = ["رمز لازم است."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
@@ -79,7 +79,7 @@ public static class AccountEndpoints
 
             if (changingCredentials) audit.Record("account.credentials_changed", null, user.Id, user.Username);
             await db.SaveChangesAsync(ct);
-            return Results.Ok(new { user.DisplayName, user.Username, HasPassword = user.PasswordHash != null });
+            return Results.Ok(new { user.DisplayName, user.Username, user.Mobile, HasPassword = user.PasswordHash != null });
         }).RequireRateLimiting("auth");
     }
 }

@@ -107,6 +107,46 @@ public static class LicenseEndpoints
             });
         });
 
+        // What a business does with Arte: counts, money and its latest cases (read-only).
+        // Runs in a scope switched to that business, so the usual tenant-filtered queries and money rules apply.
+        admin.MapGet("/businesses/{id:guid}/activity", async (Guid id, IServiceScopeFactory scopes, IClock clock, CancellationToken ct) =>
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var sp = scope.ServiceProvider;
+            var db = sp.GetRequiredService<ArteDbContext>();
+            if (!await db.Tenants.AnyAsync(t => t.Id == id, ct)) return Results.NotFound();
+            sp.GetRequiredService<Arte.Core.Tenancy.TenantContext>().Set(id);
+
+            var now = clock.UtcNow;
+            var monthAgo = now.AddDays(-30);
+            var cases = db.Cases.AsNoTracking().Where(c => !c.IsSample);
+            var rows = await (from c in cases
+                              join st in db.Stages on c.StageId equals st.Id
+                              select new { c.Id, c.OpenedAt, st.IsTerminal, st.Key }).ToListAsync(ct);
+            var delivered = rows.Where(r => r.Key == "delivered").Select(r => r.Id).ToList();
+            var balances = await Arte.Api.Billing.BillingEndpoints.Balances(db, delivered, ct);
+            var recent = await (from c in cases
+                                join st in db.Stages on c.StageId equals st.Id
+                                join cu in db.Customers on c.CustomerId equals cu.Id
+                                join a in db.Assets on c.AssetId equals a.Id into aj
+                                from a in aj.DefaultIfEmpty()
+                                orderby c.OpenedAt descending
+                                select new { c.Number, Customer = cu.FullName, Vehicle = a == null ? null : a.Title, Stage = st.Name, c.OpenedAt })
+                .Take(15).ToListAsync(ct);
+
+            return Results.Ok(new
+            {
+                Customers = await db.Customers.CountAsync(c => !c.IsSample, ct),
+                Cases = rows.Count,
+                OpenCases = rows.Count(r => !r.IsTerminal),
+                Delivered = delivered.Count,
+                CasesLast30Days = rows.Count(r => r.OpenedAt >= monthAgo),
+                ReceivedLast30DaysRials = await db.Payments.Where(p => p.PaidAt >= monthAgo).SumAsync(p => (long?)p.AmountRials, ct) ?? 0,
+                ReceivablesRials = balances.Values.Where(v => v > 0).Sum(),
+                Recent = recent,
+            });
+        });
+
         admin.MapPatch("/businesses/{id:guid}", async (Guid id, UpdateBusiness req, RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
         {
             var t = await db.Tenants.SingleOrDefaultAsync(x => x.Id == id, ct);

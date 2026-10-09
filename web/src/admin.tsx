@@ -180,6 +180,8 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
         </label>
       </div>
 
+      <BusinessActivity id={id} />
+
       <h3>سابقه‌ی اشتراک</h3>
       <div className="settings-list">
         {b.licenses.map((l) => (
@@ -225,6 +227,51 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
           onClick={() => typeof sheet === "object" && sheet && run(() => api(`/api/v1/admin/licenses/${sheet.revoke}`, { method: "DELETE" }), "اشتراک لغو شد")} />
       </BottomSheet>
     </AdminPage>
+  );
+}
+
+type Activity = {
+  customers: number; cases: number; openCases: number; delivered: number; casesLast30Days: number;
+  receivedLast30DaysRials: number; receivablesRials: number;
+  recent: { number: number; customer: string | null; vehicle: string | null; stage: string; openedAt: string }[];
+};
+
+/** How the business uses Arte: a few numbers and its latest cases (read-only, sample data excluded). */
+function BusinessActivity({ id }: { id: string }) {
+  const [a, setA] = useState<Activity | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api<Activity>(`/api/v1/admin/businesses/${id}/activity`).then(setA).catch((e) => setError(errorText(e)));
+  }, [id]);
+  if (error) return <p className="error" role="alert">{error}</p>;
+  if (!a) return <div className="splash" aria-busy="true" />;
+  const tiles: [string, string][] = [
+    ["مشتری", formatNumber(a.customers)], ["پرونده", formatNumber(a.cases)], ["باز", formatNumber(a.openCases)],
+    ["تحویل‌شده", formatNumber(a.delivered)], ["پذیرش ۳۰ روز اخیر", formatNumber(a.casesLast30Days)],
+    ["دریافتی ۳۰ روز", toman(a.receivedLast30DaysRials)], ["طلب از مشتریان", toman(a.receivablesRials)],
+  ];
+  return (
+    <>
+      <h3>فعالیت</h3>
+      <div className="admin-tiles">
+        {tiles.map(([label, value]) => (
+          <div key={label} className="admin-tile"><span className="muted small">{label}</span><strong className="font-num">{value}</strong></div>
+        ))}
+      </div>
+      <h3>آخرین پرونده‌ها</h3>
+      {a.recent.length === 0 ? <p className="muted">هنوز پرونده‌ی واقعی ثبت نکرده است.</p> : (
+        <div className="settings-list">
+          {a.recent.map((c) => (
+            <div key={c.number} className="settings-row static">
+              <span className="settings-row-text">
+                <span><span dir="ltr" className="case-code">CASE-{c.number}</span> · {c.vehicle ?? "بدون وسیله"}</span>
+                <span className="muted small">{c.customer ?? "بی‌نام"} · {c.stage} · {jalaliDate.format(new Date(c.openedAt))}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 

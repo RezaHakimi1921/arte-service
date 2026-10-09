@@ -116,6 +116,19 @@ export function LicenseBanner({ status, onOpen }: { status: LicenseStatus; onOpe
   );
 }
 
+/** Home screen, for managers: how long the subscription still runs (the banner takes over in the last days). */
+export function LicenseStrip({ status, onOpen }: { status: LicenseStatus; onOpen: () => void }) {
+  if (status.state !== "active") return null;
+  return (
+    <button type="button" className="license-strip" onClick={onOpen}>
+      <span>{status.kind === "trial" ? "دوره‌ی رایگان" : "اشتراک"}</span>
+      <strong className="font-num">{formatNumber(status.daysLeft)} روز مانده</strong>
+      {status.endsAt && <span className="muted small">تا {jalaliDate.format(new Date(status.endsAt))}</span>}
+      <span className="muted" aria-hidden="true">‹</span>
+    </button>
+  );
+}
+
 /** A branch the platform admin switched off: nothing works, so say so plainly and offer the way out. */
 export function BranchBlocked({ name, onSignOut }: { name: string; onSignOut: () => void }) {
   async function signOut() {

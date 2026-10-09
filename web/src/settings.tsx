@@ -116,7 +116,7 @@ export function SubPage({ title, onBack, children }: { title: string; onBack: ()
 
 /* ───────── account ───────── */
 
-type Account = { displayName: string | null; username: string | null; hasPassword: boolean };
+type Account = { displayName: string | null; username: string | null; mobile: string; hasPassword: boolean };
 
 export function AccountPage({ onBack }: { onBack: () => void }) {
   const { notify } = useFeedback();
@@ -173,9 +173,11 @@ export function AccountPage({ onBack }: { onBack: () => void }) {
           <Field label="نام نمایشی" error={errors.displayName}>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={80} />
           </Field>
-          <Field label="نام کاربری (انگلیسی)" error={errors.username}>
-            <input dir="ltr" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} maxLength={40} />
+          {/* The mobile number is the sign-in name; the password is optional (sign-in by SMS code always works). */}
+          <Field label="شماره‌ی ورود">
+            <input dir="ltr" className="font-num" value={account.mobile} readOnly autoComplete="username" />
           </Field>
+          <p className="hint">برای ورود با رمز، همین شماره را بزنید و رمزی که این‌جا می‌گذارید. ورود با کد پیامکی همیشه هم فعال است.</p>
           <Field label={account.hasPassword ? "رمز جدید (خالی بگذارید تا عوض نشود)" : "رمز عبور (حداقل ۱۰ کاراکتر)"} error={errors.newPassword}>
             <input type="password" dir="ltr" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           </Field>

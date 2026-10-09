@@ -187,4 +187,28 @@ public sealed class LicensingTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{other}", new { isActive = false })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{other}", new { isActive = true })).StatusCode);
     }
+
+    [Fact]
+    public async Task Admin_sees_a_business_activity_and_nobody_else_does()
+    {
+        var admin = await AdminAsync();
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var caseId = (await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(), customerName = "مشتری فعالیت", request = "صدا", newAsset = new { title = "هوندا ۱۲۵", kind = "motorcycle" },
+        }))).GetProperty("id").GetGuid();
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{caseId}/payments", new { amountRials = 5_000_000, method = "cash" }));
+
+        var a = await Json(await admin.GetAsync($"/api/v1/admin/businesses/{tenantId}/activity"));
+        Assert.Equal(1, a.GetProperty("customers").GetInt32());
+        Assert.Equal(1, a.GetProperty("cases").GetInt32());
+        Assert.Equal(1, a.GetProperty("openCases").GetInt32());
+        Assert.Equal(5_000_000, a.GetProperty("receivedLast30DaysRials").GetInt64());
+        var recent = a.GetProperty("recent")[0];
+        Assert.Equal("مشتری فعالیت", recent.GetProperty("customer").GetString());
+        Assert.Equal("هوندا ۱۲۵", recent.GetProperty("vehicle").GetString());
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync($"/api/v1/admin/businesses/{tenantId}/activity")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/v1/admin/businesses/{Guid.NewGuid()}/activity")).StatusCode);
+    }
 }

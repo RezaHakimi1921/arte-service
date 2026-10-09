@@ -167,6 +167,7 @@ function CodeField({ value, onChange, length, id }: { value: string; onChange: (
 
 export function Login({ onDone }: { onDone: (s: Session) => void }) {
   const [mode, setMode] = useState<"phone" | "password" | "code" | "reset" | "reset-code">("phone");
+  const [signup, setSignup] = useState(false);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -236,7 +237,7 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
     setError(null);
     try {
       if (mode === "password") {
-        if (!phone.trim() || !password) { setError("شماره موبایل (یا نام کاربری) و رمز را وارد کنید."); return; }
+        if (!isMobile(phone) || !password) { setError("شماره موبایل و رمز را وارد کنید."); return; }
         onDone(await api<Session>("/api/v1/auth/password", { body: { username: phone.trim(), password } }));
       } else {
         if (code.length !== sent.codeLength) { setError(`کد ${toFa(sent.codeLength)} رقمی پیامک‌شده را وارد کنید.`); return; }
@@ -271,12 +272,18 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
           {mode === "reset" ? "کد تأیید به شماره‌ی موبایل حساب پیامک می‌شود." : <>کد ارسال‌شده به <bdi dir="ltr">{spaced(phone)}</bdi> و رمز تازه را وارد کنید.</>}
         </Heading>
       ) : (
-        <Heading icon="wrench" over="خوش آمدید" title="وارد حساب خود شوید">
-          برای مدیریت تعمیرگاه با شماره‌ی موبایل وارد شوید؛ اگر بار اول است، ثبت‌نام همین‌جا انجام می‌شود.
-        </Heading>
+        signup && mode === "phone" ? (
+          <Heading icon="user" over="ثبت‌نام رایگان" title="ثبت‌نام در آرته سرویس">
+            شماره‌ی موبایلتان را بزنید؛ با کد تأیید پیامکی حسابتان ساخته می‌شود و ۱۴ روز رایگان از همه‌ی امکانات استفاده می‌کنید.
+          </Heading>
+        ) : (
+          <Heading icon="wrench" over="خوش آمدید" title="وارد حساب خود شوید">
+            با شماره‌ی موبایلی که در آرته ثبت کرده‌اید وارد شوید.
+          </Heading>
+        )
       )}
 
-      {(mode === "phone" || mode === "password") && (
+      {(mode === "phone" || mode === "password") && !signup && (
         <div className="lg-segment" role="tablist" aria-label="روش ورود">
           <button className={mode === "phone" ? "active" : ""} type="button" role="tab" aria-selected={mode === "phone"} onClick={() => go("phone")}>کد پیامکی</button>
           <button className={mode === "password" ? "active" : ""} type="button" role="tab" aria-selected={mode === "password"} onClick={() => go("password")}>رمز عبور</button>
@@ -286,18 +293,14 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
       <form onSubmit={submit} noValidate>
         {(mode === "phone" || mode === "reset" || mode === "password") && (
           <>
-            <label className="lg-label" htmlFor="lg-phone">{mode === "password" ? "شماره موبایل یا نام کاربری" : "شماره موبایل"}</label>
+            <label className="lg-label" htmlFor="lg-phone">شماره موبایل</label>
             <div className={`lg-input${error && mode !== "password" && !isMobile(phone) ? " invalid" : ""}`}>
-              <span className="lg-input-icon"><Icon name={mode === "password" ? "user" : "phone"} /></span>
-              {mode === "password" ? (
-                <input id="lg-phone" type="text" autoComplete="username" autoCapitalize="none" dir="ltr" value={phone}
-                  onChange={(e) => { setPhone(toLatinDigits(e.target.value).slice(0, 40)); setError(null); }} placeholder="0912 000 0000" />
-              ) : (
-                <input id="lg-phone" type="tel" inputMode="numeric" pattern="[0-9]*" autoComplete="tel" dir="ltr" maxLength={11} value={phone}
-                  onChange={(e) => { setPhone(toLatinDigits(e.target.value).replace(/\D/g, "").slice(0, 11)); setError(null); }}
-                  placeholder="0912 000 0000" aria-describedby={error ? "lg-error" : undefined} autoFocus />
-              )}
-              {mode !== "password" && isMobile(phone) && <span className="lg-valid"><Icon name="check" /></span>}
+              <span className="lg-input-icon"><Icon name="phone" /></span>
+              <input id="lg-phone" type="tel" inputMode="numeric" pattern="[0-9]*" autoComplete={mode === "password" ? "username" : "tel"}
+                dir="ltr" maxLength={11} value={phone}
+                onChange={(e) => { setPhone(toLatinDigits(e.target.value).replace(/\D/g, "").slice(0, 11)); setError(null); }}
+                placeholder="0912 000 0000" aria-describedby={error ? "lg-error" : undefined} autoFocus />
+              {isMobile(phone) && <span className="lg-valid"><Icon name="check" /></span>}
             </div>
           </>
         )}
@@ -343,12 +346,25 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
 
         <ErrorBox text={error} id="lg-error" />
         <Submit busy={busy}
-          label={mode === "phone" || mode === "reset" ? "دریافت کد" : mode === "password" ? "ورود به حساب" : mode === "code" ? "تأیید و ورود" : "ذخیره‌ی رمز و ورود"}
+          label={mode === "phone" ? (signup ? "دریافت کد ثبت‌نام" : "دریافت کد ورود") : mode === "reset" ? "دریافت کد" : mode === "password" ? "ورود به حساب" : mode === "code" ? "تأیید و ورود" : "ذخیره‌ی رمز و ورود"}
           icon={codeStep ? "check" : "arrow"} />
       </form>
 
       {(mode === "reset" || mode === "reset-code") && (
         <div className="lg-support"><button type="button" className="lg-text" onClick={() => go("password")}>بازگشت به ورود با رمز</button></div>
+      )}
+      {(mode === "phone" || mode === "password") && (
+        signup ? (
+          <div className="lg-support"><span>حساب دارید؟</span><button type="button" className="lg-text" onClick={() => setSignup(false)}>ورود</button></div>
+        ) : (
+          <div className="lg-signup">
+            <div>
+              <strong>هنوز در آرته ثبت‌نام نکرده‌اید؟</strong>
+              <span>شماره‌تان را بزنید؛ اگر حسابی نداشته باشید، بعد از تأیید کد ثبت‌نام همین‌جا انجام می‌شود.</span>
+            </div>
+            <button type="button" className="lg-signup-button" onClick={() => { setSignup(true); go("phone"); }}>ثبت‌نام رایگان</button>
+          </div>
+        )
       )}
     </AuthLayout>
   );

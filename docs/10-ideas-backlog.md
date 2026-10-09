@@ -5,6 +5,17 @@ Priorities already decided live in `09-roadmap-signup-license-admin.md` (licence
 
 ---
 
+## 0. NEXT (owner, ۱۴۰۵/۰۷/۱۸): customer tracking link
+
+When a case is opened (and on key changes) the customer gets an SMS with a link to a public, read-only page
+for **their case only**, showing where the work is: stages done and current (as the technician/master moves it),
+parts bought, labor, totals and payments, promised delivery, photos the shop chooses to share.
+- The link carries a long random token per case (not the case id); it can be revoked/rotated; no customer login.
+- The manager chooses in Settings which sections the customer sees; some are always shown (stage, promise, total).
+- SMS on: case opened (link), ready for delivery, delivered (with warranty); each event switchable per business.
+- Builds on: Faraz pattern sending (needs one pattern per message type), and the GT-Car / Odoo ideas below
+  (status SMS, shareable quote/invoice, customer approval from the link, periodic service reminder).
+
 ## 1. From the main competitor: GT-Car (gt-car.ir)
 
 What they sell: cloud software for any vehicle business (repair, car wash, oil change, body shop, tyres, tuning,

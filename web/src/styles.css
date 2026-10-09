@@ -1361,7 +1361,34 @@ a.button.primary { background: var(--accent); color: #fff; }
 .lg-submit svg { width: 18px; height: 18px; }
 .lg-submit svg[data-icon="arrow"] { transform: rotate(180deg); }
 .lg-spinner { width: 18px; height: 18px; border: 2px solid color-mix(in srgb, var(--accent-text) 30%, transparent); border-top-color: var(--accent-text); border-radius: 50%; animation: lg-spin 700ms linear infinite; }
-.lg-support { display: flex; justify-content: center; margin-top: 22px; }
+.lg-support { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 22px; color: var(--muted); font-size: 0.85rem; }
+/* The sign-in button draws its own spinner: no second one from the global busy style. */
+.lg-submit[aria-busy="true"]::before { content: none; }
+.lg-signup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.lg-signup > div { display: flex; flex-direction: column; gap: 4px; line-height: 1.8; }
+.lg-signup strong { font-size: 0.9rem; }
+.lg-signup span { color: var(--muted); font-size: 0.8rem; }
+.lg-signup-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
 .lg-content .settings-list { margin-top: 4px; }
 
 .lg-success { display: flex; align-items: center; flex-direction: column; max-width: 400px; margin: 0 auto; text-align: center; }
@@ -1431,3 +1458,25 @@ a.button.primary { background: var(--accent); color: #fff; }
 @media (prefers-contrast: more) {
   .lg-input, .lg-code { border-width: 2px; }
 }
+
+/* ── home: subscription days left ── */
+.license-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-align: start;
+  font-size: 0.9rem;
+}
+.license-strip strong { color: var(--success); }
+.license-strip > :last-child { margin-inline-start: auto; }
+
+.admin-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; }
+.admin-tile { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.7rem 0.85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.admin-tile strong { font-size: 1.05rem; }

@@ -7,7 +7,7 @@ import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
 import { Tour, type TourStep } from "./tour";
 import { AuthLayout, Login, SignupView, TrialWelcome } from "./login";
-import { BranchBlocked, LicenseBanner, LicensePage, type LicenseStatus } from "./license";
+import { BranchBlocked, LicenseBanner, LicensePage, LicenseStrip, type LicenseStatus } from "./license";
 import { AdminPanel } from "./admin";
 import { useFeedback } from "./feedback";
 import { AccountPage, AppearancePage, BusinessPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
@@ -361,6 +361,9 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
             <span>پرونده <span dir="ltr">CASE-{undoCase.number}</span> حذف شد.</span>
             <button className="link" onClick={restoreCase}>بازگردانی</button>
           </div>
+        )}
+        {tab === "home" && !caseId && !newCase && !me.openMode && can("settings.manage") && (
+          <LicenseStrip status={me.business!.license} onOpen={() => { go("settings"); setMorePage("license"); }} />
         )}
         {page}
       </main>
