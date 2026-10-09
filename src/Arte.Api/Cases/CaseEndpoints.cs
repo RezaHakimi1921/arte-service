@@ -1,3 +1,4 @@
+using Arte.Core.Messaging;
 using System.Text.Json;
 using Arte.Api.Billing;
 using Arte.Api.Security;
@@ -197,7 +198,7 @@ public static class CaseEndpoints
 
         return new
         {
-            c.Id, c.Number, c.Request, c.RequestedServices, c.ReportedProblems, c.FuelLevel, c.BodyStatus, c.BodyNotes,
+            c.Id, c.Number, c.TrackingCode, c.Request, c.RequestedServices, c.ReportedProblems, c.FuelLevel, c.BodyStatus, c.BodyNotes,
             c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
             c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation, c.WaitReason,
             c.OpenedAt, c.StageEnteredAt, c.ClosedAt,
@@ -271,7 +272,8 @@ public static class CaseEndpoints
 
     // ───────── commands ─────────
 
-    private static async Task<IResult> CreateAsync(CreateCase req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
+    private static async Task<IResult> CreateAsync(CreateCase req, RequestUser me, ArteDbContext db, IClock clock,
+        Arte.Api.Tracking.CustomerNotifier notifier, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
         if (!Mobile.TryNormalize(req.Mobile, out var mobile)) errors["mobile"] = ["شماره موبایل معتبر نیست."];
@@ -370,6 +372,7 @@ public static class CaseEndpoints
             IntakeChecklist = ToJson(req.Intake),
             ParentCaseId = req.ParentCaseId, Relation = req.ParentCaseId is null ? null : req.Relation ?? CaseRelations.Comeback,
             OpenedAt = now, StageEnteredAt = now, OpenedBy = userId,
+            TrackingCode = Arte.Api.Tracking.TrackingCodes.New(),
         };
         db.Cases.Add(c);
         AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.ReportedProblems, c.OdometerKm, c.ParentCaseId });
@@ -377,6 +380,7 @@ public static class CaseEndpoints
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        await notifier.NotifyAsync(c, MessageKeys.CaseOpened, ct);
         return Results.Created($"/api/v1/cases/{c.Id}", new { c.Id, c.Number });
     }
 
@@ -429,7 +433,7 @@ public static class CaseEndpoints
     }
 
     private static async Task<IResult> TransitionAsync(Guid id, Guid transitionId, RunTransition req, RequestUser me,
-        ArteDbContext db, IClock clock, CancellationToken ct)
+        ArteDbContext db, IClock clock, Arte.Api.Tracking.CustomerNotifier notifier, CancellationToken ct)
     {
         var m = me.RequiredMembership;
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == id, ct);
@@ -509,7 +513,12 @@ public static class CaseEndpoints
         }
         if (to.Category == StageCategories.Cancelled) AddEvent(db, c, CaseEventTypes.Cancelled, userId, now, new { Reason = reason });
 
-        return await SaveOr409(db, ct, async () => Results.Ok(await BuildDetail(c, m, db, ct)));
+        return await SaveOr409(db, ct, async () =>
+        {
+            if (to.Key == "ready") await notifier.NotifyAsync(c, MessageKeys.CaseReady, ct);
+            else if (to.Key == "delivered") await notifier.NotifyAsync(c, MessageKeys.CaseDelivered, ct);
+            return Results.Ok(await BuildDetail(c, m, db, ct));
+        });
     }
 
     private static async Task<IResult> AssignAsync(Guid id, Assign req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)

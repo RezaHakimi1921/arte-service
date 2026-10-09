@@ -75,6 +75,8 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     public string? WaitReason { get; set; }
     /// <summary>Created for the first-run tour (see Customer.IsSample).</summary>
     public bool IsSample { get; set; }
+    /// <summary>Random code in the customer's tracking link (/t/{code}); unguessable, can be renewed.</summary>
+    public string? TrackingCode { get; set; }
 
     public string CustodyStatus { get; set; } = CustodyStatuses.InShop;
     /// <summary>What came in with the motorcycle: helmet, key, papers, visible damage…</summary>

@@ -52,6 +52,11 @@ services:
       Sms__IranPayamak__LineNumber: ${IRANPAYAMAK_LINE:-}
       Sms__IranPayamak__Templates__auth_otp: ${IRANPAYAMAK_OTP_PATTERN:-}
       Sms__IranPayamak__ParamNames__code: ${IRANPAYAMAK_OTP_PARAM:-code}
+      # Customer SMS patterns (variables: shop, name, vehicle, code). Empty = that SMS is not sent.
+      Sms__IranPayamak__Templates__case_opened: ${IRANPAYAMAK_CASE_OPENED:-}
+      Sms__IranPayamak__Templates__case_ready: ${IRANPAYAMAK_CASE_READY:-}
+      Sms__IranPayamak__Templates__case_delivered: ${IRANPAYAMAK_CASE_DELIVERED:-}
+      Platform__SupportPhone: ${SUPPORT_PHONE:-}
       Sentry__Dsn: ${SENTRY_DSN:-}
     # "egress" is the only route out (to the SMS provider); the database stays on the internal-only network.
     # Unique alias: the web container also sits on the edge network, where plain "api"

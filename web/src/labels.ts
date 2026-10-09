@@ -53,6 +53,7 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "case.updated": (d) => `ویرایش: ${Object.keys(d).map((k) => FIELD_NAMES[k] ?? k).join("، ")}`,
   "case.note_added": (d) => `یادداشت: ${d.text}`,
   "case.photo_added": () => "عکس اضافه شد",
+  "customer.sms": (d) => `${d.sent ? "پیامک" : "پیامک ارسال نشد:"} ${({ "case.opened": "پذیرش", "case.ready": "آماده‌ی تحویل", "case.delivered": "تحویل" } as Record<string, string>)[d.kind as string] ?? ""} برای مشتری`,
   "case.reopened": (d) => `پرونده دوباره باز شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,
   "case.delivered": () => "وسیله تحویل مشتری شد",
   "case.cancelled": (d) => `پرونده لغو شد${d.reason ? ` (دلیل: ${d.reason})` : ""}`,

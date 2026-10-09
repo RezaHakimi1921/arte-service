@@ -7,10 +7,11 @@ import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
 import { Tour, type TourStep } from "./tour";
 import { AuthLayout, Login, SignupView, TrialWelcome } from "./login";
+import { TrackPage } from "./track";
 import { BranchBlocked, LicenseBanner, LicensePage, LicenseStrip, type LicenseStatus } from "./license";
 import { AdminPanel } from "./admin";
 import { useFeedback } from "./feedback";
-import { AccountPage, AppearancePage, BusinessPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
+import { AccountPage, AppearancePage, BusinessPage, CustomerPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, VehiclesPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
 
@@ -23,6 +24,7 @@ type Me = {
   business: {
     tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean;
     tourDone: boolean; sampleCaseId: string | null; isActive: boolean; license: LicenseStatus;
+    businessType: string; vehicleKinds: string[];
   } | null;
 };
 type Tab = "home" | "cases" | "customers" | "settings";
@@ -31,7 +33,11 @@ type Tab = "home" | "cases" | "customers" | "settings";
 /** adminservice.artepersia.com (or ?admin in development) serves the platform admin panel instead of the shop app. */
 const ADMIN_HOST = location.hostname.startsWith("adminservice.") || (import.meta.env.DEV && new URLSearchParams(location.search).has("admin"));
 
+/** /t/{code}: the customer's tracking page, public and outside the app. */
+const TRACK_CODE = location.pathname.match(/^\/t\/([a-z0-9]{6,16})\/?$/)?.[1] ?? null;
+
 export default function App() {
+  if (TRACK_CODE) return <TrackPage code={TRACK_CODE} />;
   return ADMIN_HOST ? <AdminRoot /> : <ShopApp />;
 }
 
@@ -167,8 +173,8 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
 
   const select = (tenantId: string) => api<Session>("/api/v1/auth/select-tenant", { body: { tenantId } });
 
-  async function create(ownerName: string, shopName: string) {
-    const t = await api<{ id: string; trialDays: number }>("/api/v1/tenants", { body: { ownerName, name: shopName || undefined } });
+  async function create(ownerName: string, shopName: string, businessType: string) {
+    const t = await api<{ id: string; trialDays: number }>("/api/v1/tenants", { body: { ownerName, name: shopName || undefined, businessType } });
     setWelcome({ session: await select(t.id), days: t.trialDays });
     return t.trialDays;
   }
@@ -314,7 +320,7 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
 
   let page;
   if (tab === "cases" && newCase)
-    page = <NewCaseView canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
+    page = <NewCaseView canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} vehicleKinds={me.business!.vehicleKinds} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
       onOpenStaff={() => { go("settings"); if (can("staff.manage")) setMorePage("staff"); }} />;
   else if (tab === "cases" && caseId)
     page = <CaseDetail id={caseId} onBack={() => setCaseId(null)} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
@@ -328,6 +334,8 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     else if (morePage === "account") page = <AccountPage onBack={back} />;
     else if (morePage === "business") page = <BusinessPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "intake") page = <IntakeRulesPage onBack={back} onSaved={onSettingsChanged} />;
+    else if (morePage === "vehicles") page = <VehiclesPage onBack={back} onSaved={onSettingsChanged} />;
+    else if (morePage === "customer") page = <CustomerPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "staff") page = <StaffPage onBack={back} />;
     else if (morePage === "reports") page = <ReportsPage onBack={back} />;
     else if (morePage === "license") page = <LicensePage onBack={back} />;

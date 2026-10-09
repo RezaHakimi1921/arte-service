@@ -44,9 +44,11 @@ function Section({ icon, title, badge, children, tone }: { icon: keyof typeof IC
   );
 }
 
-export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, onOpenStaff }: {
-  canAssign: boolean; requireAssignee: boolean; onCreated: (id: string) => void; onCancel: () => void; onOpenStaff: () => void;
+export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreated, onCancel, onOpenStaff }: {
+  canAssign: boolean; requireAssignee: boolean; vehicleKinds: string[]; onCreated: (id: string) => void; onCancel: () => void; onOpenStaff: () => void;
 }) {
+  // Only the vehicle kinds this business takes in (Settings → نوع کسب‌وکار و وسایل نقلیه).
+  const kinds = VEHICLE_KINDS.filter((k) => vehicleKinds.includes(k.key));
   // customer
   const [mobile, setMobile] = useState("");
   const [customer, setCustomer] = useState<CustomerFull | null>(null);
@@ -58,7 +60,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
   const [wantAssetId, setWantAssetId] = useState<string | null>(null);
   // vehicle
   const [assetId, setAssetId] = useState<string | "new">("new");
-  const [kind, setKind] = useState<VehicleKind | null>(null);
+  const [kind, setKind] = useState<VehicleKind | null>(kinds.length === 1 ? kinds[0].key : null);
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [calendar, setCalendar] = useState<"jalali" | "gregorian">("jalali");
@@ -326,7 +328,7 @@ export function NewCaseView({ canAssign, requireAssignee, onCreated, onCancel, o
             <div className="field">
               <span className="label">نوع وسیله</span>
               <div className="kinds" role="radiogroup" aria-label="نوع وسیله">
-                {VEHICLE_KINDS.map((k) => (
+                {kinds.map((k) => (
                   <button type="button" key={k.key} role="radio" aria-checked={kind === k.key}
                     className={`kind${kind === k.key ? " on" : ""}`} onClick={() => pickKind(k.key)}>
                     <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d={k.icon} /></svg>

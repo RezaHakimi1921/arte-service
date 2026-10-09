@@ -96,6 +96,11 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasOne<Arte.Core.Licensing.Plan>().WithMany().HasForeignKey(x => x.PlanId);
         });
         b.Entity<Tenant>().Property(x => x.IsActive).HasDefaultValue(true);
+        b.Entity<Tenant>().Property(x => x.BusinessType).HasMaxLength(32).HasDefaultValue(BusinessTypes.MotorcycleRepair);
+        b.Entity<Tenant>().Property(x => x.VehicleKinds).HasDefaultValueSql("'{car,suv,van,pickup,motorcycle}'::text[]");
+        foreach (var flag in new[] { nameof(Tenant.SmsOnOpened), nameof(Tenant.SmsOnReady), nameof(Tenant.SmsOnDelivered),
+                     nameof(Tenant.TrackShowStages), nameof(Tenant.TrackShowItems), nameof(Tenant.TrackShowAmounts) })
+            b.Entity<Tenant>().Property<bool>(flag).HasDefaultValue(true);
         b.Entity<Tenant>().Property(x => x.DeactivatedReason).HasMaxLength(300);
 
         b.Entity<RefreshToken>(e =>
@@ -168,6 +173,8 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         b.Entity<Case>(e =>
         {
             e.HasIndex(x => new { x.TenantId, x.Number }).IsUnique();
+            e.Property(x => x.TrackingCode).HasMaxLength(16);
+            e.HasIndex(x => x.TrackingCode).IsUnique().HasFilter("\"TrackingCode\" IS NOT NULL");
             e.HasIndex(x => new { x.TenantId, x.StageId });
             e.HasIndex(x => new { x.TenantId, x.AssigneeId });
             e.HasIndex(x => new { x.TenantId, x.CustomerId });

@@ -14,9 +14,11 @@ namespace Arte.Api.Tenants;
 
 public static class TenantEndpoints
 {
-    public sealed record CreateTenant(string? Name, string? Phone, string? InviteCode, string? OwnerName);
+    public sealed record CreateTenant(string? Name, string? Phone, string? InviteCode, string? OwnerName, string? BusinessType = null);
     public sealed record BusinessSettings(string? Name, string? Phone, string? Address, bool? RequireAssigneeOnIntake,
-        bool? RequireCustomerApproval, bool? RequireFinalReview);
+        bool? RequireCustomerApproval, bool? RequireFinalReview, string? BusinessType = null, string[]? VehicleKinds = null,
+        bool? CustomerSmsEnabled = null, bool? SmsOnOpened = null, bool? SmsOnReady = null, bool? SmsOnDelivered = null,
+        bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null);
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -36,6 +38,8 @@ public static class TenantEndpoints
                     m.TenantId,
                     Name = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.Name).SingleAsync(ct),
                     RequireAssigneeOnIntake = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.RequireAssigneeOnIntake).SingleAsync(ct),
+                    BusinessType = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.BusinessType).SingleAsync(ct),
+                    VehicleKinds = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.VehicleKinds).SingleAsync(ct),
                     m.Role,
                     Permissions = m.Role == Roles.Owner ? [.. Permissions.All] : m.Permissions,
                     IsActive = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.IsActive).SingleAsync(ct),
@@ -48,7 +52,12 @@ public static class TenantEndpoints
 
         app.MapGet("/api/v1/settings/business", async (RequestUser me, ArteDbContext db, CancellationToken ct) =>
             Results.Ok(await db.Tenants.AsNoTracking().Where(t => t.Id == me.RequiredMembership.TenantId)
-                .Select(t => new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview }).SingleAsync(ct)))
+                .Select(t => new
+                {
+                    t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
+                    t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
+                    t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts,
+                }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
 
         app.MapPut("/api/v1/settings/business", async (BusinessSettings req, RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
@@ -57,6 +66,9 @@ public static class TenantEndpoints
             if (req.Name is not null && (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 120)) errors["name"] = ["نام ۱ تا ۱۲۰ حرف."];
             if (req.Phone is { Length: > 20 }) errors["phone"] = ["حداکثر ۲۰ کاراکتر."];
             if (req.Address is { Length: > 300 }) errors["address"] = ["حداکثر ۳۰۰ حرف."];
+            if (req.BusinessType is not null && !BusinessTypes.All.Contains(req.BusinessType)) errors["businessType"] = ["نوع کسب‌وکار نامعتبر است."];
+            if (req.VehicleKinds is { } kinds && (kinds.Length == 0 || kinds.Length > 10 || kinds.Any(k => !Arte.Core.Customers.AssetKinds.All.Contains(k))))
+                errors["vehicleKinds"] = ["دست‌کم یک نوع وسیله را انتخاب کنید."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var t = await db.Tenants.SingleAsync(x => x.Id == me.RequiredMembership.TenantId, ct);
@@ -66,12 +78,26 @@ public static class TenantEndpoints
             if (req.RequireAssigneeOnIntake is { } r) t.RequireAssigneeOnIntake = r;
             if (req.RequireCustomerApproval is { } ca) t.RequireCustomerApproval = ca;
             if (req.RequireFinalReview is { } fr) t.RequireFinalReview = fr;
+            if (req.BusinessType is { } bt) t.BusinessType = bt;
+            if (req.VehicleKinds is { } vk) t.VehicleKinds = vk.Distinct().ToArray();
+            if (req.CustomerSmsEnabled is { } sms) t.CustomerSmsEnabled = sms;
+            if (req.SmsOnOpened is { } so) t.SmsOnOpened = so;
+            if (req.SmsOnReady is { } sr) t.SmsOnReady = sr;
+            if (req.SmsOnDelivered is { } sd) t.SmsOnDelivered = sd;
+            if (req.TrackShowStages is { } ts) t.TrackShowStages = ts;
+            if (req.TrackShowItems is { } ti) t.TrackShowItems = ti;
+            if (req.TrackShowAmounts is { } ta) t.TrackShowAmounts = ta;
             audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
             await db.SaveChangesAsync(ct);
             // Optional workflow steps follow the settings.
             await WorkflowUpgrader.UpgradeTenantAsync(db, t, ct);
             await db.SaveChangesAsync(ct);
-            return Results.Ok(new { t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview });
+            return Results.Ok(new
+            {
+                t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
+                t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
+                t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts,
+            });
         }).RequirePermission(Permissions.SettingsManage);
 
         app.MapPost("/api/v1/tenants", async (CreateTenant req, RequestUser me, IServiceScopeFactory scopes,
@@ -90,7 +116,7 @@ public static class TenantEndpoints
             var name = req.Name?.Trim();
             // Empty → named after the owner's family name (the last word of the full name); editable in Settings.
             if (string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(ownerName))
-                name = $"تعمیرگاه {ownerName.Split(' ', StringSplitOptions.RemoveEmptyEntries)[^1]}";
+                name = $"{req.BusinessType switch { BusinessTypes.MotorcycleRepair => "موتورسازی", BusinessTypes.QuickService => "آپاراتی", _ => "تعمیرگاه" }} {ownerName.Split(' ', StringSplitOptions.RemoveEmptyEntries)[^1]}";
             if (string.IsNullOrEmpty(name) || name.Length > 120) errors["name"] = ["نام کسب‌وکار حداکثر ۱۲۰ حرف."];
             string? phone = null;
             if (!string.IsNullOrWhiteSpace(req.Phone))
@@ -106,7 +132,10 @@ public static class TenantEndpoints
             if (owned >= signup.Value.MaxBusinessesPerUser)
                 return Results.Problem(statusCode: 403, title: "به سقف تعداد کسب‌وکار رسیده‌اید.");
 
-            var tenant = await ProvisionAsync(scopes, me.RequiredUserId, name!, phone, ownerName, ct);
+            var businessType = req.BusinessType ?? BusinessTypes.MotorcycleRepair;
+            if (!BusinessTypes.All.Contains(businessType))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["businessType"] = ["نوع کسب‌وکار را انتخاب کنید."] });
+            var tenant = await ProvisionAsync(scopes, me.RequiredUserId, name!, phone, ownerName, ct, businessType);
 
             return Results.Created($"/api/v1/tenants/{tenant.Id}", new { tenant.Id, tenant.Name, TrialDays = Arte.Core.Licensing.LicensePolicy.TrialDays });
         }).RequireAuthorization().RequireRateLimiting("auth");
@@ -114,14 +143,18 @@ public static class TenantEndpoints
 
     /// <summary>Creates a business with the motorcycle workflow and makes the user its owner.</summary>
     public static async Task<Tenant> ProvisionAsync(IServiceScopeFactory scopes, Guid ownerUserId, string name,
-        string? phone, string? ownerName, CancellationToken ct)
+        string? phone, string? ownerName, CancellationToken ct, string businessType = BusinessTypes.MotorcycleRepair)
     {
         // A fresh scope so the new tenant becomes the tenant of this unit of work only.
         await using var scope = scopes.CreateAsyncScope();
         var sp = scope.ServiceProvider;
         var clock = sp.GetRequiredService<IClock>();
         var db = sp.GetRequiredService<ArteDbContext>();
-        var tenant = new Tenant { Name = name, Phone = phone, Vertical = WorkflowTemplates.MotorcycleRepair, CreatedAt = clock.UtcNow };
+        var tenant = new Tenant
+        {
+            Name = name, Phone = phone, Vertical = WorkflowTemplates.MotorcycleRepair, CreatedAt = clock.UtcNow,
+            BusinessType = businessType, VehicleKinds = BusinessTypes.DefaultVehicleKinds(businessType),
+        };
         sp.GetRequiredService<TenantContext>().Set(tenant.Id);
 
         db.Tenants.Add(tenant);

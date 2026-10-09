@@ -17,4 +17,7 @@ public sealed record SmsSendResult(bool Accepted, string? ProviderMessageId, str
 public static class MessageKeys
 {
     public const string AuthOtp = "auth.otp";
+    public const string CaseOpened = "case.opened";
+    public const string CaseReady = "case.ready";
+    public const string CaseDelivered = "case.delivered";
 }

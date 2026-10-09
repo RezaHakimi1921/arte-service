@@ -32,7 +32,7 @@ type CaseDetailView = {
   stage: StageRef; customer: { id: string; fullName: string | null; mobile: string };
   asset: { id: string; title: string; identifier: string | null; kind: string; attributes: Record<string, string> | null } | null;
   assignee: { id: string; name: string } | null; parentCase: { id: string; number: number } | null;
-  photos: CasePhoto[];
+  photos: CasePhoto[]; trackingCode: string | null;
   transitions: TransitionView[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
 };
@@ -217,6 +217,25 @@ export function EmptyCases({ canCreate }: { canCreate: boolean }) {
 
 type Sheet = null | "actions" | "assign" | "note" | "wait" | "parts" | "promise" | "credit";
 
+/** The customer's tracking link: the phone's share sheet (WhatsApp, SMS…), or copied when there is none. */
+async function shareTracking(code: string, number: number, notify: (text: string) => void) {
+  const url = `${location.origin}/t/${code}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `پیگیری پرونده CASE-${number}`, text: "وضعیت کار وسیله‌ی شما در این لینک:", url });
+      return;
+    }
+  } catch {
+    return; // the user closed the share sheet
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    notify("لینک پیگیری کپی شد؛ برای مشتری بفرستید");
+  } catch {
+    window.prompt("لینک پیگیری مشتری:", url);
+  }
+}
+
 export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () => void; onDeleted: (number: number) => void }) {
   const { notify } = useFeedback();
   const [c, setC] = useState<CaseDetailView | null>(null);
@@ -356,6 +375,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
               <button onClick={() => setSheet("wait")}>{c.waitReason ? "رفع توقف" : "کار متوقف است"}</button>
             )}
             <button onClick={() => setSheet("note")}>یادداشت</button>
+            {c.trackingCode && <button onClick={() => shareTracking(c.trackingCode!, c.number, notify)}>لینک مشتری</button>}
           </div>
         </div>
       )}

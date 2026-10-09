@@ -64,6 +64,7 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<Audit>();
 builder.Services.AddScoped<OtpService>();
+builder.Services.AddScoped<Arte.Api.Tracking.CustomerNotifier>();
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<FakeSmsProvider>();
 if (smsOptions.Provider == "smsir")
@@ -188,6 +189,9 @@ app.MapBilling();
 app.MapAttachments();
 app.MapClientErrors();
 app.MapOnboarding();
+Arte.Api.Tracking.TrackingEndpoints.MapTracking(app);
+// Public, for the sign-in and tracking pages: how to reach Arte support.
+app.MapGet("/api/v1/public/info", (IConfiguration c) => Results.Ok(new { SupportPhone = c["Platform:SupportPhone"] })).AllowAnonymous();
 Arte.Api.Licensing.LicenseEndpoints.MapLicensing(app);
 app.MapReports();
 

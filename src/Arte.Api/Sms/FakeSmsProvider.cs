@@ -12,10 +12,14 @@ public sealed class FakeSmsProvider(ILogger<FakeSmsProvider> logger) : ISmsProvi
     /// <summary>Last message per mobile, read by tests.</summary>
     public ConcurrentDictionary<string, IReadOnlyDictionary<string, string>> Sent { get; } = new();
 
+    /// <summary>Every message key sent per mobile, in order, read by tests.</summary>
+    public ConcurrentDictionary<string, ConcurrentQueue<string>> Keys { get; } = new();
+
     public Task<SmsSendResult> SendTemplateAsync(string mobile, string messageKey,
         IReadOnlyDictionary<string, string> tokens, CancellationToken ct)
     {
         Sent[mobile] = tokens;
+        Keys.GetOrAdd(mobile, _ => new ConcurrentQueue<string>()).Enqueue(messageKey);
         logger.LogWarning("FAKE SMS {MessageKey} to {Mobile}: {Tokens}",
             messageKey, Mobile.Mask(mobile), string.Join(", ", tokens.Select(t => $"{t.Key}={t.Value}")));
         return Task.FromResult(new SmsSendResult(true, Guid.NewGuid().ToString("N"), null));

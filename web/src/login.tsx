@@ -3,10 +3,12 @@ import { ApiError, api, type Session } from "./api";
 import { applyTheme } from "./App";
 import { toLatinDigits } from "./ui";
 
-type IconName = "alert" | "arrow" | "check" | "eye" | "eyeOff" | "lock" | "moon" | "phone" | "shield" | "sun" | "wrench" | "user" | "shop" | "gift";
+type IconName = "car" | "oil" | "alert" | "arrow" | "check" | "eye" | "eyeOff" | "lock" | "moon" | "phone" | "shield" | "sun" | "wrench" | "user" | "shop" | "gift";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
+    car: <path d="M5 17h14M5 17a2 2 0 1 0 4 0M15 17a2 2 0 1 0 4 0M3 17v-5l2.5-5h13l2.5 5v5M3 12h18" />,
+    oil: <path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" />,
     alert: <><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 17h.01" /></>,
     arrow: <path d="m9 18 6-6-6-6" />,
     check: <path d="m5 12 4 4L19 6" />,
@@ -168,6 +170,10 @@ function CodeField({ value, onChange, length, id }: { value: string; onChange: (
 export function Login({ onDone }: { onDone: (s: Session) => void }) {
   const [mode, setMode] = useState<"phone" | "password" | "code" | "reset" | "reset-code">("phone");
   const [signup, setSignup] = useState(false);
+  const [supportPhone, setSupportPhone] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ supportPhone: string | null }>("/api/v1/public/info").then((i) => setSupportPhone(i.supportPhone)).catch(() => {});
+  }, []);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -353,6 +359,9 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
       {(mode === "reset" || mode === "reset-code") && (
         <div className="lg-support"><button type="button" className="lg-text" onClick={() => go("password")}>بازگشت به ورود با رمز</button></div>
       )}
+      {supportPhone && (
+        <div className="lg-support"><span>نیاز به راهنمایی دارید؟</span><a className="lg-text" href={`tel:${supportPhone}`}>تماس با پشتیبانی</a></div>
+      )}
       {(mode === "phone" || mode === "password") && (
         signup ? (
           <div className="lg-support"><span>حساب دارید؟</span><button type="button" className="lg-text" onClick={() => setSignup(false)}>ورود</button></div>
@@ -373,7 +382,14 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
 const toFa = (n: number) => new Intl.NumberFormat("fa-IR").format(n);
 
 /** First sign-in of a new number: a short sign-up (name; shop name optional), then the trial welcome. */
-export function SignupView({ onCreate }: { onCreate: (ownerName: string, shopName: string) => Promise<number> }) {
+const SIGNUP_TYPES = [
+  { key: "motorcycle_repair", label: "موتورسازی", icon: "wrench" as IconName },
+  { key: "car_repair", label: "تعمیرات خودرو", icon: "car" as IconName },
+  { key: "quick_service", label: "آپاراتی و تعویض روغن", icon: "oil" as IconName },
+];
+
+export function SignupView({ onCreate }: { onCreate: (ownerName: string, shopName: string, businessType: string) => Promise<number> }) {
+  const [businessType, setBusinessType] = useState<string | null>(null);
   const [ownerName, setOwnerName] = useState("");
   const [shopName, setShopName] = useState("");
   const [error, setError] = useState<{ field?: string; text: string } | null>(null);
@@ -382,11 +398,12 @@ export function SignupView({ onCreate }: { onCreate: (ownerName: string, shopNam
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (!businessType) { setError({ field: "businessType", text: "نوع کسب‌وکارتان را انتخاب کنید." }); return; }
     if (ownerName.trim().length < 2) { setError({ field: "ownerName", text: "نام و نام خانوادگی را بنویسید." }); return; }
     setBusy(true);
     setError(null);
     try {
-      await onCreate(ownerName.trim(), shopName.trim());
+      await onCreate(ownerName.trim(), shopName.trim(), businessType);
     } catch (err) {
       const fields = err instanceof ApiError ? err.fields : {};
       const [field, texts] = Object.entries(fields)[0] ?? [];
@@ -402,7 +419,16 @@ export function SignupView({ onCreate }: { onCreate: (ownerName: string, shopNam
         شماره‌ی شما تأیید شد. فقط نامتان را بنویسید تا وارد شوید؛ ۱۴ روز استفاده‌ی رایگان دارید.
       </Heading>
       <form onSubmit={submit} noValidate>
-        <label className="lg-label" htmlFor="lg-owner">نام و نام خانوادگی</label>
+        <span className="lg-label" id="lg-type-label">نوع کسب‌وکار</span>
+        <div className={`lg-types${error?.field === "businessType" ? " invalid" : ""}`} role="radiogroup" aria-labelledby="lg-type-label">
+          {SIGNUP_TYPES.map((t) => (
+            <button type="button" key={t.key} role="radio" aria-checked={businessType === t.key}
+              className={`lg-type${businessType === t.key ? " on" : ""}`} onClick={() => { setBusinessType(t.key); setError(null); }}>
+              <Icon name={t.icon} /><span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+        <label className="lg-label lg-gap" htmlFor="lg-owner">نام و نام خانوادگی</label>
         <div className={`lg-input${error?.field === "ownerName" ? " invalid" : ""}`}>
           <span className="lg-input-icon"><Icon name="user" /></span>
           <input id="lg-owner" className="lg-text-input" value={ownerName} onChange={(e) => { setOwnerName(e.target.value); setError(null); }}
@@ -412,7 +438,7 @@ export function SignupView({ onCreate }: { onCreate: (ownerName: string, shopNam
         <div className={`lg-input${error?.field === "name" ? " invalid" : ""}`}>
           <span className="lg-input-icon"><Icon name="shop" /></span>
           <input id="lg-shop" className="lg-text-input" value={shopName} onChange={(e) => setShopName(e.target.value)} maxLength={120}
-            placeholder={family ? `تعمیرگاه ${family}` : "بعداً هم می‌توانید بنویسید"} />
+            placeholder={family ? `${businessType === "quick_service" ? "آپاراتی" : businessType === "motorcycle_repair" ? "موتورسازی" : "تعمیرگاه"} ${family}` : "بعداً هم می‌توانید بنویسید"} />
         </div>
         <p className="lg-hint">اگر خالی بماند، نام خانوادگی شما گذاشته می‌شود؛ در تنظیمات ← اطلاعات کسب‌وکار قابل تغییر است.</p>
         <ErrorBox text={error?.text ?? null} />

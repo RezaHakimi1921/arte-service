@@ -1480,3 +1480,55 @@ a.button.primary { background: var(--accent); color: #fff; }
 .admin-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; }
 .admin-tile { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.7rem 0.85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .admin-tile strong { font-size: 1.05rem; }
+
+/* ── sign-up: business type ── */
+.lg-types { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.lg-types.invalid .lg-type { border-color: var(--danger); }
+.lg-type {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 84px; padding: 10px 6px; border: 1px solid var(--border); border-radius: 14px;
+  color: var(--muted); background: var(--surface); font-size: 0.82rem; font-weight: 600; line-height: 1.5; text-align: center;
+  transition: border-color var(--dur-fade) var(--ease-out), color var(--dur-fade) var(--ease-out);
+}
+.lg-type svg { width: 22px; height: 22px; }
+.lg-type.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* ── customer tracking page (/t/{code}) ── */
+.track { max-width: 560px; margin: 0 auto; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(28px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 0.75rem; }
+.track-shop { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.25rem 0.25rem 0.5rem; }
+.track-shop h1 { margin: 0; font-size: 1.25rem; }
+.track-shop p { margin: 0.2rem 0 0; }
+.track-call {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 1rem; border-radius: 12px;
+  background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none;
+}
+.track-status { display: flex; flex-direction: column; gap: 0.35rem; border-inline-start: 4px solid var(--accent); line-height: 1.8; }
+.track-status.done { border-inline-start-color: var(--success); }
+.track-status h2 { margin: 0; font-size: 1.2rem; }
+.track-status p { margin: 0; }
+.track-promise strong { color: var(--accent); }
+.track h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+.track .card p { line-height: 1.8; }
+.track-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.track-steps li { position: relative; display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 0.6rem; min-height: 44px; }
+.track-steps li:not(:last-child)::after {
+  content: ""; position: absolute; inset-inline-start: 10px; top: 30px; bottom: -14px; width: 2px; background: var(--border);
+}
+.track-steps li.done:not(:last-child)::after { background: var(--success); }
+.track-dot { width: 14px; height: 14px; margin-inline-start: 4px; border-radius: 50%; border: 2px solid var(--border); background: var(--surface); }
+.track-steps li.done .track-dot { border-color: var(--success); background: var(--success); }
+.track-steps li.current .track-dot { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.track-steps li.todo .track-step-name { color: var(--muted); }
+.track-steps li.current .track-step-name { font-weight: 800; }
+.track-items { list-style: none; margin: 0; padding: 0; }
+.track-items li { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0; border-top: 1px solid var(--border); line-height: 1.8; }
+.track-items li:first-child { border-top: 0; }
+.track-items strong { white-space: nowrap; }
+.track-kind { font-size: 0.75rem; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.track-money p { display: flex; justify-content: space-between; margin: 0.2rem 0; }
+.track-money p.owe strong { color: var(--danger); }
+.track-foot { text-align: center; padding-top: 0.5rem; }
+.track-error { text-align: center; line-height: 1.9; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.track-steps li.current.final .track-dot { border-color: var(--success); background: var(--success); box-shadow: 0 0 0 4px var(--good-bg); }

@@ -5,7 +5,7 @@ import { BottomSheet } from "./sheet";
 import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { resetWorkflow } from "./workflow";
 
-export type SettingsPage = "account" | "business" | "intake" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
+export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
 
 export { ROLE_NAMES } from "./labels";
 import { ROLE_NAMES } from "./labels";
@@ -23,6 +23,8 @@ const ICON = {
   staff: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
   theme: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
   report: "M3 3v18h18M7 15l4-4 3 3 5-6",
+  vehicle: "M5 17h14M5 17a2 2 0 1 0 4 0M15 17a2 2 0 1 0 4 0M3 17v-5l2.5-5h13l2.5 5v5M3 12h18",
+  sms: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5",
   license: "M9 12l2 2 4-4M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6z",
   admin: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
   help: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
@@ -71,6 +73,8 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
         <Group title="کسب‌وکار">
           <Row icon="shop" title="اطلاعات کسب‌وکار" sub="نام، تلفن، نشانی" onClick={() => onOpen("business")} />
           <Row icon="license" title="اشتراک" sub={licenseText} onClick={() => onOpen("license")} />
+          <Row icon="vehicle" title="نوع کسب‌وکار و وسایل نقلیه" sub="کدام وسایل در پذیرش نشان داده شوند" onClick={() => onOpen("vehicles")} />
+          <Row icon="sms" title="پیامک و پیگیری مشتری" sub="لینک وضعیت پرونده و پیامک به مشتری" onClick={() => onOpen("customer")} />
           <Row icon="rules" title="قوانین پذیرش و روند کار" sub="مسئول الزامی، بررسی استاد، تأیید مشتری" onClick={() => onOpen("intake")} />
         </Group>
       )}
@@ -202,7 +206,16 @@ export function AccountPage({ onBack }: { onBack: () => void }) {
 type BusinessSettings = {
   name: string; phone: string | null; address: string | null;
   requireAssigneeOnIntake: boolean; requireCustomerApproval: boolean; requireFinalReview: boolean;
+  businessType: string; vehicleKinds: string[];
+  customerSmsEnabled: boolean; smsOnOpened: boolean; smsOnReady: boolean; smsOnDelivered: boolean;
+  trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean;
 };
+
+export const BUSINESS_TYPES: { key: string; label: string; hint: string; kinds: string[] }[] = [
+  { key: "motorcycle_repair", label: "موتورسازی", hint: "تعمیر موتورسیکلت", kinds: ["motorcycle"] },
+  { key: "car_repair", label: "تعمیرات خودرو", hint: "مکانیکی و تعمیرگاه خودرو", kinds: ["car", "suv", "van", "pickup"] },
+  { key: "quick_service", label: "آپاراتی و تعویض روغن", hint: "خدمات سریع خودرو و موتور", kinds: ["car", "suv", "van", "pickup", "motorcycle"] },
+];
 
 function useBusinessSettings(onSaved: () => void) {
   const { notify } = useFeedback();
@@ -264,6 +277,79 @@ export function IntakeRulesPage({ onBack, onSaved }: { onBack: () => void; onSav
           <Switch title="تأیید هزینه توسط مشتری قبل از تعمیر" sub="بعد از عیب‌یابی، کار تا تأیید مشتری متوقف می‌ماند. معمولاً لازم نیست چون مشتری خودش کار را سپرده است."
             checked={s.requireCustomerApproval} disabled={busy} onChange={(v) => save({ requireCustomerApproval: v })} />
         </div>
+      )}
+    </SubPage>
+  );
+}
+
+const KIND_NAMES: Record<string, string> = { car: "سواری", suv: "شاسی‌بلند", van: "ون", pickup: "وانت", motorcycle: "موتورسیکلت" };
+
+export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
+  const { s, save, busy } = useBusinessSettings(onSaved);
+  return (
+    <SubPage title="نوع کسب‌وکار و وسایل نقلیه" onBack={onBack}>
+      {!s ? <div className="splash" aria-busy="true" /> : (
+        <>
+          <h3>نوع کسب‌وکار</h3>
+          <div className="choice-list" role="radiogroup" aria-label="نوع کسب‌وکار">
+            {BUSINESS_TYPES.map((b) => (
+              <button type="button" key={b.key} role="radio" aria-checked={s.businessType === b.key} disabled={busy}
+                className={`choice${s.businessType === b.key ? " on" : ""}`}
+                onClick={() => save({ businessType: b.key, vehicleKinds: b.kinds })}>
+                <span>{b.label}</span><span className="muted small">{b.hint}</span>
+              </button>
+            ))}
+          </div>
+          <p className="hint">با عوض کردن نوع، وسایل پیش‌فرض همان نوع انتخاب می‌شود؛ پایین‌تر می‌توانید دستی تغییرشان دهید.</p>
+          <h3>وسایلی که می‌پذیرید</h3>
+          <div className="settings-list">
+            {Object.entries(KIND_NAMES).map(([k, label]) => {
+              const on = s.vehicleKinds.includes(k);
+              return (
+                <Switch key={k} title={label} sub={on ? "در پذیرش نشان داده می‌شود" : "در پذیرش نشان داده نمی‌شود"} checked={on}
+                  disabled={busy || (on && s.vehicleKinds.length === 1)}
+                  onChange={(v) => save({ vehicleKinds: v ? [...s.vehicleKinds, k] : s.vehicleKinds.filter((x) => x !== k) })} />
+              );
+            })}
+          </div>
+        </>
+      )}
+    </SubPage>
+  );
+}
+
+export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
+  const { s, save, busy } = useBusinessSettings(onSaved);
+  return (
+    <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
+      {!s ? <div className="splash" aria-busy="true" /> : (
+        <>
+          <p className="hint">
+            هر پرونده یک لینک اختصاصی دارد که مشتری بدون ورود، وضعیت کارش را در آن می‌بیند. لینک را از صفحه‌ی پرونده هم
+            می‌توانید بفرستید (مثلاً در واتساپ).
+          </p>
+          <h3>پیامک به مشتری</h3>
+          <div className="settings-list">
+            <Switch title="ارسال پیامک به مشتری" sub="با نام تعمیرگاه، نام مشتری و لینک پیگیری."
+              checked={s.customerSmsEnabled} disabled={busy} onChange={(v) => save({ customerSmsEnabled: v })} />
+            <Switch title="هنگام پذیرش" sub="«… شما پذیرش شد و در نوبت کار قرار گرفت.»"
+              checked={s.smsOnOpened} disabled={busy || !s.customerSmsEnabled} onChange={(v) => save({ smsOnOpened: v })} />
+            <Switch title="آماده‌ی تحویل" sub="«… شما آماده‌ی تحویل است.»"
+              checked={s.smsOnReady} disabled={busy || !s.customerSmsEnabled} onChange={(v) => save({ smsOnReady: v })} />
+            <Switch title="هنگام تحویل" sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
+              checked={s.smsOnDelivered} disabled={busy || !s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
+          </div>
+          <h3>صفحه‌ی پیگیری مشتری</h3>
+          <p className="hint">وضعیت فعلی، قول تحویل و نام و تلفن تعمیرگاه همیشه نشان داده می‌شود.</p>
+          <div className="settings-list">
+            <Switch title="همه‌ی مراحل کار" sub="هر مرحله با ساعتش؛ خاموش: فقط وضعیت فعلی."
+              checked={s.trackShowStages} disabled={busy} onChange={(v) => save({ trackShowStages: v })} />
+            <Switch title="قطعات و کارها" sub="فهرست قطعه‌ها، اجرت و خدمت‌های ثبت‌شده (قیمت خرید هیچ‌وقت نشان داده نمی‌شود)."
+              checked={s.trackShowItems} disabled={busy} onChange={(v) => save({ trackShowItems: v })} />
+            <Switch title="مبلغ‌ها" sub="جمع، پرداخت‌شده و مانده‌ی حساب."
+              checked={s.trackShowAmounts} disabled={busy} onChange={(v) => save({ trackShowAmounts: v })} />
+          </div>
+        </>
       )}
     </SubPage>
   );
