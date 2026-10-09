@@ -71,6 +71,8 @@ services:
       CREATE_SUPERUSER: ${BUGSINK_ADMIN:?set in .env}
       BASE_URL: https://error.artepersia.com
       BEHIND_HTTPS_PROXY: "True"
+      # The public name for people, the internal alias for the API's reports.
+      ALLOWED_HOSTS: error.artepersia.com,arte-bugsink
       PORT: 8000
       SINGLE_USER: "True"
       SITE_TITLE: Arte errors
