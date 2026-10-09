@@ -94,6 +94,9 @@ build → test → commit → push → deploy → health check → summary
   Arte publishes **no** host ports. On the shared network use unique aliases (`arte-api`, `arte-web`) — plain `api` is PersonalWallet's.
 - Editing PersonalWallet's Caddyfile: back up, append **in place** (bind-mounted single file), `caddy validate`, then `caddy reload`.
 - SSH: `ssh -i ~/.ssh/arte_service_deploy -p 2238 cluadai@78.39.51.105`. No sudo.
+- **Admin site**: https://adminservice.artepersia.com — same `arte-web` container and build; the PWA switches to the
+  platform admin panel by host name (`ADMIN_HOST` in `App.tsx`; `?admin` in development). Admins are set from the server:
+  `docker compose run --rm -T api set-admin <mobile>`.
 - **Errors (Bugsink, Sentry-compatible)**: https://error.artepersia.com — edge Caddy block forwards to `arte-bugsink:8000`.
   User `admin@artepersia.com`, password in `.env` → `BUGSINK_ADMIN`. The API reports via `Sentry:Dsn` (`SENTRY_DSN`,
   internal host `arte-bugsink`); browser errors go through `POST /api/v1/client-errors`, never straight to Bugsink.

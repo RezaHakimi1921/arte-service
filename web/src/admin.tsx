@@ -38,10 +38,10 @@ function StatusChip({ b }: { b: Pick<BusinessRow, "isActive" | "license"> }) {
   return <span className={`status-chip ${tone}`}>{licenseHeadline(b.license)}</span>;
 }
 
-function AdminPage({ title, back, onBack, children }: { title: string; back: string; onBack: () => void; children: React.ReactNode }) {
+function AdminPage({ title, back, onBack, children }: { title: string; back: string; onBack?: () => void; children: React.ReactNode }) {
   return (
     <section className="admin">
-      <button className="link back" onClick={onBack}>→ {back}</button>
+      {onBack && <button className="link back" onClick={onBack}>→ {back}</button>}
       <h2>{title}</h2>
       {children}
     </section>
@@ -49,7 +49,7 @@ function AdminPage({ title, back, onBack, children }: { title: string; back: str
 }
 
 /** Platform admin panel: every business (branch), its subscription and switch, and the price list. */
-export function AdminPanel({ onBack }: { onBack: () => void }) {
+export function AdminPanel({ onBack }: { onBack?: () => void }) {
   const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" }>({ page: "list" });
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
   if (view.page === "business") return <AdminBusiness id={view.id} onBack={() => setView({ page: "list" })} />;
@@ -57,7 +57,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
   return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} />;
 }
 
-function AdminList({ onBack, onOpen, onPlans }: { onBack: () => void; onOpen: (id: string) => void; onPlans: () => void }) {
+function AdminList({ onBack, onOpen, onPlans }: { onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [rows, setRows] = useState<BusinessRow[] | null>(null);
@@ -74,7 +74,12 @@ function AdminList({ onBack, onOpen, onPlans }: { onBack: () => void; onOpen: (i
   const match = FILTERS.find((f) => f.key === filter)!.match;
   const shown = rows?.filter(match) ?? [];
   return (
-    <AdminPage title="پنل مدیریت آرته" back="تنظیمات" onBack={onBack}>
+    <AdminPage title={onBack ? "پنل مدیریت آرته" : "کسب‌وکارها"} back="تنظیمات" onBack={onBack}>
+      {onBack && (
+        <p className="muted small">
+          نسخه‌ی کامل برای کامپیوتر: <a href="https://adminservice.artepersia.com" target="_blank" rel="noopener">adminservice.artepersia.com</a>
+        </p>
+      )}
       <div className="admin-tools">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام تعمیرگاه، نام یا موبایل مالک" aria-label="جستجوی کسب‌وکار" />
         <button onClick={onPlans}>پلن‌ها و قیمت‌ها</button>
@@ -92,12 +97,12 @@ function AdminList({ onBack, onOpen, onPlans }: { onBack: () => void; onOpen: (i
       <div className="settings-list">
         {shown.map((b) => (
           <button type="button" key={b.id} className="settings-row admin-row" onClick={() => onOpen(b.id)}>
-            <span className="settings-row-text">
+            <span className="settings-row-text admin-cells">
               <span className="admin-row-top"><strong>{b.name}</strong><StatusChip b={b} /></span>
-              <span className="muted small">
+              <span className="muted small admin-cell-owner">
                 {b.owner?.displayName ?? "بی‌نام"} · <span dir="ltr" className="font-num">{b.owner?.mobile}</span>
               </span>
-              <span className="muted small">
+              <span className="muted small admin-cell-usage">
                 {b.license.state === "expired" ? "بدون اشتراک" : `${formatNumber(b.license.daysLeft)} روز مانده`}
                 {" · "}{formatNumber(b.cases)} پرونده · {formatNumber(b.staff)} نفر
                 {b.lastCaseAt && <> · آخرین پذیرش {jalaliDate.format(new Date(b.lastCaseAt))}</>}

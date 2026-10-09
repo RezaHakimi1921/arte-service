@@ -28,7 +28,74 @@ type Me = {
 type Tab = "home" | "cases" | "customers" | "settings";
 
 
+/** adminservice.artepersia.com (or ?admin in development) serves the platform admin panel instead of the shop app. */
+const ADMIN_HOST = location.hostname.startsWith("adminservice.") || (import.meta.env.DEV && new URLSearchParams(location.search).has("admin"));
+
 export default function App() {
+  return ADMIN_HOST ? <AdminRoot /> : <ShopApp />;
+}
+
+/**
+ * The admin site: its own sign-in (same accounts), no demo/open mode, and only platform admins get past the door.
+ * Desktop gets a wide layout; on a phone it is the same panel as inside the app.
+ */
+function AdminRoot() {
+  const [state, setState] = useState<"boot" | "login" | "denied" | "ok">("boot");
+  const [me, setMe] = useState<Me | null>(null);
+
+  const signIn = useCallback(async (s: Session | null) => {
+    applySession(s);
+    if (!s) { setMe(null); setState("login"); return; }
+    try {
+      const m = await api<Me>("/api/v1/me");
+      setMe(m);
+      setState(m.isPlatformAdmin ? "ok" : "denied");
+    } catch {
+      setState("login");
+    }
+  }, []);
+
+  useEffect(() => {
+    document.title = "مدیریت آرته";
+    setSignedOutHandler(() => { setMe(null); setState("login"); });
+    refresh().then(signIn).catch(() => setState("login"));
+  }, [signIn]);
+
+  async function logout() {
+    await api("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
+    signIn(null);
+  }
+
+  if (state === "boot") return <div className="splash" aria-busy="true" />;
+  if (state === "login") return <Login onDone={signIn} />;
+  if (state === "denied")
+    return (
+      <main className="auth">
+        <div className="card blocked">
+          <h2>دسترسی ندارید</h2>
+          <p>این بخش فقط برای مدیریت آرته است. با حساب مدیر وارد شوید.</p>
+          <button onClick={logout}>خروج و ورود با حساب دیگر</button>
+        </div>
+      </main>
+    );
+  return (
+    <FeedbackProvider>
+      <div className="admin-app">
+        <header className="admin-top">
+          <strong>مدیریت آرته</strong>
+          <span className="muted small">{me?.displayName ?? me?.mobile}</span>
+          <a className="link small" href="https://service.artepersia.com">برنامه‌ی تعمیرگاه</a>
+          <button className="link small" onClick={logout}>خروج</button>
+        </header>
+        <main className="admin-main">
+          <AdminPanel />
+        </main>
+      </div>
+    </FeedbackProvider>
+  );
+}
+
+function ShopApp() {
   const [booting, setBooting] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);

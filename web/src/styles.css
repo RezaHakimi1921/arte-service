@@ -1116,3 +1116,26 @@ a.button.primary { background: var(--accent); color: #fff; }
 @media (prefers-contrast: more) {
   .status-chip { border-width: 2px; }
 }
+
+/* ── admin site (adminservice.artepersia.com): wide on desktop, the same panel on a phone ── */
+.admin-app { min-height: 100dvh; background: var(--bg); }
+.admin-top {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 1rem;
+  padding: calc(0.7rem + env(safe-area-inset-top, 0px)) 16px 0.7rem;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.admin-top strong { margin-inline-end: auto; font-size: 1.05rem; }
+.admin-main { max-width: 1100px; margin: 0 auto; padding: 1rem 16px calc(2rem + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 900px) {
+  .admin-main { padding-inline: 32px; }
+  .admin-main .admin-tools input { flex: 0 1 420px; }
+  /* Business list as a table: name+status | owner | usage. */
+  .admin-main .admin-row .admin-cells {
+    display: grid; grid-template-columns: minmax(220px, 1.3fr) minmax(200px, 1fr) minmax(260px, 1.4fr);
+    align-items: center; gap: 1rem;
+  }
+  .admin-main .admin-row { min-height: 56px; }
+  /* Business detail: facts and history side by side. */
+  .admin-main .admin > .license-status, .admin-main .admin > .admin-facts { max-width: 560px; }
+}
