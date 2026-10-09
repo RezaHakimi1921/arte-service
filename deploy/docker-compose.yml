@@ -61,15 +61,16 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
-  # Error tracking (Sentry-compatible). Internal network only: the API reports to it, nothing on the
-  # internet can reach it. Its web UI is bound to the server's localhost; open it through an SSH tunnel.
+  # Error tracking (Sentry-compatible) at https://error.artepersia.com: the edge Caddy (PersonalWallet stack)
+  # terminates TLS and forwards to arte-bugsink:8000 on the shared network. The API reports over the internal network.
   bugsink:
     image: bugsink/bugsink:latest
     restart: unless-stopped
     environment:
       SECRET_KEY: ${BUGSINK_SECRET_KEY:?set in .env}
       CREATE_SUPERUSER: ${BUGSINK_ADMIN:?set in .env}
-      BASE_URL: http://localhost:8000
+      BASE_URL: https://error.artepersia.com
+      BEHIND_HTTPS_PROXY: "True"
       PORT: 8000
       SINGLE_USER: "True"
       SITE_TITLE: Arte errors
@@ -78,7 +79,8 @@ services:
     networks:
       internal:
         aliases: [arte-bugsink]
-    ports: ["127.0.0.1:8000:8000"]
+      edge:
+        aliases: [arte-bugsink]
     mem_limit: 512m
     security_opt: ["no-new-privileges:true"]
 
