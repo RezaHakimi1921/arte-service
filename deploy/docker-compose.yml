@@ -35,6 +35,8 @@ services:
       ConnectionStrings__Default: Host=db;Port=5432;Database=arte;Username=arte;Password=${POSTGRES_PASSWORD}
       Jwt__Key: ${JWT_KEY:?set in .env}
       Otp__Pepper: ${OTP_PEPPER:?set in .env}
+      # Must match the SMS pattern's code length (Faraz pattern: 5 digits).
+      Otp__Digits: ${OTP_DIGITS:-6}
       Signup__InviteCode: ${SIGNUP_INVITE_CODE:?set in .env}
       Signup__RequireInviteCode: ${SIGNUP_REQUIRE_INVITE:-false}
       Auth__PasswordLoginEnabled: ${PASSWORD_LOGIN:-false}

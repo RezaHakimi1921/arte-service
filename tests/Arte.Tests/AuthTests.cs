@@ -159,4 +159,18 @@ public sealed class AuthTests(ArteApiFactory api)
         res.EnsureSuccessStatusCode();
         return res.Headers.GetValues("Set-Cookie").Single().Split(';')[0]["arte_rt=".Length..];
     }
+
+    [Fact]
+    public async Task Codes_have_the_configured_length_and_never_start_with_zero()
+    {
+        var client = api.Client();
+        for (var i = 0; i < 25; i++)
+        {
+            var mobile = ArteApiFactory.NewMobile();
+            (await client.PostAsJsonAsync("/api/v1/auth/otp/request", new { mobile })).EnsureSuccessStatusCode();
+            var code = api.Sms.Sent[mobile]["code"];
+            Assert.Equal(6, code.Length);
+            Assert.NotEqual('0', code[0]);
+        }
+    }
 }

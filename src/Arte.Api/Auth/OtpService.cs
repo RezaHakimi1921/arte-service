@@ -58,7 +58,8 @@ public sealed class OtpService(
             .Where(c => c.Mobile == mobile && c.ConsumedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.ConsumedAt, now), ct);
 
-        var code = RandomNumberGenerator.GetInt32(0, (int)Math.Pow(10, _otp.Digits)).ToString().PadLeft(_otp.Digits, '0');
+        // Never a leading zero: SMS patterns type the variable as a number and may drop it.
+        var code = RandomNumberGenerator.GetInt32((int)Math.Pow(10, _otp.Digits - 1), (int)Math.Pow(10, _otp.Digits)).ToString();
         db.OtpChallenges.Add(new OtpChallenge
         {
             Mobile = mobile,
