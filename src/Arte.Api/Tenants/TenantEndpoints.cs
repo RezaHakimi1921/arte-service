@@ -18,7 +18,7 @@ public static class TenantEndpoints
     public sealed record BusinessSettings(string? Name, string? Phone, string? Address, bool? RequireAssigneeOnIntake,
         bool? RequireCustomerApproval, bool? RequireFinalReview, string? BusinessType = null, string[]? VehicleKinds = null,
         bool? CustomerSmsEnabled = null, bool? SmsOnOpened = null, bool? SmsOnReady = null, bool? SmsOnDelivered = null,
-        bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null);
+        bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null, bool? PhotosVisibleByDefault = null);
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -56,7 +56,7 @@ public static class TenantEndpoints
                 {
                     t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                     t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
-                    t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts,
+                    t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
                 }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
 
@@ -87,6 +87,7 @@ public static class TenantEndpoints
             if (req.TrackShowStages is { } ts) t.TrackShowStages = ts;
             if (req.TrackShowItems is { } ti) t.TrackShowItems = ti;
             if (req.TrackShowAmounts is { } ta) t.TrackShowAmounts = ta;
+            if (req.PhotosVisibleByDefault is { } pv) t.PhotosVisibleByDefault = pv;
             audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
             await db.SaveChangesAsync(ct);
             // Optional workflow steps follow the settings.
@@ -96,7 +97,7 @@ public static class TenantEndpoints
             {
                 t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                 t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
-                t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts,
+                t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
             });
         }).RequirePermission(Permissions.SettingsManage);
 

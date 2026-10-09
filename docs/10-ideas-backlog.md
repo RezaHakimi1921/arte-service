@@ -16,6 +16,15 @@ parts bought, labor, totals and payments, promised delivery, photos the shop cho
 - Builds on: Faraz pattern sending (needs one pattern per message type), and the GT-Car / Odoo ideas below
   (status SMS, shareable quote/invoice, customer approval from the link, periodic service reminder).
 
+## 0b. SMS credit per business (owner, ۱۴۰۵/۰۷/۱۸)
+Customer SMS is paid from Arte's Faraz credit today. Next: each business buys an SMS package (sold with or beside the
+licence), a per-business SMS balance decremented per message part, low-balance warning, and sending stops at zero.
+Admin panel: grant/sell SMS packages, see usage per business.
+
+## 0c. Customer satisfaction survey (owner, ۱۴۰۵/۰۷/۱۸ — to be designed together, sold as a licence option)
+A short survey link (sent with or instead of the «delivered» SMS) with a few questions; results become manager
+reports: satisfaction per technician, per service, over time. Open design questions in the chat summary.
+
 ## 1. From the main competitor: GT-Car (gt-car.ir)
 
 What they sell: cloud software for any vehicle business (repair, car wash, oil change, body shop, tyres, tuning,

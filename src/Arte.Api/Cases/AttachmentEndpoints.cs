@@ -27,9 +27,10 @@ public static class AttachmentEndpoints
         app.MapPost("/api/v1/cases/{caseId:guid}/attachments", UploadAsync).RequireTenant();
         app.MapGet("/api/v1/attachments/{id:guid}", DownloadAsync).RequireTenant();
         app.MapDelete("/api/v1/attachments/{id:guid}", DeleteAsync).RequireTenant();
+        app.MapPatch("/api/v1/attachments/{id:guid}", UpdateAsync).RequireTenant();
     }
 
-    private static string Root(IConfiguration config, IHostEnvironment env) =>
+    internal static string Root(IConfiguration config, IHostEnvironment env) =>
         Path.GetFullPath(config["Storage:Root"] ?? Path.Combine(env.ContentRootPath, "uploads"));
 
     private static async Task<IResult> UploadAsync(Guid caseId, HttpRequest request, RequestUser me, ArteDbContext db,
@@ -52,6 +53,9 @@ public static class AttachmentEndpoints
         if (file.Length > MaxBytes) return Results.Problem(statusCode: 400, title: "حجم عکس حداکثر ۶ مگابایت است.");
         var caption = form["caption"].ToString().Trim();
         if (caption.Length > 200) caption = caption[..200];
+        // Visible to the customer: as chosen at upload, otherwise the business default.
+        var visible = bool.TryParse(form["visibleToCustomer"].ToString(), out var v) ? v
+            : await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct);
 
         await using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, ct);
@@ -69,7 +73,7 @@ public static class AttachmentEndpoints
         var attachment = new CaseAttachment
         {
             Id = id, CaseId = c.Id, StageKey = stageKey, ContentType = kind.Type, SizeBytes = bytes.Length,
-            StoragePath = relative.Replace('\\', '/'), Caption = caption.Length == 0 ? null : caption,
+            StoragePath = relative.Replace('\\', '/'), Caption = caption.Length == 0 ? null : caption, VisibleToCustomer = visible,
             CreatedBy = me.RequiredUserId, CreatedAt = clock.UtcNow,
         };
         db.CaseAttachments.Add(attachment);
@@ -79,7 +83,7 @@ public static class AttachmentEndpoints
             Data = System.Text.Json.JsonSerializer.SerializeToDocument(new { stage = stageKey, caption = attachment.Caption }),
         });
         await db.SaveChangesAsync(ct);
-        return Results.Created($"/api/v1/attachments/{id}", new { attachment.Id, attachment.StageKey, attachment.CreatedAt, attachment.Caption });
+        return Results.Created($"/api/v1/attachments/{id}", new { attachment.Id, attachment.StageKey, attachment.CreatedAt, attachment.Caption, attachment.VisibleToCustomer });
     }
 
     private static async Task<IResult> DownloadAsync(Guid id, RequestUser me, ArteDbContext db, IConfiguration config, IHostEnvironment env, CancellationToken ct)
@@ -93,6 +97,24 @@ public static class AttachmentEndpoints
         var full = Path.GetFullPath(Path.Combine(root, a.StoragePath));
         if (!full.StartsWith(root, StringComparison.Ordinal) || !File.Exists(full)) return Results.NotFound();
         return Results.File(full, a.ContentType, enableRangeProcessing: false);
+    }
+
+    public sealed record UpdatePhoto(bool? VisibleToCustomer, string? Caption);
+
+    private static async Task<IResult> UpdateAsync(Guid id, UpdatePhoto req, RequestUser me, ArteDbContext db, CancellationToken ct)
+    {
+        var a = await db.CaseAttachments.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (a is null) return Results.NotFound();
+        var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == a.CaseId, ct);
+        var m = me.RequiredMembership;
+        if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
+        if (a.CreatedBy != me.RequiredUserId && !m.Has(Arte.Core.Identity.Permissions.CasesCreate))
+            return Results.Problem(statusCode: 403, title: "فقط فرستنده عکس یا مدیر می‌تواند آن را تغییر دهد.");
+        if (req.Caption is { Length: > 200 }) return Results.ValidationProblem(new Dictionary<string, string[]> { ["caption"] = ["حداکثر ۲۰۰ حرف."] });
+        if (req.VisibleToCustomer is { } vis) a.VisibleToCustomer = vis;
+        if (req.Caption is not null) a.Caption = string.IsNullOrWhiteSpace(req.Caption) ? null : req.Caption.Trim();
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { a.Id, a.StageKey, a.Caption, a.CreatedAt, a.VisibleToCustomer });
     }
 
     private static async Task<IResult> DeleteAsync(Guid id, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)

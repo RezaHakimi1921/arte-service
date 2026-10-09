@@ -9,7 +9,7 @@ type StaffPay = {
   commissionType: string; fixedMonthlyRials: number;
 };
 type Summary = {
-  opened: number; delivered: number; salesRials: number; partsRials: number; workRials: number; partsProfitRials: number;
+  opened: number; delivered: number; salesRials: number; partsRials: number; workRials: number; partsProfitRials: number | null;
   receivedRials: number; receivablesRials: number; staff: StaffPay[];
 };
 
@@ -35,7 +35,7 @@ const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} توم
 const monthName = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "long", year: "numeric" });
 
 /** A few fixed numbers for the owner; no builder, no charts. Delivered cases drive sales and staff pay. */
-export function ReportsPage({ onBack }: { onBack: () => void }) {
+export function ReportsPage({ onBack, onReceivables }: { onBack: () => void; onReceivables: () => void }) {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]["key"]>("month");
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,10 +73,14 @@ export function ReportsPage({ onBack }: { onBack: () => void }) {
             <Stat label="تحویل" value={`${formatNumber(data.delivered)} پرونده`} />
             <Stat label="فروش (پرونده‌های تحویل‌شده)" value={toman(data.salesRials)} wide />
             <Stat label="دریافتی" value={toman(data.receivedRials)} />
-            <Stat label="سود قطعه" value={toman(data.partsProfitRials)} />
+            {data.partsProfitRials != null && <Stat label="سود قطعه" value={toman(data.partsProfitRials)} />}
             <Stat label="اجرت و خدمات" value={toman(data.workRials)} />
             <Stat label="فروش قطعه" value={toman(data.partsRials)} />
-            <Stat label="طلب از مشتریان (الان)" value={toman(data.receivablesRials)} wide tone={data.receivablesRials > 0 ? "warn" : undefined} />
+            <button type="button" className={`report-stat wide report-link${data.receivablesRials > 0 ? " warn" : ""}`} onClick={onReceivables}>
+              <span className="muted small">نسیه‌ها · طلب از مشتریان (الان)</span>
+              <strong className="font-num">{toman(data.receivablesRials)}</strong>
+              <span className="muted small">فهرست نسیه‌ها و موعد پرداخت ‹</span>
+            </button>
           </div>
 
           <h3>دستمزد کارکنان</h3>

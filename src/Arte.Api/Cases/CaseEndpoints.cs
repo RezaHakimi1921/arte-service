@@ -54,6 +54,15 @@ public static class CaseEndpoints
 
         app.MapGet("/api/v1/dashboard", DashboardAsync).RequireTenant();
         app.MapGet("/api/v1/inbox", InboxAsync).RequireTenant();
+        // The customer asked for the tracking link again: send it by SMS (business must have customer SMS on).
+        app.MapPost("/api/v1/cases/{id:guid}/send-link", async (Guid id, RequestUser me, ArteDbContext db,
+            Arte.Api.Tracking.CustomerNotifier notifier, CancellationToken ct) =>
+        {
+            var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (c is null || !CaseAccess.CanSee(me.RequiredMembership, c)) return Results.NotFound();
+            var problem = await notifier.SendLinkAsync(c, ct);
+            return problem is null ? Results.NoContent() : Results.Problem(statusCode: 409, title: problem);
+        }).RequirePermission(Permissions.CasesCreate);
         app.MapGet("/api/v1/assets/lookup", async (string identifier, ArteDbContext db, CancellationToken ct) =>
         {
             var id = identifier.Trim();
@@ -208,8 +217,9 @@ public static class CaseEndpoints
             Assignee = assignee, ParentCase = parent,
             c.WarrantyUntil, c.CreditDueAt,
             Billing = await BillingEndpoints.MoneyView(db, c.Id, me, ct),
+            PhotosVisibleByDefault = await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct),
             Photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id).OrderBy(a => a.CreatedAt)
-                .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt }).ToListAsync(ct),
+                .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt, a.VisibleToCustomer }).ToListAsync(ct),
             Transitions = allowed,
             CanEdit = CaseAccess.CanWorkOn(me, c) || me.Has(Permissions.CasesCreate),
             CanManage = me.Has(Permissions.CasesCreate),

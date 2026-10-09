@@ -79,9 +79,14 @@ public static class TrackingEndpoints
                 }
             }
 
+            // Only the photos the shop marked for the customer.
+            var photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.VisibleToCustomer)
+                .OrderBy(a => a.CreatedAt).Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt }).ToListAsync(ct);
+
             return Results.Ok(new
             {
                 Shop = new { t.Name, t.Phone, t.Address },
+                Photos = photos,
                 Case = new
                 {
                     c.Number, Customer = customer.FullName, c.OpenedAt, c.PromisedAt, c.ClosedAt, c.WarrantyUntil,
@@ -93,6 +98,25 @@ public static class TrackingEndpoints
                 Items = items,
                 Money = money,
             });
+        }).AllowAnonymous().RequireRateLimiting("session");
+
+        // A photo the shop shared, served only through its case's tracking code.
+        app.MapGet("/api/v1/track/{code}/photos/{photoId:guid}", async (string code, Guid photoId, IServiceScopeFactory scopes,
+            IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
+        {
+            if (code.Length is < 6 or > 16 || !code.All(ch => char.IsAsciiLetterLower(ch) || char.IsAsciiDigit(ch))) return Results.NotFound();
+            await using var scope = scopes.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+            var photo = await (from a in db.CaseAttachments.IgnoreQueryFilters([ArteDbContext.TenantFilter])
+                               join c in db.Cases.IgnoreQueryFilters([ArteDbContext.TenantFilter]) on a.CaseId equals c.Id
+                               where a.Id == photoId && a.VisibleToCustomer && c.TrackingCode == code && !c.IsSample
+                                     && a.DeletedAt == null && c.DeletedAt == null
+                               select new { a.StoragePath, a.ContentType }).SingleOrDefaultAsync(ct);
+            if (photo is null) return Results.NotFound();
+            var root = Arte.Api.Cases.AttachmentEndpoints.Root(config, env);
+            var full = Path.GetFullPath(Path.Combine(root, photo.StoragePath));
+            if (!full.StartsWith(root, StringComparison.Ordinal) || !File.Exists(full)) return Results.NotFound();
+            return Results.File(full, photo.ContentType);
         }).AllowAnonymous().RequireRateLimiting("session");
     }
 }

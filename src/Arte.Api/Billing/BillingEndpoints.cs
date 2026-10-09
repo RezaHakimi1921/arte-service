@@ -213,7 +213,8 @@ public static class BillingEndpoints
             var like = $"%{term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
             items = items.Where(x => EF.Functions.ILike(x.Title, like, "\\"));
         }
-        var showCost = me.RequiredMembership.Has(Permissions.ReportsView);
+        // Purchase prices and profit are the owner's alone, whatever permissions others were given.
+        var showCost = me.RequiredMembership.Role == Roles.Owner;
         return Results.Ok(await items.OrderBy(x => x.Title).Take(50)
             .Select(x => new
             {
@@ -292,7 +293,7 @@ public static class BillingEndpoints
         var names = await db.Memberships.AsNoTracking().Where(x => performerIds.Contains(x.Id))
             .Select(x => new { x.Id, Name = x.User!.DisplayName ?? x.User.Mobile }).ToDictionaryAsync(x => x.Id, x => x.Name, ct);
         var money = CaseMoney.Of(items, payments);
-        var showCost = m.Has(Permissions.ReportsView);
+        var showCost = m.Role == Roles.Owner;
 
         return new
         {

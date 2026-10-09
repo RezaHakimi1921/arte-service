@@ -15,7 +15,7 @@ public static class ReportEndpoints
         app.MapGet("/api/v1/reports/summary", SummaryAsync).RequirePermission(Permissions.ReportsView);
     }
 
-    private static async Task<IResult> SummaryAsync(DateTimeOffset from, DateTimeOffset to, ArteDbContext db, CancellationToken ct)
+    private static async Task<IResult> SummaryAsync(DateTimeOffset from, DateTimeOffset to, ArteDbContext db, Arte.Api.Security.RequestUser me, CancellationToken ct)
     {
         from = from.ToUniversalTime();
         to = to.ToUniversalTime();
@@ -65,7 +65,9 @@ public static class ReportEndpoints
         {
             From = from, To = to,
             Opened = opened, Delivered = delivered.Count,
-            SalesRials = sales, PartsRials = parts, WorkRials = work, PartsProfitRials = partsProfit,
+            SalesRials = sales, PartsRials = parts, WorkRials = work,
+            // Profit is the owner's alone.
+            PartsProfitRials = me.RequiredMembership.Role == Roles.Owner ? partsProfit : (long?)null,
             ReceivedRials = received, ReceivablesRials = receivables,
             Staff = staff,
         });

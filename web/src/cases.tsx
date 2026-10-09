@@ -32,7 +32,7 @@ type CaseDetailView = {
   stage: StageRef; customer: { id: string; fullName: string | null; mobile: string };
   asset: { id: string; title: string; identifier: string | null; kind: string; attributes: Record<string, string> | null } | null;
   assignee: { id: string; name: string } | null; parentCase: { id: string; number: number } | null;
-  photos: CasePhoto[]; trackingCode: string | null;
+  photos: CasePhoto[]; trackingCode: string | null; photosVisibleByDefault: boolean;
   transitions: TransitionView[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
 };
@@ -215,26 +215,7 @@ export function EmptyCases({ canCreate }: { canCreate: boolean }) {
 
 /* ───────── detail ───────── */
 
-type Sheet = null | "actions" | "assign" | "note" | "wait" | "parts" | "promise" | "credit";
-
-/** The customer's tracking link: the phone's share sheet (WhatsApp, SMS…), or copied when there is none. */
-async function shareTracking(code: string, number: number, notify: (text: string) => void) {
-  const url = `${location.origin}/t/${code}`;
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: `پیگیری پرونده CASE-${number}`, text: "وضعیت کار وسیله‌ی شما در این لینک:", url });
-      return;
-    }
-  } catch {
-    return; // the user closed the share sheet
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    notify("لینک پیگیری کپی شد؛ برای مشتری بفرستید");
-  } catch {
-    window.prompt("لینک پیگیری مشتری:", url);
-  }
-}
+type Sheet = null | "actions" | "assign" | "note" | "wait" | "parts" | "promise" | "credit" | "link";
 
 export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () => void; onDeleted: (number: number) => void }) {
   const { notify } = useFeedback();
@@ -313,7 +294,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
   if (notFound) return <section><button className="link back" onClick={onBack}>→ پرونده‌ها</button><p className="empty muted">پرونده پیدا نشد.</p></section>;
   if (!c) return <div className="splash" aria-busy="true" />;
 
-  const photoSection = <PhotoSection caseId={c.id} photos={c.photos ?? []} stageKey={c.stage.key} canAdd={c.canEdit && c.stage.key !== "cancelled"} onChange={load} />;
+  const photoSection = <PhotoSection caseId={c.id} photos={c.photos ?? []} stageKey={c.stage.key} canAdd={c.canEdit && c.stage.key !== "cancelled"} onChange={load} visibleByDefault={c.photosVisibleByDefault} />;
   const primary = c.transitions.find((t) => t.isPrimary);
   const others = c.transitions.filter((t) => t !== primary);
 
@@ -375,7 +356,7 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
               <button onClick={() => setSheet("wait")}>{c.waitReason ? "رفع توقف" : "کار متوقف است"}</button>
             )}
             <button onClick={() => setSheet("note")}>یادداشت</button>
-            {c.trackingCode && <button onClick={() => shareTracking(c.trackingCode!, c.number, notify)}>لینک مشتری</button>}
+            {c.trackingCode && <button onClick={() => setSheet("link")}>لینک مشتری</button>}
           </div>
         </div>
       )}
@@ -453,6 +434,22 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
       <CreditSheet open={sheet === "credit"} balanceRials={balanceDue} busy={busy} onClose={close}
         onPay={() => { close(); setPaySignal((n) => n + 1); }}
         onCredit={(dueIso) => pending && run(pending, { allowCredit: true, creditDueAt: dueIso })} />
+
+      {c.trackingCode && (
+        <BottomSheet open={sheet === "link"} title="لینک پیگیری مشتری" onClose={close}>
+          <p className="muted small">مشتری با این لینک، بدون ورود، وضعیت کار، قطعات و هزینه را می‌بیند.</p>
+          <SheetOption label="باز کردن صفحه‌ی مشتری" hint="همان چیزی که مشتری می‌بیند"
+            onClick={() => { window.open(`/t/${c.trackingCode}`, "_blank", "noopener"); close(); }} />
+          <SheetOption label={busy ? "در حال ارسال…" : "ارسال دوباره با پیامک"} hint="به شماره‌ی مشتری" disabled={busy}
+            onClick={() => act(() => api(`/api/v1/cases/${id}/send-link`, { method: "POST" }), "لینک برای مشتری پیامک شد", () => { close(); load(); })} />
+          {"share" in navigator && (
+            <SheetOption label="اشتراک‌گذاری" hint="واتساپ، تلگرام، پیامک گوشی…"
+              onClick={() => { navigator.share({ title: `پیگیری پرونده CASE-${c.number}`, url: `${location.origin}/t/${c.trackingCode}` }).catch(() => {}); close(); }} />
+          )}
+          <SheetOption label="کپی لینک"
+            onClick={() => { navigator.clipboard?.writeText(`${location.origin}/t/${c.trackingCode}`).then(() => notify("لینک کپی شد"), () => {}); close(); }} />
+        </BottomSheet>
+      )}
 
       <BottomSheet open={sheet === "parts"} title="قطعه را چه کسی تهیه می‌کند؟" onClose={close}>
         {PARTS_OPTIONS.map((o) => (

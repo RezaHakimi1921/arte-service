@@ -51,4 +51,6 @@ public sealed class Tenant
     public bool TrackShowItems { get; set; } = true;
     /// <summary>Tracking page: total, paid and balance.</summary>
     public bool TrackShowAmounts { get; set; } = true;
+    /// <summary>New photos start as visible to the customer (each photo can still be switched).</summary>
+    public bool PhotosVisibleByDefault { get; set; }
 }

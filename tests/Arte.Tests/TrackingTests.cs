@@ -119,5 +119,91 @@ public sealed class TrackingTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/v1/settings/business", new { vehicleKinds = Array.Empty<string>() })).StatusCode);
         var updated = await Json(await client.PutAsJsonAsync("/api/v1/settings/business", new { vehicleKinds = new[] { "car", "motorcycle" } }));
         Assert.Equal(2, updated.GetProperty("vehicleKinds").GetArrayLength());
+        // Saved for real: read back, and visible in /me for intake.
+        var reread = await client.GetFromJsonAsync<JsonElement>("/api/v1/settings/business");
+        Assert.Equal(["car", "motorcycle"], reread.GetProperty("vehicleKinds").EnumerateArray().Select(k => k.GetString()!).ToArray());
+        me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
+        Assert.Contains("motorcycle", me.GetProperty("business").GetProperty("vehicleKinds").EnumerateArray().Select(k => k.GetString()));
+    }
+
+    private static readonly byte[] TinyPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+    private static MultipartFormDataContent Photo(bool? visible)
+    {
+        var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(TinyPng);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        form.Add(file, "file", "p.png");
+        if (visible is { } v) form.Add(new StringContent(v ? "true" : "false"), "visibleToCustomer");
+        return form;
+    }
+
+    [Fact]
+    public async Task Customer_sees_only_the_photos_marked_for_them()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (id, code, _) = await OpenCase(owner);
+        var hidden = (await Json(await owner.PostAsync($"/api/v1/cases/{id}/attachments", Photo(null)))).GetProperty("id").GetGuid(); // default: not shown
+        var shown = (await Json(await owner.PostAsync($"/api/v1/cases/{id}/attachments", Photo(true)))).GetProperty("id").GetGuid();
+
+        var t = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        Assert.Equal([shown], t.GetProperty("photos").EnumerateArray().Select(p => p.GetProperty("id").GetGuid()).ToArray());
+        Assert.Equal(HttpStatusCode.OK, (await api.Client().GetAsync($"/api/v1/track/{code}/photos/{shown}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await api.Client().GetAsync($"/api/v1/track/{code}/photos/{hidden}")).StatusCode);
+
+        // Switched later: now hidden one is shared, the other withdrawn.
+        await Json(await owner.PatchAsJsonAsync($"/api/v1/attachments/{hidden}", new { visibleToCustomer = true }));
+        await Json(await owner.PatchAsJsonAsync($"/api/v1/attachments/{shown}", new { visibleToCustomer = false }));
+        Assert.Equal(HttpStatusCode.OK, (await api.Client().GetAsync($"/api/v1/track/{code}/photos/{hidden}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await api.Client().GetAsync($"/api/v1/track/{code}/photos/{shown}")).StatusCode);
+
+        // Another case's code never opens this case's photo; the business default applies to new photos.
+        var (_, otherCode, _) = await OpenCase(owner);
+        Assert.Equal(HttpStatusCode.NotFound, (await api.Client().GetAsync($"/api/v1/track/{otherCode}/photos/{hidden}")).StatusCode);
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { photosVisibleByDefault = true }));
+        var byDefault = await Json(await owner.PostAsync($"/api/v1/cases/{id}/attachments", Photo(null)));
+        Assert.True(byDefault.GetProperty("visibleToCustomer").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Link_can_be_sent_again_by_hand_only_when_customer_sms_is_on()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (id, _, mobile) = await OpenCase(owner);
+        var off = await owner.PostAsync($"/api/v1/cases/{id}/send-link", null);
+        Assert.Equal(HttpStatusCode.Conflict, off.StatusCode);
+
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = true }));
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsync($"/api/v1/cases/{id}/send-link", null)).StatusCode);
+        Assert.Equal("case.link", api.Sms.Keys[mobile].Last());
+
+        var techMobile = ArteApiFactory.NewMobile();
+        await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, role = "technician" });
+        var (tech, _) = await api.LoginAsync(techMobile);
+        Assert.Equal(HttpStatusCode.Forbidden, (await tech.PostAsync($"/api/v1/cases/{id}/send-link", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Purchase_price_and_profit_are_for_the_owner_only_even_with_report_rights()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var supMobile = ArteApiFactory.NewMobile();
+        var supId = (await Json(await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = supMobile, role = "supervisor" }))).GetProperty("id").GetGuid();
+        await owner.PatchAsJsonAsync($"/api/v1/staff/{supId}", new { permissions = new[] { "cases.create", "cases.assign", "cases.view_all", "cases.work", "reports.view", "payments.record" } });
+        var (id, _, _) = await OpenCase(owner);
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items", new { kind = "part", title = "شمع", unitCostRials = 1_000_000, unitPriceRials = 1_500_000 }));
+
+        var (sup, _) = await api.LoginAsync(supMobile);
+        var billing = (await Json(await sup.GetAsync($"/api/v1/cases/{id}"))).GetProperty("billing");
+        Assert.False(billing.GetProperty("canSeeCost").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, billing.GetProperty("items")[0].GetProperty("unitCostRials").ValueKind);
+        Assert.Equal(JsonValueKind.Null, billing.GetProperty("items")[0].GetProperty("profitRials").ValueKind);
+
+        var from = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(-1).ToString("O"));
+        var to = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(1).ToString("O"));
+        var report = await Json(await sup.GetAsync($"/api/v1/reports/summary?from={from}&to={to}"));
+        Assert.Equal(JsonValueKind.Null, report.GetProperty("partsProfitRials").ValueKind);
+        Assert.True((await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("billing").GetProperty("canSeeCost").GetBoolean());
     }
 }

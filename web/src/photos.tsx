@@ -4,7 +4,7 @@ import { useFeedback } from "./feedback";
 import { BottomSheet, SheetOption } from "./sheet";
 import { formatNumber } from "./ui";
 
-export type CasePhoto = { id: string; stageKey: string; caption: string | null; createdAt: string };
+export type CasePhoto = { id: string; stageKey: string; caption: string | null; createdAt: string; visibleToCustomer: boolean };
 
 const STAGE_HINT: Record<string, string> = {
   received: "پذیرش", diagnosing: "عیب‌یابی", awaiting_approval: "تأیید", awaiting_parts: "انتظار قطعه",
@@ -39,6 +39,7 @@ function Thumb({ photo, onOpen }: { photo: CasePhoto; onOpen: (url: string) => v
   return (
     <button type="button" className="photo-thumb" onClick={() => url && onOpen(url)} aria-label={`عکس ${STAGE_HINT[photo.stageKey] ?? ""}`} aria-busy={!url && !failed}>
       {url ? <img src={url} alt="" /> : <span className="muted small">{failed ? "!" : ""}</span>}
+      {photo.visibleToCustomer && <span className="photo-shared" title="مشتری این عکس را می‌بیند">مشتری</span>}
       <span className="photo-tag small">{STAGE_HINT[photo.stageKey] ?? ""}</span>
     </button>
   );
@@ -49,9 +50,11 @@ function Thumb({ photo, onOpen }: { photo: CasePhoto; onOpen: (url: string) => v
  * stage (the camera opens directly on phones); the stage it was taken in is stored with it, so the master
  * sees "work done" photos during review and "delivery" photos afterwards.
  */
-export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange }: {
-  caseId: string; photos: CasePhoto[]; stageKey: string; canAdd: boolean; onChange: () => void;
+export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visibleByDefault }: {
+  caseId: string; photos: CasePhoto[]; stageKey: string; canAdd: boolean; onChange: () => void; visibleByDefault: boolean;
 }) {
+  // Whether the next photos are shown on the customer's tracking page; starts from the business setting.
+  const [share, setShare] = useState(visibleByDefault);
   const { notify } = useFeedback();
   const input = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -65,6 +68,7 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange }: {
       for (const file of Array.from(files).slice(0, 6)) {
         const form = new FormData();
         form.append("file", await compress(file), "photo.jpg");
+        form.append("visibleToCustomer", share ? "true" : "false");
         await api(`/api/v1/cases/${caseId}/attachments`, { body: form });
       }
       notify(files.length > 1 ? `${formatNumber(files.length)} عکس اضافه شد` : "عکس اضافه شد");
@@ -74,6 +78,20 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange }: {
     } finally {
       setUploading(false);
       if (input.current) input.current.value = "";
+    }
+  }
+
+  async function toggleShare(photo: CasePhoto, visible: boolean) {
+    setBusy(true);
+    try {
+      await api(`/api/v1/attachments/${photo.id}`, { method: "PATCH", body: { visibleToCustomer: visible } });
+      setViewing((v) => (v ? { ...v, photo: { ...v.photo, visibleToCustomer: visible } } : v));
+      notify(visible ? "مشتری این عکس را می‌بیند" : "عکس از صفحه‌ی مشتری برداشته شد");
+      onChange();
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "خطا", "error");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -105,6 +123,12 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange }: {
         )}
       </div>
       <input ref={input} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => upload(e.target.files)} />
+      {canAdd && (
+        <label className="photo-share">
+          <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} />
+          <span>عکس‌های بعدی را مشتری هم در لینک پیگیری ببیند</span>
+        </label>
+      )}
       {hint && canAdd && <p className="hint">{hint}</p>}
       {photos.length > 0 ? (
         <div className="photo-grid">
@@ -118,6 +142,11 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange }: {
           <>
             <img className="photo-full" src={viewing.url} alt={viewing.photo.caption ?? ""} />
             <p className="muted small">{new Intl.DateTimeFormat("fa-IR-u-ca-persian", { dateStyle: "medium", timeStyle: "short" }).format(new Date(viewing.photo.createdAt))}</p>
+            <label className="setting-row">
+              <span><strong>مشتری این عکس را ببیند</strong><span className="muted small">در صفحه‌ی پیگیری مشتری نشان داده می‌شود.</span></span>
+              <input type="checkbox" role="switch" className="switch" checked={viewing.photo.visibleToCustomer} disabled={busy}
+                onChange={(e) => toggleShare(viewing.photo, e.target.checked)} />
+            </label>
             <SheetOption label="حذف عکس" tone="danger" disabled={busy} onClick={() => remove(viewing.photo)} />
           </>
         )}

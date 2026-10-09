@@ -20,4 +20,6 @@ public static class MessageKeys
     public const string CaseOpened = "case.opened";
     public const string CaseReady = "case.ready";
     public const string CaseDelivered = "case.delivered";
+    /// <summary>Sent by hand from the case page when the customer asks for the link again.</summary>
+    public const string CaseLink = "case.link";
 }

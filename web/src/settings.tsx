@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
 import { useFeedback } from "./feedback";
 import { BottomSheet } from "./sheet";
@@ -80,9 +80,8 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
       )}
       {(can("cases.create") || can("payments.record") || can("reports.view")) && (
         <Group title="فروش">
-          {can("reports.view") && <Row icon="report" title="گزارش‌ها" sub="فروش، دریافتی، دستمزد کارکنان" onClick={() => onOpen("reports")} />}
+          {can("reports.view") && <Row icon="report" title="گزارش‌ها" sub="فروش، دریافتی، نسیه‌ها، دستمزد کارکنان" onClick={() => onOpen("reports")} />}
           {can("cases.create") && <Row icon="price" title="فهرست قیمت" sub="قطعه، اجرت، خدمت" onClick={() => onOpen("catalog")} />}
-          {(can("payments.record") || can("reports.view")) && <Row icon="credit" title="نسیه‌ها" sub="طلب از مشتریان" onClick={() => onOpen("receivables")} />}
         </Group>
       )}
       {can("staff.manage") && (
@@ -108,10 +107,10 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
   );
 }
 
-export function SubPage({ title, onBack, children }: { title: string; onBack: () => void; children: ReactNode }) {
+export function SubPage({ title, onBack, children, backLabel = "تنظیمات" }: { title: string; onBack: () => void; children: ReactNode; backLabel?: string }) {
   return (
     <section>
-      <button className="link back" onClick={onBack}>→ تنظیمات</button>
+      <button className="link back" onClick={onBack}>→ {backLabel}</button>
       <h2>{title}</h2>
       {children}
     </section>
@@ -208,7 +207,7 @@ type BusinessSettings = {
   requireAssigneeOnIntake: boolean; requireCustomerApproval: boolean; requireFinalReview: boolean;
   businessType: string; vehicleKinds: string[];
   customerSmsEnabled: boolean; smsOnOpened: boolean; smsOnReady: boolean; smsOnDelivered: boolean;
-  trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean;
+  trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean; photosVisibleByDefault: boolean;
 };
 
 export const BUSINESS_TYPES: { key: string; label: string; hint: string; kinds: string[] }[] = [
@@ -217,25 +216,36 @@ export const BUSINESS_TYPES: { key: string; label: string; hint: string; kinds: 
   { key: "quick_service", label: "آپاراتی و تعویض روغن", hint: "خدمات سریع خودرو و موتور", kinds: ["car", "suv", "van", "pickup", "motorcycle"] },
 ];
 
+/**
+ * Business settings with instant switches: a change shows at once and only that change is sent; changes go to the
+ * server one after another, so quick taps are never lost or overwritten by an older copy. On an error the page
+ * reloads the saved values.
+ */
 function useBusinessSettings(onSaved: () => void) {
   const { notify } = useFeedback();
   const [s, setS] = useState<BusinessSettings | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api<BusinessSettings>("/api/v1/settings/business").then(setS).catch(() => {}); }, []);
-  const save = useCallback(async (next: Partial<BusinessSettings>) => {
-    if (!s || busy) return;
-    setBusy(true);
-    try {
-      setS(await api<BusinessSettings>("/api/v1/settings/business", { method: "PUT", body: { ...s, ...next } }));
-      resetWorkflow();
-      notify("ذخیره شد");
-      onSaved();
-    } catch (err) {
-      notify(err instanceof ApiError ? err.message : "خطا", "error");
-    } finally {
-      setBusy(false);
-    }
-  }, [s, busy, notify, onSaved]);
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const load = useCallback(() => api<BusinessSettings>("/api/v1/settings/business").then(setS).catch(() => {}), []);
+  useEffect(() => { load(); }, [load]);
+
+  const save = useCallback((next: Partial<BusinessSettings>) => {
+    setS((prev) => (prev ? { ...prev, ...next } : prev));
+    queue.current = queue.current.then(async () => {
+      setBusy(true);
+      try {
+        await api<BusinessSettings>("/api/v1/settings/business", { method: "PUT", body: next });
+        resetWorkflow();
+        notify("ذخیره شد");
+        onSaved();
+      } catch (err) {
+        notify(err instanceof ApiError ? err.message : "ذخیره نشد", "error");
+        await load();
+      } finally {
+        setBusy(false);
+      }
+    });
+  }, [notify, onSaved, load]);
   return { s, setS, save, busy };
 }
 
@@ -244,7 +254,7 @@ export function BusinessPage({ onBack, onSaved }: { onBack: () => void; onSaved:
   return (
     <SubPage title="اطلاعات کسب‌وکار" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
-        <form className="plain-form" onSubmit={(e) => { e.preventDefault(); save({}); }}>
+        <form className="plain-form" onSubmit={(e) => { e.preventDefault(); save({ name: s.name, phone: s.phone ?? "", address: s.address ?? "" }); }}>
           <Field label="نام کسب‌وکار"><input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} maxLength={120} /></Field>
           <Field label="تلفن"><input type="tel" inputMode="tel" dir="ltr" value={s.phone ?? ""} onChange={(e) => setS({ ...s, phone: e.target.value })} maxLength={20} /></Field>
           <Field label="نشانی"><textarea rows={2} value={s.address ?? ""} onChange={(e) => setS({ ...s, address: e.target.value })} maxLength={300} /></Field>
@@ -265,17 +275,17 @@ function Switch({ title, sub, checked, disabled, onChange }: { title: string; su
 }
 
 export function IntakeRulesPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
-  const { s, save, busy } = useBusinessSettings(onSaved);
+  const { s, save } = useBusinessSettings(onSaved);
   return (
     <SubPage title="قوانین پذیرش و روند کار" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
         <div className="settings-list">
           <Switch title="تعیین مسئول هنگام پذیرش الزامی باشد" sub="هر پرونده جدید همان لحظه به یک همکار سپرده شود."
-            checked={s.requireAssigneeOnIntake} disabled={busy} onChange={(v) => save({ requireAssigneeOnIntake: v })} />
+            checked={s.requireAssigneeOnIntake} disabled={false} onChange={(v) => save({ requireAssigneeOnIntake: v })} />
           <Switch title="بررسی نهایی توسط استاد" sub="شاگرد پایان کار را اعلام می‌کند، استاد بررسی و تأیید می‌کند، بعد به مشتری اطلاع داده می‌شود."
-            checked={s.requireFinalReview} disabled={busy} onChange={(v) => save({ requireFinalReview: v })} />
+            checked={s.requireFinalReview} disabled={false} onChange={(v) => save({ requireFinalReview: v })} />
           <Switch title="تأیید هزینه توسط مشتری قبل از تعمیر" sub="بعد از عیب‌یابی، کار تا تأیید مشتری متوقف می‌ماند. معمولاً لازم نیست چون مشتری خودش کار را سپرده است."
-            checked={s.requireCustomerApproval} disabled={busy} onChange={(v) => save({ requireCustomerApproval: v })} />
+            checked={s.requireCustomerApproval} disabled={false} onChange={(v) => save({ requireCustomerApproval: v })} />
         </div>
       )}
     </SubPage>
@@ -285,7 +295,7 @@ export function IntakeRulesPage({ onBack, onSaved }: { onBack: () => void; onSav
 const KIND_NAMES: Record<string, string> = { car: "سواری", suv: "شاسی‌بلند", van: "ون", pickup: "وانت", motorcycle: "موتورسیکلت" };
 
 export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
-  const { s, save, busy } = useBusinessSettings(onSaved);
+  const { s, save } = useBusinessSettings(onSaved);
   return (
     <SubPage title="نوع کسب‌وکار و وسایل نقلیه" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
@@ -293,7 +303,7 @@ export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved:
           <h3>نوع کسب‌وکار</h3>
           <div className="choice-list" role="radiogroup" aria-label="نوع کسب‌وکار">
             {BUSINESS_TYPES.map((b) => (
-              <button type="button" key={b.key} role="radio" aria-checked={s.businessType === b.key} disabled={busy}
+              <button type="button" key={b.key} role="radio" aria-checked={s.businessType === b.key}
                 className={`choice${s.businessType === b.key ? " on" : ""}`}
                 onClick={() => save({ businessType: b.key, vehicleKinds: b.kinds })}>
                 <span>{b.label}</span><span className="muted small">{b.hint}</span>
@@ -307,7 +317,7 @@ export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved:
               const on = s.vehicleKinds.includes(k);
               return (
                 <Switch key={k} title={label} sub={on ? "در پذیرش نشان داده می‌شود" : "در پذیرش نشان داده نمی‌شود"} checked={on}
-                  disabled={busy || (on && s.vehicleKinds.length === 1)}
+                  disabled={on && s.vehicleKinds.length === 1}
                   onChange={(v) => save({ vehicleKinds: v ? [...s.vehicleKinds, k] : s.vehicleKinds.filter((x) => x !== k) })} />
               );
             })}
@@ -319,7 +329,7 @@ export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved:
 }
 
 export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
-  const { s, save, busy } = useBusinessSettings(onSaved);
+  const { s, save } = useBusinessSettings(onSaved);
   return (
     <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
@@ -331,23 +341,25 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
           <h3>پیامک به مشتری</h3>
           <div className="settings-list">
             <Switch title="ارسال پیامک به مشتری" sub="با نام تعمیرگاه، نام مشتری و لینک پیگیری."
-              checked={s.customerSmsEnabled} disabled={busy} onChange={(v) => save({ customerSmsEnabled: v })} />
+              checked={s.customerSmsEnabled} disabled={false} onChange={(v) => save({ customerSmsEnabled: v })} />
             <Switch title="هنگام پذیرش" sub="«… شما پذیرش شد و در نوبت کار قرار گرفت.»"
-              checked={s.smsOnOpened} disabled={busy || !s.customerSmsEnabled} onChange={(v) => save({ smsOnOpened: v })} />
+              checked={s.smsOnOpened} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnOpened: v })} />
             <Switch title="آماده‌ی تحویل" sub="«… شما آماده‌ی تحویل است.»"
-              checked={s.smsOnReady} disabled={busy || !s.customerSmsEnabled} onChange={(v) => save({ smsOnReady: v })} />
+              checked={s.smsOnReady} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnReady: v })} />
             <Switch title="هنگام تحویل" sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
-              checked={s.smsOnDelivered} disabled={busy || !s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
+              checked={s.smsOnDelivered} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
           </div>
           <h3>صفحه‌ی پیگیری مشتری</h3>
           <p className="hint">وضعیت فعلی، قول تحویل و نام و تلفن تعمیرگاه همیشه نشان داده می‌شود.</p>
           <div className="settings-list">
             <Switch title="همه‌ی مراحل کار" sub="هر مرحله با ساعتش؛ خاموش: فقط وضعیت فعلی."
-              checked={s.trackShowStages} disabled={busy} onChange={(v) => save({ trackShowStages: v })} />
+              checked={s.trackShowStages} disabled={false} onChange={(v) => save({ trackShowStages: v })} />
             <Switch title="قطعات و کارها" sub="فهرست قطعه‌ها، اجرت و خدمت‌های ثبت‌شده (قیمت خرید هیچ‌وقت نشان داده نمی‌شود)."
-              checked={s.trackShowItems} disabled={busy} onChange={(v) => save({ trackShowItems: v })} />
+              checked={s.trackShowItems} disabled={false} onChange={(v) => save({ trackShowItems: v })} />
             <Switch title="مبلغ‌ها" sub="جمع، پرداخت‌شده و مانده‌ی حساب."
-              checked={s.trackShowAmounts} disabled={busy} onChange={(v) => save({ trackShowAmounts: v })} />
+              checked={s.trackShowAmounts} disabled={false} onChange={(v) => save({ trackShowAmounts: v })} />
+            <Switch title="عکس‌های جدید را مشتری هم ببیند" sub="پیش‌فرض هنگام گرفتن عکس؛ برای هر عکس در پرونده جدا هم قابل تغییر است."
+              checked={s.photosVisibleByDefault} disabled={false} onChange={(v) => save({ photosVisibleByDefault: v })} />
           </div>
         </>
       )}

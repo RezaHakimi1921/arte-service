@@ -432,7 +432,7 @@ export function ReceivablesView({ onOpenCase, onBack }: { onOpenCase: (id: strin
   const dateFmt = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
   return (
     <section>
-      <button className="link back" onClick={onBack}>→ تنظیمات</button>
+      <button className="link back" onClick={onBack}>→ گزارش‌ها</button>
       <h2>نسیه‌ها</h2>
       {error && <p className="error">{error}</p>}
       {data && (

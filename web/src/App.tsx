@@ -329,15 +329,15 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
   else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
   else if (tab === "settings") {
     const back = () => setMorePage(null);
-    if (morePage === "receivables") page = <ReceivablesView onBack={back} onOpenCase={(id) => { setTab("cases"); setCaseId(id); }} />;
-    else if (morePage === "catalog") page = <CatalogView onBack={back} canSeeCost={can("reports.view")} />;
+    if (morePage === "receivables") page = <ReceivablesView onBack={() => setMorePage("reports")} onOpenCase={(id) => { setTab("cases"); setCaseId(id); }} />;
+    else if (morePage === "catalog") page = <CatalogView onBack={back} canSeeCost={me.business!.role === "owner"} />;
     else if (morePage === "account") page = <AccountPage onBack={back} />;
     else if (morePage === "business") page = <BusinessPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "intake") page = <IntakeRulesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "vehicles") page = <VehiclesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "customer") page = <CustomerPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "staff") page = <StaffPage onBack={back} />;
-    else if (morePage === "reports") page = <ReportsPage onBack={back} />;
+    else if (morePage === "reports") page = <ReportsPage onBack={back} onReceivables={() => setMorePage("receivables")} />;
     else if (morePage === "license") page = <LicensePage onBack={back} />;
     else if (morePage === "admin" && me.isPlatformAdmin) page = <AdminPanel onBack={back} />;
     else if (morePage === "appearance") page = <AppearancePage onBack={back} applyTheme={applyTheme} />;

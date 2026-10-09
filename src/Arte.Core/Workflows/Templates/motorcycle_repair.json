@@ -28,7 +28,7 @@
     { "from": "awaiting_parts",    "to": "repairing",         "label": "قطعه رسید",                           "primary": true, "permission": "cases.work" },
     { "from": "review",            "to": "ready",             "label": "تأیید کار؛ اطلاع به مشتری برای تحویل", "primary": true, "permission": "cases.create" },
     { "from": "review",            "to": "repairing",         "label": "نیاز به کار بیشتر",                   "reason": true,  "permission": "cases.create" },
-    { "from": "ready",             "to": "delivered",         "label": "ثبت تحویل",                           "primary": true, "permission": "cases.create" },
+    { "from": "ready",             "to": "delivered",         "label": "تحویل وسیله به مشتری",                "primary": true, "permission": "cases.create" },
     { "from": "delivered",         "to": "received",          "label": "بازگشایی در ضمانت",                   "reason": true,  "permission": "cases.create" }
   ]
 }
