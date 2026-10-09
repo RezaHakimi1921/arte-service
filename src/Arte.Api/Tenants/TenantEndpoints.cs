@@ -20,7 +20,7 @@ public static class TenantEndpoints
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/v1/me", async (RequestUser me, ArteDbContext db, IConfiguration config, CancellationToken ct) =>
+        app.MapGet("/api/v1/me", async (RequestUser me, ArteDbContext db, IConfiguration config, IClock clock, CancellationToken ct) =>
         {
             var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == me.RequiredUserId, ct);
             var m = me.Membership;
@@ -29,6 +29,7 @@ public static class TenantEndpoints
                 user.Id,
                 user.Mobile,
                 user.DisplayName,
+                user.IsPlatformAdmin,
                 OpenMode = config.GetValue("Auth:OpenMode", false),
                 Business = m is null ? null : new
                 {
@@ -37,6 +38,8 @@ public static class TenantEndpoints
                     RequireAssigneeOnIntake = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.RequireAssigneeOnIntake).SingleAsync(ct),
                     m.Role,
                     Permissions = m.Role == Roles.Owner ? [.. Permissions.All] : m.Permissions,
+                    IsActive = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.IsActive).SingleAsync(ct),
+                    License = await Arte.Api.Licensing.LicenseService.StatusAsync(db, m.TenantId, clock.UtcNow, ct),
                     TourDone = await db.Memberships.Where(x => x.Id == m.Id).Select(x => x.TourDoneAt != null).SingleAsync(ct),
                     SampleCaseId = await db.Cases.Where(c => c.IsSample).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct),
                 },
@@ -131,6 +134,7 @@ public static class TenantEndpoints
             CreatedAt = clock.UtcNow,
         };
         db.Memberships.Add(owner);
+        db.Licenses.Add(Arte.Api.Licensing.LicenseService.Trial(tenant.Id, clock.UtcNow));
         db.Workflows.Add(WorkflowTemplates.Instantiate(WorkflowTemplates.MotorcycleRepair, tenant.Id, tenant));
 
         if (!string.IsNullOrEmpty(ownerName))

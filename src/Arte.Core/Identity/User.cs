@@ -16,6 +16,8 @@ public sealed class User
     public string? PasswordHash { get; set; }
     public int FailedPasswordAttempts { get; set; }
     public DateTimeOffset? PasswordLockedUntil { get; set; }
+    /// <summary>Arte staff who run the platform admin panel (businesses, licences, plans). Set only from the server CLI.</summary>
+    public bool IsPlatformAdmin { get; set; }
 }
 
 public sealed class Membership : ITenantOwned

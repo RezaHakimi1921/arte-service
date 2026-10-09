@@ -5,7 +5,7 @@ import { BottomSheet } from "./sheet";
 import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { resetWorkflow } from "./workflow";
 
-export type SettingsPage = "account" | "business" | "intake" | "catalog" | "receivables" | "staff" | "appearance" | "reports";
+export type SettingsPage = "account" | "business" | "intake" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
 
 export { ROLE_NAMES } from "./labels";
 import { ROLE_NAMES } from "./labels";
@@ -23,6 +23,8 @@ const ICON = {
   staff: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
   theme: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
   report: "M3 3v18h18M7 15l4-4 3 3 5-6",
+  license: "M9 12l2 2 4-4M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6z",
+  admin: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
   help: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
 };
@@ -50,9 +52,10 @@ function Group({ title, children, tour }: { title: string; children: ReactNode; 
 }
 
 /** One simple list; every item opens its own page with one job. */
-export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openMode, onTour, onRemoveSample }: {
+export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openMode, onTour, onRemoveSample, isPlatformAdmin, licenseText }: {
   name: string; mobile: string; role: string; can: (p: string) => boolean; onOpen: (p: SettingsPage) => void;
   onSignOut: () => void; openMode: boolean; onTour: () => void; onRemoveSample?: () => void;
+  isPlatformAdmin: boolean; licenseText: string;
 }) {
   async function logout() {
     await api("/api/v1/auth/logout", { method: "POST" }).catch(() => {});
@@ -67,6 +70,7 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
       {can("settings.manage") && (
         <Group title="کسب‌وکار">
           <Row icon="shop" title="اطلاعات کسب‌وکار" sub="نام، تلفن، نشانی" onClick={() => onOpen("business")} />
+          <Row icon="license" title="اشتراک" sub={licenseText} onClick={() => onOpen("license")} />
           <Row icon="rules" title="قوانین پذیرش و روند کار" sub="مسئول الزامی، بررسی استاد، تأیید مشتری" onClick={() => onOpen("intake")} />
         </Group>
       )}
@@ -80,6 +84,11 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
       {can("staff.manage") && (
         <Group title="مدیریت" tour="staff">
           <Row icon="staff" title="کارکنان و دسترسی‌ها" onClick={() => onOpen("staff")} />
+        </Group>
+      )}
+      {isPlatformAdmin && (
+        <Group title="آرته">
+          <Row icon="admin" title="پنل مدیریت آرته" sub="کسب‌وکارها، اشتراک‌ها، قیمت‌ها" onClick={() => onOpen("admin")} />
         </Group>
       )}
       <Group title="سیستم">

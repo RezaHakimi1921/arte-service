@@ -15,4 +15,7 @@ public sealed class Tenant
     /// <summary>Business setting: the master checks finished work before the customer is told it is ready.</summary>
     public bool RequireFinalReview { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>Platform admin switch: an inactive branch cannot be used at all (data is kept).</summary>
+    public bool IsActive { get; set; } = true;
+    public string? DeactivatedReason { get; set; }
 }

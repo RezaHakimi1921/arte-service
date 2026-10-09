@@ -23,6 +23,8 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Arte.Core.Licensing.Plan> Plans => Set<Arte.Core.Licensing.Plan>();
+    public DbSet<Arte.Core.Licensing.License> Licenses => Set<Arte.Core.Licensing.License>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Asset> Assets => Set<Asset>();
@@ -79,6 +81,22 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasIndex(x => new { x.RequestIp, x.CreatedAt });
             e.Property(x => x.Version).IsRowVersion();
         });
+
+        b.Entity<Arte.Core.Licensing.Plan>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(60);
+            e.HasIndex(x => x.SortOrder);
+        });
+        b.Entity<Arte.Core.Licensing.License>(e =>
+        {
+            e.Property(x => x.Kind).HasMaxLength(16);
+            e.Property(x => x.Note).HasMaxLength(500);
+            e.HasIndex(x => new { x.TenantId, x.EndsAt });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId);
+            e.HasOne<Arte.Core.Licensing.Plan>().WithMany().HasForeignKey(x => x.PlanId);
+        });
+        b.Entity<Tenant>().Property(x => x.IsActive).HasDefaultValue(true);
+        b.Entity<Tenant>().Property(x => x.DeactivatedReason).HasMaxLength(300);
 
         b.Entity<RefreshToken>(e =>
         {

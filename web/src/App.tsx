@@ -6,6 +6,8 @@ import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
 import { Tour, type TourStep } from "./tour";
+import { BranchBlocked, LicenseBanner, LicensePage, type LicenseStatus } from "./license";
+import { AdminPanel } from "./admin";
 import { useFeedback } from "./feedback";
 import { AccountPage, AppearancePage, BusinessPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
@@ -17,9 +19,10 @@ type Me = {
   mobile: string;
   displayName: string | null;
   openMode: boolean;
+  isPlatformAdmin: boolean;
   business: {
     tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean;
-    tourDone: boolean; sampleCaseId: string | null;
+    tourDone: boolean; sampleCaseId: string | null; isActive: boolean; license: LicenseStatus;
   } | null;
 };
 type Tab = "home" | "cases" | "customers" | "settings";
@@ -68,6 +71,7 @@ export default function App() {
     );
   if (!session || !me) return <Login onDone={signIn} />;
   if (!me.business) return <ChooseBusiness session={session} onDone={signIn} />;
+  if (!me.business.isActive) return <BranchBlocked name={me.business.name} onSignOut={() => signIn(null)} />;
   return (
     <FeedbackProvider>
       <Shell me={me} onSignOut={() => signIn(null)} onSettingsChanged={() => { api<Me>("/api/v1/me").then(setMe).catch(() => {}); }} />
@@ -338,6 +342,7 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
   const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
   const [morePage, setMorePage] = useState<SettingsPage | null>(null);
   const can = (p: string) => me.business!.permissions.includes(p);
+  const canIntake = can("cases.create") && (me.openMode || me.business!.license.state !== "expired");
   const { notify } = useFeedback();
   // Businesses from before the tour have no sample yet: it is created first, then the tour opens.
   const needsSample = !me.business!.tourDone && can("cases.create") && !me.business!.sampleCaseId;
@@ -452,7 +457,7 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
   else if (tab === "cases" && caseId)
     page = <CaseDetail id={caseId} onBack={() => setCaseId(null)} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
   else if (tab === "cases")
-    page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={can("cases.create")} />;
+    page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={canIntake} />;
   else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
   else if (tab === "settings") {
     const back = () => setMorePage(null);
@@ -463,12 +468,15 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     else if (morePage === "intake") page = <IntakeRulesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "staff") page = <StaffPage onBack={back} />;
     else if (morePage === "reports") page = <ReportsPage onBack={back} />;
+    else if (morePage === "license") page = <LicensePage onBack={back} />;
+    else if (morePage === "admin" && me.isPlatformAdmin) page = <AdminPanel onBack={back} />;
     else if (morePage === "appearance") page = <AppearancePage onBack={back} applyTheme={applyTheme} />;
     else page = <SettingsHome name={me.displayName ?? me.mobile} mobile={me.mobile} role={me.business!.role} can={can}
       onOpen={setMorePage} onSignOut={onSignOut} openMode={me.openMode}
-      onTour={startTour} onRemoveSample={sampleId && can("cases.create") ? removeSample : undefined} />;
+      onTour={startTour} onRemoveSample={sampleId && can("cases.create") ? removeSample : undefined}
+      isPlatformAdmin={me.isPlatformAdmin} licenseText={licenseLine(me.business!.license)} />;
   }
-  else page = <HomeView key={`${caseId}-${homeKey}`} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={can("cases.create")} />;
+  else page = <HomeView key={`${caseId}-${homeKey}`} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake} />;
 
   return (
     <div className="shell">
@@ -481,6 +489,10 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
         <strong>{me.business!.name}</strong>
         <span className="muted small">{me.displayName ?? me.mobile}</span>
       </header>
+      {!me.openMode && (
+        <LicenseBanner status={me.business!.license}
+          onOpen={can("settings.manage") ? () => { go("settings"); setMorePage("license"); } : undefined} />
+      )}
       <main className="content">
         {undoCase && tab === "cases" && !caseId && (
           <div className="toast" role="status">
@@ -525,3 +537,8 @@ export function applyTheme(theme: string, persist = true) {
   }
 }
 
+
+function licenseLine(s: LicenseStatus) {
+  if (s.state === "expired") return "تمام شده";
+  return `${s.kind === "trial" ? "دوره‌ی رایگان" : "فعال"} · ${new Intl.NumberFormat("fa-IR").format(s.daysLeft)} روز مانده`;
+}

@@ -162,6 +162,7 @@ app.UseExceptionHandler(e => e.Run(async http =>
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<TenantResolutionMiddleware>();
+app.UseMiddleware<Arte.Api.Licensing.LicenseEnforcementMiddleware>();
 app.UseAuthorization();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).DisableRateLimiting();
@@ -177,6 +178,7 @@ app.MapBilling();
 app.MapAttachments();
 app.MapClientErrors();
 app.MapOnboarding();
+Arte.Api.Licensing.LicenseEndpoints.MapLicensing(app);
 app.MapReports();
 
 if (config.GetValue("Database:MigrateOnStartup", false))
@@ -203,6 +205,16 @@ if (config.GetValue("Database:MigrateOnStartup", false))
     }
 }
 
+// Price list once, and a one-time trial for businesses created before licences existed.
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+    var now = scope.ServiceProvider.GetRequiredService<Arte.Core.Common.IClock>().UtcNow;
+    await Arte.Api.Licensing.LicenseService.SeedPlansAsync(db, now, CancellationToken.None);
+    var backfilled = await Arte.Api.Licensing.LicenseService.BackfillAsync(db, now, CancellationToken.None);
+    if (backfilled > 0) app.Logger.LogInformation("Granted a starting trial to {Count} existing businesses", backfilled);
+}
+
 if (!config.GetValue("Auth:OpenMode", false))
 {
     await using var scope = app.Services.CreateAsyncScope();
@@ -216,6 +228,8 @@ else
 
 if (args.Length > 0 && args[0] == "set-password")
     return await SetPasswordCommand.RunAsync(app.Services, args);
+if (args.Length > 0 && args[0] == "set-admin")
+    return await SetAdminCommand.RunAsync(app.Services, args);
 
 app.Run();
 return 0;

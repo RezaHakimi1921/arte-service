@@ -1073,3 +1073,46 @@ button[aria-busy="true"]::before {
 }
 
 .touring .content { padding-bottom: 70dvh; }
+
+/* ── subscription ── */
+.license-status { display: flex; flex-direction: column; gap: 0.5rem; border-inline-start: 4px solid var(--success); }
+.license-status.expiring { border-inline-start-color: var(--warning-text); }
+.license-status.expired { border-inline-start-color: var(--danger); }
+.license-status p { margin: 0; line-height: 1.8; }
+.license-badge { font-weight: 800; font-size: 1.05rem; }
+.license-days strong { font-size: 1.6rem; }
+.plan-row strong { white-space: nowrap; }
+.plan-saving { color: var(--success); font-weight: 700; }
+.renew-how { display: flex; flex-direction: column; gap: 0.75rem; line-height: 1.8; }
+.renew-how p { margin: 0; }
+a.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;
+  min-height: 48px; padding: 0.6rem 1rem; border-radius: 12px; text-decoration: none; font-weight: 700;
+}
+a.button.primary { background: var(--accent); color: #fff; }
+.license-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.5rem 16px; font-size: 0.9rem; line-height: 1.7;
+  background: var(--warning-bg); color: var(--warning-text);
+}
+.license-banner.expired { background: var(--danger); color: #fff; }
+.license-banner.expired .link { color: #fff; text-decoration: underline; }
+.card.blocked { display: flex; flex-direction: column; gap: 0.75rem; line-height: 1.8; }
+.card.blocked h2, .card.blocked p { margin: 0; }
+
+/* ── platform admin ── */
+.admin-tools { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.admin-tools input { flex: 1 1 200px; }
+.admin-row-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.status-chip {
+  display: inline-block; padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
+  border: 1px solid currentColor; white-space: nowrap;
+}
+.status-chip.ok { color: var(--success); }
+.status-chip.warning { color: var(--warning-text); background: var(--warning-bg); }
+.status-chip.danger { color: var(--danger); }
+.admin-facts { display: flex; flex-direction: column; gap: 0.4rem; }
+.admin-facts p { margin: 0; }
+@media (prefers-contrast: more) {
+  .status-chip { border-width: 2px; }
+}
