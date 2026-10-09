@@ -68,6 +68,7 @@ public sealed class LicensingTests(ArteApiFactory api)
         var blocked = await owner.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), request = "x" });
         Assert.Equal(HttpStatusCode.PaymentRequired, blocked.StatusCode);
         Assert.Contains("license_expired", await blocked.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.PaymentRequired, (await owner.PostAsJsonAsync("/API/V1/Cases/", new { mobile = ArteApiFactory.NewMobile(), request = "x" })).StatusCode);
         Assert.Equal(HttpStatusCode.PaymentRequired, (await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = ArteApiFactory.NewMobile(), role = "technician" })).StatusCode);
 
         // Existing work goes on: reading, items, payments.
@@ -168,5 +169,22 @@ public sealed class LicensingTests(ArteApiFactory api)
 
         Assert.Equal(1, await db.Licenses.CountAsync(l => l.TenantId == fresh && l.Kind == LicenseKinds.Trial));
         Assert.Equal(0, await db.Licenses.CountAsync(l => l.TenantId == revoked));
+    }
+
+    [Fact]
+    public async Task Admin_who_owns_a_branch_can_still_manage_another_branch()
+    {
+        var adminMobile = ArteApiFactory.NewMobile();
+        var (admin, _) = await api.NewBusinessAsync(adminMobile);   // signed in with their own branch selected
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+            await db.Users.Where(u => u.Mobile == adminMobile).ExecuteUpdateAsync(s => s.SetProperty(u => u.IsPlatformAdmin, true));
+        }
+        var (_, other) = await api.NewBusinessAsync();
+
+        await Json(await admin.PostAsJsonAsync($"/api/v1/admin/businesses/{other}/licenses", new { kind = "gift", days = 10 }));
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{other}", new { isActive = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{other}", new { isActive = true })).StatusCode);
     }
 }

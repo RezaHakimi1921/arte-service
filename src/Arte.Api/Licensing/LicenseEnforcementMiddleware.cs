@@ -19,8 +19,12 @@ public sealed class LicenseEnforcementMiddleware(RequestDelegate next)
 {
     private static readonly string[] AlwaysAllowed = ["/api/v1/me", "/api/v1/auth/", "/api/v1/license", "/api/v1/client-errors"];
 
+    private static readonly string[] NewThings = ["/api/v1/cases", "/api/v1/customers", "/api/v1/staff"];
+
+    // Routing ignores case, so this check must too (otherwise /API/V1/CASES would slip past it).
     private static bool CreatesSomethingNew(HttpRequest r) =>
-        HttpMethods.IsPost(r.Method) && r.Path.Value?.TrimEnd('/') is "/api/v1/cases" or "/api/v1/customers" or "/api/v1/staff";
+        HttpMethods.IsPost(r.Method) && r.Path.Value?.TrimEnd('/') is { } path
+        && NewThings.Any(p => string.Equals(path, p, StringComparison.OrdinalIgnoreCase));
 
     public async Task InvokeAsync(HttpContext http, RequestUser user, ArteDbContext db, IClock clock)
     {
