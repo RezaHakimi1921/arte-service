@@ -62,7 +62,14 @@ Owner → brands → branches; today's tenant = one branch.
 
 ---
 
-## 6. SMS / OTP — blocked: sms.ir needs a business licence for the OTP template
+## 6. SMS / OTP
+
+**Chosen (۱۴۰۵/۰۷/۱۸): Faraz SMS / Iran Payamak** — accepts individuals without eNamad; OTP pattern `XBk5FjbVlz`
+approved. Adapter `IranPayamakProvider` (POST https://api.iranpayamak.com/ws/v1/sms/pattern, header `Api-Key`).
+Server settings: `SMS_PROVIDER=iranpayamak`, `IRANPAYAMAK_API_KEY`, `IRANPAYAMAK_LINE`, `IRANPAYAMAK_OTP_PATTERN`,
+`IRANPAYAMAK_OTP_PARAM`.
+
+### History: sms.ir needs a business licence for the OTP template
 
 Status (۱۴۰۵/۰۷/۱۷): the sms.ir adapter is built and deployed, but sms.ir will not approve the template without a
 business licence (مجوز کسب‌وکار). Until then: password login (username or mobile), open demo mode.
