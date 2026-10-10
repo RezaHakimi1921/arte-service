@@ -89,6 +89,17 @@ public static class PermissionEndpointExtensions
                 : await next(ctx);
         });
 
+    /// <summary>Arte staff only (User.IsPlatformAdmin, set from the server CLI); no business needed.</summary>
+    public static TBuilder RequirePlatformAdmin<TBuilder>(this TBuilder builder) where TBuilder : IEndpointConventionBuilder =>
+        builder.RequireAuthorization().AddEndpointFilter(async (ctx, next) =>
+        {
+            var http = ctx.HttpContext;
+            var me = http.RequestServices.GetRequiredService<RequestUser>();
+            var db = http.RequestServices.GetRequiredService<ArteDbContext>();
+            var isAdmin = me.UserId is { } uid && await db.Users.AnyAsync(u => u.Id == uid && u.IsPlatformAdmin, http.RequestAborted);
+            return isAdmin ? await next(ctx) : Results.Problem(statusCode: 403, title: "این بخش فقط برای مدیریت آرته است.");
+        });
+
     /// <summary>Caller must have selected a business and hold every listed permission.</summary>
     public static TBuilder RequirePermission<TBuilder>(this TBuilder builder, params string[] permissions)
         where TBuilder : IEndpointConventionBuilder =>

@@ -22,4 +22,6 @@ public static class MessageKeys
     public const string CaseDelivered = "case.delivered";
     /// <summary>Sent by hand from the case page when the customer asks for the link again.</summary>
     public const string CaseLink = "case.link";
+    /// <summary>Satisfaction survey after delivery (link to the tracking page, /s/{code}).</summary>
+    public const string SurveyRequest = "survey.request";
 }

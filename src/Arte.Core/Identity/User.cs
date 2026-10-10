@@ -40,6 +40,11 @@ public sealed class Membership : ITenantOwned
     public DateTimeOffset CreatedAt { get; set; }
     /// <summary>When this member finished or skipped the intro tour; null shows it on next sign-in.</summary>
     public DateTimeOffset? TourDoneAt { get; set; }
+    /// <summary>
+    /// Gets a bell notification when a customer answers the survey: for every case if they see all cases, otherwise
+    /// for their own work. Chosen by the manager per member; on for the owner and supervisors by default.
+    /// </summary>
+    public bool SurveyNotify { get; set; }
 
     public bool Has(string permission) => Role == Roles.Owner || Permissions.Contains(permission);
 }

@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { ApiError, api } from "./api";
-import { ROLE_NAMES } from "./labels";
+import { ROLE_NAMES, caseCode } from "./labels";
 import { SubPage } from "./settings";
+import { StarRow, scoreText } from "./survey";
 import { formatNumber } from "./ui";
+
+type SurveyReport = {
+  sent: number; responses: number; responseRatePercent: number | null; average: number | null; satisfiedPercent: number | null;
+  questions: { question: string; average: number; responses: number }[];
+  staff: { membershipId: string; name: string; responses: number; average: number | null; satisfiedPercent: number | null }[];
+  low: { id: string; number: number; customer: string | null; score: number; comment: string | null; answeredAt: string; followed: boolean }[];
+};
 
 type StaffPay = {
   membershipId: string; name: string; role: string; cases: number; baseRials: number; commissionRials: number;
@@ -10,7 +18,7 @@ type StaffPay = {
 };
 type Summary = {
   opened: number; delivered: number; salesRials: number; partsRials: number; workRials: number; partsProfitRials: number | null;
-  receivedRials: number; receivablesRials: number; staff: StaffPay[];
+  receivedRials: number; receivablesRials: number; staff: StaffPay[]; survey: SurveyReport | null;
 };
 
 const jalaliDay = new Intl.DateTimeFormat("en-u-ca-persian-nu-latn", { day: "numeric" });
@@ -35,7 +43,7 @@ const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} توم
 const monthName = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "long", year: "numeric" });
 
 /** A few fixed numbers for the owner; no builder, no charts. Delivered cases drive sales and staff pay. */
-export function ReportsPage({ onBack, onReceivables }: { onBack: () => void; onReceivables: () => void }) {
+export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () => void; onReceivables: () => void; onOpenCase: (id: string) => void }) {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]["key"]>("month");
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +114,8 @@ export function ReportsPage({ onBack, onReceivables }: { onBack: () => void; onR
           {payable.some((s) => s.fixedMonthlyRials > 0) && (
             <p className="hint">{period === "today" || period === "week" ? "در بازه روزانه و هفتگی فقط پورسانت در جمع آمده است." : "جمع = پورسانت این بازه + حقوق ثابت یک ماه."}</p>
           )}
+
+          {data.survey && <SurveyBlock r={data.survey} onOpenCase={onOpenCase} />}
         </>
       )}
     </SubPage>
@@ -118,5 +128,66 @@ function Stat({ label, value, wide, tone }: { label: string; value: string; wide
       <span className="muted small">{label}</span>
       <strong className="font-num">{value}</strong>
     </div>
+  );
+}
+
+/** Customer satisfaction for the period: CSAT (share of 4–5 answers), response rate, each question, each person. */
+function SurveyBlock({ r, onOpenCase }: { r: SurveyReport; onOpenCase: (id: string) => void }) {
+  return (
+    <>
+      <h3>رضایت مشتری</h3>
+      {r.responses === 0 ? (
+        <p className="muted small">
+          {r.sent > 0 ? `${formatNumber(r.sent)} نظرسنجی فرستاده شد؛ هنوز پاسخی نیامده است.` : "در این بازه نظری ثبت نشده است."}
+        </p>
+      ) : (
+        <>
+          <div className="report-grid">
+            <Stat label="مشتریان راضی (۴ و ۵ ستاره)" value={`${formatNumber(r.satisfiedPercent ?? 0)}٪`} tone={(r.satisfiedPercent ?? 0) < 70 ? "warn" : undefined} />
+            <Stat label="میانگین امتیاز" value={scoreText(r.average ?? 0)} />
+            <Stat label="تعداد نظر" value={formatNumber(r.responses)} />
+            <Stat label="نرخ پاسخ" value={r.responseRatePercent != null ? `${formatNumber(r.responseRatePercent)}٪ از ${formatNumber(r.sent)} پیامک` : "—"} />
+          </div>
+          <div className="settings-list">
+            {r.questions.map((q) => (
+              <div key={q.question} className="settings-row static">
+                <span className="settings-row-text"><span>{q.question}</span><span className="muted small">{formatNumber(q.responses)} پاسخ</span></span>
+                <span className="report-score"><StarRow rating={q.average} /><strong className="font-num">{scoreText(q.average)}</strong></span>
+              </div>
+            ))}
+          </div>
+          <h3>رضایت به تفکیک کارکنان</h3>
+          <div className="settings-list">
+            {r.staff.map((s) => (
+              <div key={s.membershipId} className="settings-row static">
+                <span className="settings-row-text">
+                  <span>{s.name}</span>
+                  <span className="muted small">{formatNumber(s.responses)} نظر، {formatNumber(s.satisfiedPercent ?? 0)}٪ راضی</span>
+                </span>
+                {s.average != null && <strong className="font-num">{scoreText(s.average)}</strong>}
+              </div>
+            ))}
+          </div>
+          <p className="hint">هر نظر برای مسئول پرونده و کسی که اجرت را انجام داده حساب می‌شود.</p>
+          {r.low.length > 0 && (
+            <>
+              <h3>نظرهای پایین</h3>
+              <div className="settings-list">
+                {r.low.map((l) => (
+                  <button type="button" key={l.id} className="settings-row" onClick={() => onOpenCase(l.id)}>
+                    <span className="settings-row-text">
+                      <span>{l.customer ?? "مشتری"}، {scoreText(l.score)}</span>
+                      {l.comment && <span className="muted small">«{l.comment}»</span>}
+                      <span className="muted small">{l.followed ? "پیگیری شد" : "پیگیری نشده"} · <span className="case-code" dir="ltr">{caseCode(l.number)}</span></span>
+                    </span>
+                    <span className="muted" aria-hidden="true">‹</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </>
   );
 }

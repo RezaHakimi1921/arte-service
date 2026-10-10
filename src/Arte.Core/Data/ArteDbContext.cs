@@ -4,6 +4,7 @@ using Arte.Core.Cases;
 using Arte.Core.Common;
 using Arte.Core.Customers;
 using Arte.Core.Identity;
+using Arte.Core.Surveys;
 using Arte.Core.Tenancy;
 using Arte.Core.Workflows;
 using Microsoft.EntityFrameworkCore;
@@ -37,6 +38,11 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
     public DbSet<CaseAttachment> CaseAttachments => Set<CaseAttachment>();
+    public DbSet<SurveyQuestion> SurveyQuestions => Set<SurveyQuestion>();
+    public DbSet<SurveyInvite> SurveyInvites => Set<SurveyInvite>();
+    public DbSet<SurveyAnswer> SurveyAnswers => Set<SurveyAnswer>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -102,6 +108,59 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
                      nameof(Tenant.TrackShowStages), nameof(Tenant.TrackShowItems), nameof(Tenant.TrackShowAmounts) })
             b.Entity<Tenant>().Property<bool>(flag).HasDefaultValue(true);
         b.Entity<Tenant>().Property(x => x.DeactivatedReason).HasMaxLength(300);
+        b.Entity<Tenant>().Property(x => x.SurveySendOn).HasDefaultValue(true);
+        b.Entity<Tenant>().Property(x => x.SurveyDelayMinutes).HasDefaultValue(30);
+
+        b.Entity<SurveyQuestion>(e =>
+        {
+            e.Property(x => x.Text).HasMaxLength(200);
+            e.HasIndex(x => new { x.TenantId, x.SortOrder });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId);
+            // The three questions every business starts with (the admin edits them in the admin panel).
+            var seeded = new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero);
+            e.HasData(
+                new SurveyQuestion { Id = new Guid("0199c9a0-0000-7000-8000-000000000001"), Text = "از کیفیت کاری که روی وسیله‌تان انجام شد چقدر راضی هستید؟", SortOrder = 1, CreatedAt = seeded, UpdatedAt = seeded },
+                new SurveyQuestion { Id = new Guid("0199c9a0-0000-7000-8000-000000000002"), Text = "از برخورد و پاسخ‌گویی کارکنان چقدر راضی هستید؟", SortOrder = 2, CreatedAt = seeded, UpdatedAt = seeded },
+                new SurveyQuestion { Id = new Guid("0199c9a0-0000-7000-8000-000000000003"), Text = "از زمان تحویل و شفافیت هزینه‌ها چقدر راضی هستید؟", SortOrder = 3, CreatedAt = seeded, UpdatedAt = seeded });
+        });
+
+        b.Entity<SurveyInvite>(e =>
+        {
+            e.HasIndex(x => x.CaseId).IsUnique();
+            // The sender looks only at unsent, open invites.
+            e.HasIndex(x => x.DueAt).HasFilter("\"SentAt\" IS NULL AND \"CancelledAt\" IS NULL AND \"AnsweredAt\" IS NULL");
+            e.HasIndex(x => new { x.TenantId, x.AnsweredAt });
+            e.Property(x => x.LastError).HasMaxLength(200);
+            e.Property(x => x.Comment).HasMaxLength(500);
+            e.Property(x => x.FollowUpNote).HasMaxLength(300);
+            e.Property(x => x.Score).HasPrecision(3, 2);
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId);
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<SurveyAnswer>(e =>
+        {
+            e.HasIndex(x => new { x.InviteId, x.QuestionId }).IsUnique();
+            e.Property(x => x.QuestionText).HasMaxLength(200);
+            e.HasOne<SurveyInvite>().WithMany().HasForeignKey(x => x.InviteId);
+            e.HasOne<SurveyQuestion>().WithMany().HasForeignKey(x => x.QuestionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<Notification>(e =>
+        {
+            e.Property(x => x.Type).HasMaxLength(40);
+            e.Property(x => x.Title).HasMaxLength(200);
+            e.Property(x => x.Body).HasMaxLength(300);
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt });
+        });
+
+        b.Entity<NotificationRecipient>(e =>
+        {
+            e.HasKey(x => new { x.NotificationId, x.MembershipId });
+            e.HasIndex(x => new { x.MembershipId, x.ReadAt });
+            e.HasOne<Notification>().WithMany().HasForeignKey(x => x.NotificationId);
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);
+        });
 
         b.Entity<RefreshToken>(e =>
         {

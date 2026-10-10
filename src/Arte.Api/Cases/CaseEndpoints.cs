@@ -220,6 +220,8 @@ public static class CaseEndpoints
             PhotosVisibleByDefault = await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct),
             Photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id).OrderBy(a => a.CreatedAt)
                 .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt, a.VisibleToCustomer }).ToListAsync(ct),
+            Survey = await Arte.Api.Surveys.SurveyEndpoints.CaseViewAsync(db, c, ct),
+            CanFollowUp = CaseAccess.CanSeeAll(me),
             Transitions = allowed,
             CanEdit = CaseAccess.CanWorkOn(me, c) || me.Has(Permissions.CasesCreate),
             CanManage = me.Has(Permissions.CasesCreate),
@@ -443,7 +445,7 @@ public static class CaseEndpoints
     }
 
     private static async Task<IResult> TransitionAsync(Guid id, Guid transitionId, RunTransition req, RequestUser me,
-        ArteDbContext db, IClock clock, Arte.Api.Tracking.CustomerNotifier notifier, CancellationToken ct)
+        ArteDbContext db, IClock clock, Arte.Api.Tracking.CustomerNotifier notifier, Arte.Api.Surveys.SurveyService surveys, CancellationToken ct)
     {
         var m = me.RequiredMembership;
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == id, ct);
@@ -514,12 +516,14 @@ public static class CaseEndpoints
             c.ClosedAt = null;
             c.CustodyStatus = CustodyStatuses.InShop;
             AddEvent(db, c, CaseEventTypes.Reopened, userId, now, new { Reason = reason });
+            await surveys.CancelUnsentAsync(c.Id, ct);
         }
         if (to.IsTerminal) c.ClosedAt = now;
         if (to.Key == "delivered")
         {
             c.CustodyStatus = CustodyStatuses.WithCustomer;
             AddEvent(db, c, CaseEventTypes.Delivered, userId, now, new { c.OdometerKm });
+            await surveys.ScheduleOnDeliveryAsync(c, ct);
         }
         if (to.Category == StageCategories.Cancelled) AddEvent(db, c, CaseEventTypes.Cancelled, userId, now, new { Reason = reason });
 
@@ -558,10 +562,12 @@ public static class CaseEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> DeleteAsync(Guid id, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
+    private static async Task<IResult> DeleteAsync(Guid id, RequestUser me, ArteDbContext db, IClock clock,
+        Arte.Api.Surveys.SurveyService surveys, CancellationToken ct)
     {
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (c is null) return Results.NotFound();
+        await surveys.CancelUnsentAsync(c.Id, ct);
         var now = clock.UtcNow;
         c.DeletedAt = now;
         c.DeletedBy = me.RequiredUserId;
@@ -651,6 +657,8 @@ public static class CaseEndpoints
         {
             Role = m.Role,
             NeedsAction = seeAll ? cards.Where(c => c.Reasons.Count > 0 && c.Stage.Category != StageCategories.Done).ToList() : [],
+            // Delivered cases whose customer was unhappy, until someone marks the follow-up.
+            LowSatisfaction = seeAll ? await Arte.Api.Surveys.SurveyEndpoints.NeedsFollowUpAsync(db, ct) : [],
             Mine = cards.Where(c => c.Mine).ToList(),
             Ready = cards.Where(c => c.Stage.Category == StageCategories.Done).ToList(),
             Blocked = cards.Where(c => c.WaitReason is not null)

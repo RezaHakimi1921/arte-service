@@ -7,6 +7,7 @@ import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
 import { PhotoSection, type CasePhoto } from "./photos";
+import { SurveySection, type CaseSurvey } from "./survey";
 import { ROLE_NAMES } from "./labels";
 import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { ServicePicker } from "./services";
@@ -35,6 +36,7 @@ type CaseDetailView = {
   photos: CasePhoto[]; trackingCode: string | null; photosVisibleByDefault: boolean;
   transitions: TransitionView[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
+  survey: CaseSurvey | null; canFollowUp: boolean;
 };
 type Assignable = { id: string; name: string; role: string };
 export type CaseFilter = { category?: string; mine?: boolean; all?: boolean };
@@ -217,7 +219,9 @@ export function EmptyCases({ canCreate }: { canCreate: boolean }) {
 
 type Sheet = null | "actions" | "assign" | "note" | "wait" | "parts" | "promise" | "credit" | "link";
 
-export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () => void; onDeleted: (number: number) => void }) {
+export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
+  id: string; onBack: () => void; onDeleted: (number: number) => void; focusSurvey?: boolean;
+}) {
   const { notify } = useFeedback();
   const [c, setC] = useState<CaseDetailView | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -361,6 +365,8 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
         </div>
       )}
 
+      {c.survey && <SurveySection caseId={c.id} survey={c.survey} canFollowUp={c.canFollowUp} focus={focusSurvey} onChange={load} />}
+
       {/* In review the master looks at the work photos first; otherwise they sit below the bill. */}
       {c.stage.key === "review" && photoSection}
       <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal}
@@ -440,11 +446,11 @@ export function CaseDetail({ id, onBack, onDeleted }: { id: string; onBack: () =
           <p className="muted small">مشتری با این لینک، بدون ورود، وضعیت کار، قطعات و هزینه را می‌بیند.</p>
           <SheetOption label="باز کردن صفحه‌ی مشتری" hint="همان چیزی که مشتری می‌بیند"
             onClick={() => { window.open(`/t/${c.trackingCode}`, "_blank", "noopener"); close(); }} />
-          <SheetOption label={busy ? "در حال ارسال…" : "ارسال دوباره با پیامک"} hint="به شماره‌ی مشتری" disabled={busy}
+          <SheetOption label={busy ? "در حال ارسال…" : "ارسال دوباره با پیامک"} hint="به شماره‌ی مشتری · هزینه‌ی یک پیامک از اعتبار کم می‌شود" disabled={busy}
             onClick={() => act(() => api(`/api/v1/cases/${id}/send-link`, { method: "POST" }), "لینک برای مشتری پیامک شد", () => { close(); load(); })} />
           {"share" in navigator && (
             <SheetOption label="اشتراک‌گذاری" hint="واتساپ، تلگرام، پیامک گوشی…"
-              onClick={() => { navigator.share({ title: `پیگیری پرونده CASE-${c.number}`, url: `${location.origin}/t/${c.trackingCode}` }).catch(() => {}); close(); }} />
+              onClick={() => { navigator.share({ title: "پیگیری کار شما", url: `${location.origin}/t/${c.trackingCode}` }).catch(() => {}); close(); }} />
           )}
           <SheetOption label="کپی لینک"
             onClick={() => { navigator.clipboard?.writeText(`${location.origin}/t/${c.trackingCode}`).then(() => notify("لینک کپی شد"), () => {}); close(); }} />

@@ -15,7 +15,7 @@ namespace Arte.Api.Licensing;
 public static class LicenseEndpoints
 {
     public sealed record GrantLicense(string? Kind, Guid? PlanId, int? Months, int? Days, long? PriceRials, string? Note);
-    public sealed record UpdateBusiness(bool? IsActive, string? Reason);
+    public sealed record UpdateBusiness(bool? IsActive, string? Reason, bool? SurveyEnabled = null);
     public sealed record PlanInput(string? Name, int? Months, long? PriceRials, bool? IsActive, int? SortOrder);
 
     public static void MapLicensing(this IEndpointRouteBuilder app)
@@ -34,14 +34,7 @@ public static class LicenseEndpoints
         }).RequirePermission(Permissions.SettingsManage);
 
         // ───────── platform admin panel ─────────
-        var admin = app.MapGroup("/api/v1/admin").RequireAuthorization().AddEndpointFilter(async (ctx, next) =>
-        {
-            var http = ctx.HttpContext;
-            var me = http.RequestServices.GetRequiredService<RequestUser>();
-            var db = http.RequestServices.GetRequiredService<ArteDbContext>();
-            var isAdmin = me.UserId is { } uid && await db.Users.AnyAsync(u => u.Id == uid && u.IsPlatformAdmin, http.RequestAborted);
-            return isAdmin ? await next(ctx) : Results.Problem(statusCode: 403, title: "این بخش فقط برای مدیریت آرته است.");
-        });
+        var admin = app.MapGroup("/api/v1/admin").RequirePlatformAdmin();
 
         admin.MapGet("/businesses", async (string? q, ArteDbContext db, IClock clock, CancellationToken ct) =>
         {
@@ -101,7 +94,7 @@ public static class LicenseEndpoints
                 .Select(m => new { m.Role, m.IsActive, m.User!.DisplayName, m.User.Mobile, m.User.LastLoginAt }).ToListAsync(ct);
             return Results.Ok(new
             {
-                t.Id, t.Name, t.Phone, t.Address, t.CreatedAt, t.IsActive, t.DeactivatedReason,
+                t.Id, t.Name, t.Phone, t.Address, t.CreatedAt, t.IsActive, t.DeactivatedReason, t.SurveyEnabled,
                 Status = await LicenseService.StatusAsync(db, id, clock.UtcNow, ct),
                 Licenses = licenses, Members = members,
             });
@@ -158,6 +151,11 @@ public static class LicenseEndpoints
                 t.IsActive = active;
                 t.DeactivatedReason = active ? null : string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason.Trim();
                 audit.Record(active ? "admin.branch_activated" : "admin.branch_deactivated", id, me.RequiredUserId, t.DeactivatedReason);
+            }
+            if (req.SurveyEnabled is { } survey && survey != t.SurveyEnabled)
+            {
+                t.SurveyEnabled = survey;
+                audit.Record(survey ? "admin.survey_enabled" : "admin.survey_disabled", id, me.RequiredUserId, null);
             }
             await db.SaveChangesAsync(ct);
             return Results.NoContent();

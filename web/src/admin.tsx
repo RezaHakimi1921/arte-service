@@ -14,7 +14,7 @@ type BusinessRow = {
 };
 type BusinessDetail = {
   id: string; name: string; phone: string | null; address: string | null; createdAt: string; isActive: boolean;
-  deactivatedReason: string | null; status: LicenseStatus;
+  deactivatedReason: string | null; status: LicenseStatus; surveyEnabled: boolean;
   licenses: { id: string; kind: string; startsAt: string; endsAt: string; priceRials: number; note: string | null; createdAt: string; revoked: boolean; plan: string | null }[];
   members: { role: string; isActive: boolean; displayName: string | null; mobile: string; lastLoginAt: string | null }[];
 };
@@ -50,14 +50,21 @@ function AdminPage({ title, back, onBack, children }: { title: string; back: str
 
 /** Platform admin panel: every business (branch), its subscription and switch, and the price list. */
 export function AdminPanel({ onBack }: { onBack?: () => void }) {
-  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" }>({ page: "list" });
+  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" } | { page: "survey" }>({ page: "list" });
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
   if (view.page === "business") return <AdminBusiness id={view.id} onBack={() => setView({ page: "list" })} />;
   if (view.page === "plans") return <AdminPlans onBack={() => setView({ page: "list" })} />;
-  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} />;
+  if (view.page === "survey")
+    return (
+      <AdminPage title="سؤال‌های نظرسنجی" back="فهرست" onBack={() => setView({ page: "list" })}>
+        <p className="muted small">این سؤال‌ها از مشتری‌های همه‌ی کسب‌وکارهایی که امکان نظرسنجی دارند پرسیده می‌شود. هر سؤال ۱ تا ۵ ستاره است.</p>
+        <SurveyQuestions />
+      </AdminPage>
+    );
+  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} onSurvey={() => setView({ page: "survey" })} />;
 }
 
-function AdminList({ onBack, onOpen, onPlans }: { onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void }) {
+function AdminList({ onBack, onOpen, onPlans, onSurvey }: { onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void; onSurvey: () => void }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [rows, setRows] = useState<BusinessRow[] | null>(null);
@@ -83,6 +90,7 @@ function AdminList({ onBack, onOpen, onPlans }: { onBack?: () => void; onOpen: (
       <div className="admin-tools">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام تعمیرگاه، نام یا موبایل مالک" aria-label="جستجوی کسب‌وکار" />
         <button onClick={onPlans}>پلن‌ها و قیمت‌ها</button>
+        <button onClick={onSurvey}>سؤال‌های نظرسنجی</button>
       </div>
       <div className="chips" role="tablist" aria-label="وضعیت">
         {FILTERS.map((f) => (
@@ -178,6 +186,22 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
               ? run(() => api(`/api/v1/admin/businesses/${id}`, { method: "PATCH", body: { isActive: true } }), "شعبه فعال شد")
               : (setReason(""), setSheet("deactivate"))} />
         </label>
+      </div>
+
+      <h3>نظرسنجی مشتری (امکان جدا)</h3>
+      <div className="card admin-facts">
+        <label className="setting-row">
+          <span><strong>نظرسنجی رضایت مشتری</strong><span className="muted small">روشن: بعد از تحویل برای مشتری پیامک نظرسنجی می‌رود و نتیجه در پنل کسب‌وکار دیده می‌شود.</span></span>
+          <input type="checkbox" role="switch" className="switch" checked={b.surveyEnabled} disabled={busy}
+            onChange={(e) => run(() => api(`/api/v1/admin/businesses/${id}`, { method: "PATCH", body: { surveyEnabled: e.target.checked } }),
+              e.target.checked ? "نظرسنجی فعال شد" : "نظرسنجی خاموش شد")} />
+        </label>
+        {b.surveyEnabled && (
+          <>
+            <p className="muted small">سؤال‌های اضافه فقط برای همین کسب‌وکار (بعد از سؤال‌های عمومی پرسیده می‌شوند):</p>
+            <SurveyQuestions tenantId={id} />
+          </>
+        )}
       </div>
 
       <BusinessActivity id={id} />
@@ -414,5 +438,83 @@ function AdminPlans({ onBack }: { onBack: () => void }) {
         </form>
       </BottomSheet>
     </AdminPage>
+  );
+}
+
+type Question = { id: string; tenantId: string | null; text: string; sortOrder: number; isActive: boolean };
+
+/**
+ * The survey questions: general ones (no tenantId) or the extra ones of one business. Only the admin writes them;
+ * a question is never deleted (answers keep its text) but switched off.
+ */
+function SurveyQuestions({ tenantId }: { tenantId?: string }) {
+  const { notify } = useFeedback();
+  const [rows, setRows] = useState<Question[] | null>(null);
+  const [editing, setEditing] = useState<Question | "new" | null>(null);
+  const [text, setText] = useState("");
+  const [active, setActive] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const query = tenantId ? `?tenantId=${tenantId}` : "";
+  const load = useCallback(() => api<Question[]>(`/api/v1/admin/survey-questions${query}`).then(setRows).catch(() => setRows([])), [query]);
+  useEffect(() => { load(); }, [load]);
+
+  function open(q: Question | "new") {
+    setEditing(q);
+    setText(q === "new" ? "" : q.text);
+    setActive(q === "new" ? true : q.isActive);
+    setError(null);
+  }
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      if (editing === "new") await api("/api/v1/admin/survey-questions", { body: { text: text.trim(), tenantId } });
+      else if (editing) await api(`/api/v1/admin/survey-questions/${editing.id}`, { method: "PATCH", body: { text: text.trim(), isActive: active } });
+      notify("ذخیره شد");
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!rows) return <div className="splash small" aria-busy="true" />;
+  return (
+    <>
+      {rows.length === 0 && <p className="muted small">سؤالی ثبت نشده است.</p>}
+      <div className="settings-list">
+        {rows.map((q) => (
+          <button type="button" key={q.id} className={`settings-row${q.isActive ? "" : " inactive"}`} onClick={() => open(q)}>
+            <span className="settings-row-text">
+              <span>{q.text}</span>
+              {!q.isActive && <span className="muted small">غیرفعال؛ دیگر پرسیده نمی‌شود</span>}
+            </span>
+            <span className="muted" aria-hidden="true">‹</span>
+          </button>
+        ))}
+      </div>
+      <button onClick={() => open("new")}>+ سؤال تازه</button>
+      <BottomSheet open={!!editing} title={editing === "new" ? "سؤال تازه" : "ویرایش سؤال"} onClose={() => setEditing(null)}>
+        <form onSubmit={save} noValidate>
+          <Field label="متن سؤال (۵ تا ۲۰۰ حرف)" error={error}>
+            <input value={text} onChange={(e) => setText(e.target.value)} maxLength={200} placeholder="مثلاً از تمیزی وسیله هنگام تحویل چقدر راضی هستید؟" />
+          </Field>
+          {editing !== "new" && (
+            <>
+              <p className="hint">نظرهای قبلی با همان متنی که مشتری دیده بود می‌مانند.</p>
+              <label className="setting-row">
+                <span><strong>پرسیده شود</strong><span className="muted small">خاموش: از نظرسنجی‌های بعدی برداشته می‌شود.</span></span>
+                <input type="checkbox" role="switch" className="switch" checked={active} onChange={(e) => setActive(e.target.checked)} />
+              </label>
+            </>
+          )}
+          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+        </form>
+      </BottomSheet>
+    </>
   );
 }

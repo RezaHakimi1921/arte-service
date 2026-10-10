@@ -70,6 +70,7 @@ public static class ReportEndpoints
             PartsProfitRials = me.RequiredMembership.Role == Roles.Owner ? partsProfit : (long?)null,
             ReceivedRials = received, ReceivablesRials = receivables,
             Staff = staff,
+            Survey = await Arte.Api.Surveys.SurveyEndpoints.ReportAsync(db, me.RequiredMembership.TenantId, from, to, ct),
         });
     }
 }

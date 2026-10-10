@@ -18,7 +18,8 @@ public static class TenantEndpoints
     public sealed record BusinessSettings(string? Name, string? Phone, string? Address, bool? RequireAssigneeOnIntake,
         bool? RequireCustomerApproval, bool? RequireFinalReview, string? BusinessType = null, string[]? VehicleKinds = null,
         bool? CustomerSmsEnabled = null, bool? SmsOnOpened = null, bool? SmsOnReady = null, bool? SmsOnDelivered = null,
-        bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null, bool? PhotosVisibleByDefault = null);
+        bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null, bool? PhotosVisibleByDefault = null,
+        bool? SurveySendOn = null, int? SurveyDelayMinutes = null);
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -43,6 +44,7 @@ public static class TenantEndpoints
                     m.Role,
                     Permissions = m.Role == Roles.Owner ? [.. Permissions.All] : m.Permissions,
                     IsActive = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.IsActive).SingleAsync(ct),
+                    SurveyEnabled = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.SurveyEnabled).SingleAsync(ct),
                     License = await Arte.Api.Licensing.LicenseService.StatusAsync(db, m.TenantId, clock.UtcNow, ct),
                     TourDone = await db.Memberships.Where(x => x.Id == m.Id).Select(x => x.TourDoneAt != null).SingleAsync(ct),
                     SampleCaseId = await db.Cases.Where(c => c.IsSample).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct),
@@ -57,6 +59,7 @@ public static class TenantEndpoints
                     t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                     t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                     t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes,
                 }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
 
@@ -69,6 +72,8 @@ public static class TenantEndpoints
             if (req.BusinessType is not null && !BusinessTypes.All.Contains(req.BusinessType)) errors["businessType"] = ["نوع کسب‌وکار نامعتبر است."];
             if (req.VehicleKinds is { } kinds && (kinds.Length == 0 || kinds.Length > 10 || kinds.Any(k => !Arte.Core.Customers.AssetKinds.All.Contains(k))))
                 errors["vehicleKinds"] = ["دست‌کم یک نوع وسیله را انتخاب کنید."];
+            if (req.SurveyDelayMinutes is < Arte.Core.Surveys.SurveyRules.MinDelayMinutes or > Arte.Core.Surveys.SurveyRules.MaxDelayMinutes)
+                errors["surveyDelayMinutes"] = ["زمان ارسال بین ۵ دقیقه تا ۷۲ ساعت بعد از تحویل."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var t = await db.Tenants.SingleAsync(x => x.Id == me.RequiredMembership.TenantId, ct);
@@ -88,6 +93,9 @@ public static class TenantEndpoints
             if (req.TrackShowItems is { } ti) t.TrackShowItems = ti;
             if (req.TrackShowAmounts is { } ta) t.TrackShowAmounts = ta;
             if (req.PhotosVisibleByDefault is { } pv) t.PhotosVisibleByDefault = pv;
+            // The survey add-on itself (SurveyEnabled) is switched by the platform admin only.
+            if (req.SurveySendOn is { } ss) t.SurveySendOn = ss;
+            if (req.SurveyDelayMinutes is { } sdm) t.SurveyDelayMinutes = sdm;
             audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
             await db.SaveChangesAsync(ct);
             // Optional workflow steps follow the settings.
@@ -98,6 +106,7 @@ public static class TenantEndpoints
                 t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                 t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                 t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes,
             });
         }).RequirePermission(Permissions.SettingsManage);
 
@@ -166,6 +175,7 @@ public static class TenantEndpoints
             Role = Roles.Owner,
             Permissions = Roles.DefaultPermissions(Roles.Owner),
             CreatedAt = clock.UtcNow,
+            SurveyNotify = true,
         };
         db.Memberships.Add(owner);
         db.Licenses.Add(Arte.Api.Licensing.LicenseService.Trial(tenant.Id, clock.UtcNow));

@@ -5,6 +5,7 @@ import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
+import { NotificationBell } from "./survey";
 import { Tour, type TourStep } from "./tour";
 import { AuthLayout, Login, SignupView, TrialWelcome } from "./login";
 import { TrackPage } from "./track";
@@ -23,7 +24,7 @@ type Me = {
   isPlatformAdmin: boolean;
   business: {
     tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean;
-    tourDone: boolean; sampleCaseId: string | null; isActive: boolean; license: LicenseStatus;
+    tourDone: boolean; sampleCaseId: string | null; isActive: boolean; license: LicenseStatus; surveyEnabled: boolean;
     businessType: string; vehicleKinds: string[];
   } | null;
 };
@@ -34,10 +35,13 @@ type Tab = "home" | "cases" | "customers" | "settings";
 const ADMIN_HOST = location.hostname.startsWith("adminservice.") || (import.meta.env.DEV && new URLSearchParams(location.search).has("admin"));
 
 /** /t/{code}: the customer's tracking page, public and outside the app. */
-const TRACK_CODE = location.pathname.match(/^\/t\/([a-z0-9]{6,16})\/?$/)?.[1] ?? null;
+const TRACK_MATCH = location.pathname.match(/^\/([ts])\/([a-z0-9]{6,16})\/?$/);
+const TRACK_CODE = TRACK_MATCH?.[2] ?? null;
+/** The survey SMS links to /s/{code}: the same customer page, opened at the survey. */
+const TRACK_SURVEY = TRACK_MATCH?.[1] === "s";
 
 export default function App() {
-  if (TRACK_CODE) return <TrackPage code={TRACK_CODE} />;
+  if (TRACK_CODE) return <TrackPage code={TRACK_CODE} survey={TRACK_SURVEY} />;
   return ADMIN_HOST ? <AdminRoot /> : <ShopApp />;
 }
 
@@ -205,6 +209,8 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
 function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => void; onSettingsChanged: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
   const [caseId, setCaseId] = useState<string | null>(null);
+  // Opened from a notification: the case page scrolls to the customer's feedback.
+  const [surveyCase, setSurveyCase] = useState<string | null>(null);
   const [newCase, setNewCase] = useState(false);
   const [caseFilter, setCaseFilter] = useState<CaseFilter>({});
   const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
@@ -299,6 +305,7 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
   function go(next: Tab) {
     setTab(next);
     setCaseId(null);
+    setSurveyCase(null);
     setNewCase(false);
     setMorePage(null);
   }
@@ -323,7 +330,7 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     page = <NewCaseView canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} vehicleKinds={me.business!.vehicleKinds} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
       onOpenStaff={() => { go("settings"); if (can("staff.manage")) setMorePage("staff"); }} />;
   else if (tab === "cases" && caseId)
-    page = <CaseDetail id={caseId} onBack={() => setCaseId(null)} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
+    page = <CaseDetail key={caseId} id={caseId} focusSurvey={surveyCase === caseId} onBack={() => { setCaseId(null); setSurveyCase(null); }} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
   else if (tab === "cases")
     page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={canIntake} />;
   else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
@@ -336,8 +343,9 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
     else if (morePage === "intake") page = <IntakeRulesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "vehicles") page = <VehiclesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "customer") page = <CustomerPage onBack={back} onSaved={onSettingsChanged} />;
-    else if (morePage === "staff") page = <StaffPage onBack={back} />;
-    else if (morePage === "reports") page = <ReportsPage onBack={back} onReceivables={() => setMorePage("receivables")} />;
+    else if (morePage === "staff") page = <StaffPage onBack={back} surveyEnabled={me.business!.surveyEnabled} />;
+    else if (morePage === "reports") page = <ReportsPage onBack={back} onReceivables={() => setMorePage("receivables")}
+      onOpenCase={(id) => { setTab("cases"); setMorePage(null); setCaseId(id); setSurveyCase(id); }} />;
     else if (morePage === "license") page = <LicensePage onBack={back} />;
     else if (morePage === "admin" && me.isPlatformAdmin) page = <AdminPanel onBack={back} />;
     else if (morePage === "appearance") page = <AppearancePage onBack={back} applyTheme={applyTheme} />;
@@ -346,7 +354,8 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
       onTour={startTour} onRemoveSample={sampleId && can("cases.create") ? removeSample : undefined}
       isPlatformAdmin={me.isPlatformAdmin} licenseText={licenseLine(me.business!.license)} />;
   }
-  else page = <HomeView key={`${caseId}-${homeKey}`} onOpen={(id) => { setTab("cases"); setCaseId(id); }} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake} />;
+  else page = <HomeView key={`${caseId}-${homeKey}`} onOpen={(id) => { setTab("cases"); setCaseId(id); }}
+    onOpenSurvey={(id) => { setTab("cases"); setCaseId(id); setSurveyCase(id); }} surveyEnabled={me.business!.surveyEnabled} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake} />;
 
   return (
     <div className="shell">
@@ -356,8 +365,13 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
         </div>
       )}
       <header className="topbar">
-        <strong>{me.business!.name}</strong>
-        <span className="muted small">{me.displayName ?? me.mobile}</span>
+        <div className="topbar-text">
+          <strong>{me.business!.name}</strong>
+          <span className="muted small">{me.displayName ?? me.mobile}</span>
+        </div>
+        {me.business!.surveyEnabled && (
+          <NotificationBell onOpenCase={(id) => { setTab("cases"); setNewCase(false); setMorePage(null); setCaseId(id); setSurveyCase(id); }} />
+        )}
       </header>
       {!me.openMode && (
         <LicenseBanner status={me.business!.license}

@@ -65,6 +65,11 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<Audit>();
 builder.Services.AddScoped<OtpService>();
 builder.Services.AddScoped<Arte.Api.Tracking.CustomerNotifier>();
+builder.Services.AddScoped<Arte.Api.Surveys.SurveyService>();
+builder.Services.AddSingleton<Arte.Api.Surveys.SurveySender>();
+// Tests switch the timer off and run the sender by hand.
+if (config.GetValue("Surveys:SenderEnabled", true))
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<Arte.Api.Surveys.SurveySender>());
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<FakeSmsProvider>();
 if (smsOptions.Provider == "smsir")
@@ -190,6 +195,7 @@ app.MapAttachments();
 app.MapClientErrors();
 app.MapOnboarding();
 Arte.Api.Tracking.TrackingEndpoints.MapTracking(app);
+Arte.Api.Surveys.SurveyEndpoints.MapSurveys(app);
 // Public, for the sign-in and tracking pages: how to reach Arte support.
 app.MapGet("/api/v1/public/info", (IConfiguration c) => Results.Ok(new { SupportPhone = c["Platform:SupportPhone"] })).AllowAnonymous();
 Arte.Api.Licensing.LicenseEndpoints.MapLicensing(app);

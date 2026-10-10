@@ -57,6 +57,7 @@ services:
       Sms__IranPayamak__Templates__case_ready: ${IRANPAYAMAK_CASE_READY:-}
       Sms__IranPayamak__Templates__case_delivered: ${IRANPAYAMAK_CASE_DELIVERED:-}
       Sms__IranPayamak__Templates__case_link: ${IRANPAYAMAK_CASE_LINK:-}
+      Sms__IranPayamak__Templates__survey_request: ${IRANPAYAMAK_SURVEY:-}
       Platform__SupportPhone: ${SUPPORT_PHONE:-}
       Sentry__Dsn: ${SENTRY_DSN:-}
     # "egress" is the only route out (to the SMS provider); the database stays on the internal-only network.

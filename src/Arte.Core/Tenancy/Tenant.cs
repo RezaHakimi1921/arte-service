@@ -53,4 +53,12 @@ public sealed class Tenant
     public bool TrackShowAmounts { get; set; } = true;
     /// <summary>New photos start as visible to the customer (each photo can still be switched).</summary>
     public bool PhotosVisibleByDefault { get; set; }
+
+    // ── Customer satisfaction survey (a paid add-on) ──
+    /// <summary>The add-on is on for this business. Only the platform admin changes it.</summary>
+    public bool SurveyEnabled { get; set; }
+    /// <summary>Business setting: send the survey SMS after delivery.</summary>
+    public bool SurveySendOn { get; set; } = true;
+    /// <summary>Minutes after delivery (then moved into sending hours, 09:00–23:00).</summary>
+    public int SurveyDelayMinutes { get; set; } = 30;
 }

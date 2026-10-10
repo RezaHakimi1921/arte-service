@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, ApiError } from "./api";
 import { useFeedback } from "./feedback";
-import { BottomSheet } from "./sheet";
+import { BottomSheet, SheetOption } from "./sheet";
 import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { resetWorkflow } from "./workflow";
 
@@ -208,7 +208,10 @@ type BusinessSettings = {
   businessType: string; vehicleKinds: string[];
   customerSmsEnabled: boolean; smsOnOpened: boolean; smsOnReady: boolean; smsOnDelivered: boolean;
   trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean; photosVisibleByDefault: boolean;
+  surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number;
 };
+
+const SURVEY_DELAYS: [number, string][] = [[15, "۱۵ دقیقه"], [30, "۳۰ دقیقه"], [60, "۱ ساعت"], [180, "۳ ساعت"], [1440, "۲۴ ساعت"]];
 
 export const BUSINESS_TYPES: { key: string; label: string; hint: string; kinds: string[] }[] = [
   { key: "motorcycle_repair", label: "موتورسازی", hint: "تعمیر موتورسیکلت", kinds: ["motorcycle"] },
@@ -305,12 +308,22 @@ export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved:
             {BUSINESS_TYPES.map((b) => (
               <button type="button" key={b.key} role="radio" aria-checked={s.businessType === b.key}
                 className={`choice${s.businessType === b.key ? " on" : ""}`}
-                onClick={() => save({ businessType: b.key, vehicleKinds: b.kinds })}>
+                onClick={() => { if (s.businessType !== b.key) save({ businessType: b.key }); }}>
                 <span>{b.label}</span><span className="muted small">{b.hint}</span>
               </button>
             ))}
           </div>
-          <p className="hint">با عوض کردن نوع، وسایل پیش‌فرض همان نوع انتخاب می‌شود؛ پایین‌تر می‌توانید دستی تغییرشان دهید.</p>
+          {(() => {
+            // Changing the type never touches the vehicle list; the defaults are only offered.
+            const type = BUSINESS_TYPES.find((b) => b.key === s.businessType);
+            const same = type && type.kinds.length === s.vehicleKinds.length && type.kinds.every((k) => s.vehicleKinds.includes(k));
+            return type && !same ? (
+              <div className="hint-action">
+                <p className="hint">وسایل پیش‌فرض «{type.label}»: {type.kinds.map((k) => KIND_NAMES[k] ?? k).join("، ")}</p>
+                <button type="button" className="secondary" onClick={() => save({ vehicleKinds: type.kinds })}>همین وسایل را انتخاب کن</button>
+              </div>
+            ) : <p className="hint">عوض کردن نوع، وسایل انتخاب‌شده را تغییر نمی‌دهد؛ پایین‌تر هر وسیله را روشن یا خاموش کنید.</p>;
+          })()}
           <h3>وسایلی که می‌پذیرید</h3>
           <div className="settings-list">
             {Object.entries(KIND_NAMES).map(([k, label]) => {
@@ -330,6 +343,9 @@ export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved:
 
 export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
   const { s, save } = useBusinessSettings(onSaved);
+  const [confirmSms, setConfirmSms] = useState(false);
+  const [support, setSupport] = useState<string | null>(null);
+  useEffect(() => { api<{ supportPhone: string | null }>("/api/v1/public/info").then((i) => setSupport(i.supportPhone)).catch(() => {}); }, []);
   return (
     <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
@@ -341,7 +357,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
           <h3>پیامک به مشتری</h3>
           <div className="settings-list">
             <Switch title="ارسال پیامک به مشتری" sub="با نام تعمیرگاه، نام مشتری و لینک پیگیری."
-              checked={s.customerSmsEnabled} disabled={false} onChange={(v) => save({ customerSmsEnabled: v })} />
+              checked={s.customerSmsEnabled} disabled={false} onChange={(v) => (v ? setConfirmSms(true) : save({ customerSmsEnabled: false }))} />
             <Switch title="هنگام پذیرش" sub="«… شما پذیرش شد و در نوبت کار قرار گرفت.»"
               checked={s.smsOnOpened} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnOpened: v })} />
             <Switch title="آماده‌ی تحویل" sub="«… شما آماده‌ی تحویل است.»"
@@ -361,8 +377,42 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
             <Switch title="عکس‌های جدید را مشتری هم ببیند" sub="پیش‌فرض هنگام گرفتن عکس؛ برای هر عکس در پرونده جدا هم قابل تغییر است."
               checked={s.photosVisibleByDefault} disabled={false} onChange={(v) => save({ photosVisibleByDefault: v })} />
           </div>
+
+          <h3>نظرسنجی رضایت مشتری</h3>
+          {s.surveyEnabled ? (
+            <>
+              <p className="hint">
+                بعد از تحویل، یک پیامک کوتاه با لینک نظرسنجی برای مشتری فرستاده می‌شود (فقط بین ساعت ۹ تا ۲۳). نظر مشتری در پرونده،
+                زنگوله‌ی اعلان و گزارش‌ها می‌آید و رضایت پایین در خانه نشان داده می‌شود.
+              </p>
+              <div className="settings-list">
+                <Switch title="ارسال نظرسنجی بعد از تحویل" sub="مشتری از لینک پیگیری هم می‌تواند نظر بدهد."
+                  checked={s.surveySendOn} disabled={false} onChange={(v) => save({ surveySendOn: v })} />
+              </div>
+              <span className="label">چه مدت بعد از تحویل فرستاده شود؟</span>
+              <div className="chips" role="radiogroup" aria-label="زمان ارسال نظرسنجی">
+                {SURVEY_DELAYS.map(([m, label]) => (
+                  <button type="button" key={m} role="radio" aria-checked={s.surveyDelayMinutes === m} disabled={!s.surveySendOn}
+                    className={`chip-button${s.surveyDelayMinutes === m ? " active" : ""}`} onClick={() => save({ surveyDelayMinutes: m })}>{label}</button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="hint">
+              نظرسنجی رضایت مشتری یک امکان جداست؛ برای فعال‌سازی با پشتیبانی آرته تماس بگیرید
+              {support && <> (<a href={`tel:${support}`} dir="ltr" className="font-num">{support}</a>)</>}.
+            </p>
+          )}
         </>
       )}
+      <BottomSheet open={confirmSms} title="ارسال پیامک به مشتری روشن شود؟" onClose={() => setConfirmSms(false)}>
+        <p>
+          با روشن کردن این گزینه، در مرحله‌هایی که پایین‌تر روشن کرده‌اید (پذیرش، آماده‌ی تحویل، تحویل) برای مشتری پیامک
+          فرستاده می‌شود و هزینه‌ی هر پیامک از اعتبار پیامک کم می‌شود.
+        </p>
+        <SheetOption label="بله، روشن شود" tone="primary" onClick={() => { setConfirmSms(false); save({ customerSmsEnabled: true }); }} />
+        <SheetOption label="انصراف" onClick={() => setConfirmSms(false)} />
+      </BottomSheet>
     </SubPage>
   );
 }
@@ -388,7 +438,7 @@ export function AppearancePage({ onBack, applyTheme }: { onBack: () => void; app
 type StaffRow = {
   id: string; mobile: string; displayName: string | null; role: string; isActive: boolean;
   fixedMonthlyRials: number | null; commissionType: string; commissionPercent: number | null;
-  commissionFixedRials: number | null; commissionBase: string;
+  commissionFixedRials: number | null; commissionBase: string; surveyNotify: boolean;
 };
 
 const COMMISSION_BASES: { value: string; label: string; hint: string }[] = [
@@ -399,7 +449,7 @@ const COMMISSION_BASES: { value: string; label: string; hint: string }[] = [
 const tomanDigits = (rials: number | null | undefined) => (rials ? String(Math.round(rials / 10)) : "");
 
 /** Pay settings for one staff member: fixed monthly salary and/or a commission per delivered case. */
-function StaffSheet({ row, onClose, onSaved }: { row: StaffRow | null; onClose: () => void; onSaved: () => void }) {
+function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | null; surveyEnabled: boolean; onClose: () => void; onSaved: () => void }) {
   const { notify } = useFeedback();
   const [name, setName] = useState("");
   const [role, setRole] = useState("technician");
@@ -408,6 +458,7 @@ function StaffSheet({ row, onClose, onSaved }: { row: StaffRow | null; onClose: 
   const [percent, setPercent] = useState("");
   const [fixed, setFixed] = useState("");
   const [base, setBase] = useState("case_total");
+  const [surveyNotify, setSurveyNotify] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -420,6 +471,7 @@ function StaffSheet({ row, onClose, onSaved }: { row: StaffRow | null; onClose: 
     setPercent(row.commissionPercent != null ? String(row.commissionPercent) : "");
     setFixed(tomanDigits(row.commissionFixedRials));
     setBase(row.commissionBase || "case_total");
+    setSurveyNotify(row.surveyNotify);
     setError(null);
   }, [row]);
 
@@ -440,6 +492,7 @@ function StaffSheet({ row, onClose, onSaved }: { row: StaffRow | null; onClose: 
         commissionType: type, commissionBase: base,
         commissionFixedRials: Number(fixed || 0) * 10,
       };
+      if (surveyEnabled) body.surveyNotify = surveyNotify;
       if (type === "percent") body.commissionPercent = pct;
       if (row.role !== "owner") body.role = role;
       await api(`/api/v1/staff/${row.id}`, { method: "PATCH", body });
@@ -512,6 +565,12 @@ function StaffSheet({ row, onClose, onSaved }: { row: StaffRow | null; onClose: 
               ← سهم این همکار <strong className="font-num">{formatNumber(example)}</strong> تومان.
             </p>
           )}
+          {surveyEnabled && (
+            <div className="settings-list">
+              <Switch title="اعلان نظر مشتری" disabled={false} checked={surveyNotify} onChange={setSurveyNotify}
+                sub={row.role === "technician" ? "وقتی مشتری برای کار این همکار نظر داد، در زنگوله‌اش می‌بیند." : "هر نظری که مشتری‌ها می‌دهند، در زنگوله‌اش می‌بیند."} />
+            </div>
+          )}
           {error && <span className="error" role="alert">{error}</span>}
           <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
           {row.role !== "owner" && (
@@ -533,7 +592,7 @@ function payText(s: StaffRow) {
   return parts.join(" · ");
 }
 
-export function StaffPage({ onBack }: { onBack: () => void }) {
+export function StaffPage({ onBack, surveyEnabled = false }: { onBack: () => void; surveyEnabled?: boolean }) {
   const { notify } = useFeedback();
   const [rows, setRows] = useState<StaffRow[] | null>(null);
   const [mobile, setMobile] = useState("");
@@ -581,7 +640,7 @@ export function StaffPage({ onBack }: { onBack: () => void }) {
           ))}
         </div>
       )}
-      <StaffSheet row={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+      <StaffSheet row={editing} surveyEnabled={surveyEnabled} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       <h3>افزودن همکار</h3>
       <form className="plain-form" onSubmit={add}>
         <Field label="شماره موبایل" error={error}><MobileInput value={mobile} onChange={setMobile} /></Field>

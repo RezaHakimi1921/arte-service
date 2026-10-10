@@ -15,12 +15,15 @@ namespace Arte.Api.Tracking;
 /// </summary>
 public static class TrackingEndpoints
 {
+    /// <summary>Tracking codes are 6–16 lower-case letters and digits; anything else is not looked up.</summary>
+    public static bool ValidCode(string code) =>
+        code.Length is >= 6 and <= 16 && code.All(ch => char.IsAsciiLetterLower(ch) || char.IsAsciiDigit(ch));
+
     public static void MapTracking(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/v1/track/{code}", async (string code, IServiceScopeFactory scopes, CancellationToken ct) =>
         {
-            if (code.Length is < 6 or > 16 || !code.All(ch => char.IsAsciiLetterLower(ch) || char.IsAsciiDigit(ch)))
-                return Results.NotFound();
+            if (!ValidCode(code)) return Results.NotFound();
 
             await using var scope = scopes.CreateAsyncScope();
             var sp = scope.ServiceProvider;
@@ -83,13 +86,31 @@ public static class TrackingEndpoints
             var photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.VisibleToCustomer)
                 .OrderBy(a => a.CreatedAt).Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt }).ToListAsync(ct);
 
+            // The satisfaction survey, once the vehicle is delivered (the SMS links here too).
+            object? survey = null;
+            if (t.SurveyEnabled
+                && await db.SurveyInvites.AsNoTracking().SingleOrDefaultAsync(x => x.CaseId == c.Id, ct) is { } invite)
+            {
+                var state = Arte.Api.Surveys.SurveyService.State(invite, sp.GetRequiredService<Arte.Core.Common.IClock>().UtcNow);
+                if (state != "closed")
+                    survey = new
+                    {
+                        State = state,
+                        Questions = state == "open"
+                            ? (await Arte.Api.Surveys.SurveyService.QuestionsAsync(db, t.Id, ct)).Select(q => new { q.Id, q.Text }).ToList()
+                            : null,
+                        Score = state == "answered" ? invite.Score : null,
+                    };
+            }
+
             return Results.Ok(new
             {
                 Shop = new { t.Name, t.Phone, t.Address },
+                Survey = survey,
                 Photos = photos,
                 Case = new
                 {
-                    c.Number, Customer = customer.FullName, c.OpenedAt, c.PromisedAt, c.ClosedAt, c.WarrantyUntil,
+                    Customer = customer.FullName, c.OpenedAt, c.PromisedAt, c.ClosedAt, c.WarrantyUntil,
                     Vehicle = asset is null ? null : new { asset.Title, asset.Kind, asset.Identifier },
                     c.ReportedProblems, c.RequestedServices,
                 },
@@ -104,7 +125,7 @@ public static class TrackingEndpoints
         app.MapGet("/api/v1/track/{code}/photos/{photoId:guid}", async (string code, Guid photoId, IServiceScopeFactory scopes,
             IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
         {
-            if (code.Length is < 6 or > 16 || !code.All(ch => char.IsAsciiLetterLower(ch) || char.IsAsciiDigit(ch))) return Results.NotFound();
+            if (!ValidCode(code)) return Results.NotFound();
             await using var scope = scopes.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
             var photo = await (from a in db.CaseAttachments.IgnoreQueryFilters([ArteDbContext.TenantFilter])

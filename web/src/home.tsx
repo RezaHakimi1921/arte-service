@@ -2,8 +2,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { toman } from "./billing";
 import { CaseCard, type CaseCardData, type CaseFilter } from "./cases";
-import { WAIT_REASONS } from "./labels";
+import { WAIT_REASONS, caseCode } from "./labels";
+import { StarRow, scoreText } from "./survey";
 import { formatNumber } from "./ui";
+
+type LowCase = { id: string; number: number; customerName: string | null; assetTitle: string | null; score: number; comment: string | null; answeredAt: string };
+type MyScore = { enabled: boolean; responses?: number; average?: number | null; satisfiedPercent?: number | null; days?: number };
 
 type Inbox = {
   role: string;
@@ -12,6 +16,7 @@ type Inbox = {
   ready: CaseCardData[];
   blocked: { reason: string; cases: CaseCardData[] }[];
   dueToday: CaseCardData[];
+  lowSatisfaction: LowCase[];
   stats: {
     open: number; active: number; waiting: number; ready: number; openedToday: number; deliveredToday: number;
     unassigned: number; blocked: number; readyBalanceRials: number;
@@ -22,11 +27,14 @@ type Inbox = {
  * Dashboard: the state of the shop at a glance (tiles, always visible), then what needs attention and why.
  * Technicians see their own numbers and jobs.
  */
-export function HomeView({ canCreate, onOpen, onNewCase, onOpenCases }: {
-  canCreate: boolean; onOpen: (id: string) => void; onNewCase: () => void; onOpenCases: (f: CaseFilter) => void;
+export function HomeView({ canCreate, onOpen, onOpenSurvey, onNewCase, onOpenCases, surveyEnabled }: {
+  canCreate: boolean; onOpen: (id: string) => void; onOpenSurvey: (id: string) => void; onNewCase: () => void;
+  onOpenCases: (f: CaseFilter) => void; surveyEnabled: boolean;
 }) {
   const [inbox, setInbox] = useState<Inbox | null>(null);
+  const [score, setScore] = useState<MyScore | null>(null);
   useEffect(() => { api<Inbox>("/api/v1/inbox").then(setInbox).catch(() => {}); }, []);
+  useEffect(() => { if (surveyEnabled) api<MyScore>("/api/v1/surveys/mine").then(setScore).catch(() => {}); }, [surveyEnabled]);
   if (!inbox) return <div className="splash" aria-busy="true" />;
 
   const manager = inbox.role !== "technician";
@@ -50,6 +58,31 @@ export function HomeView({ canCreate, onOpen, onNewCase, onOpenCases }: {
         <p className="muted empty-inline">
           {canCreate ? "پرونده بازی ندارید. با «پذیرش جدید» اولین وسیله را ثبت کنید." : "فعلاً کاری به شما سپرده نشده است."}
         </p>
+      )}
+
+      {manager && inbox.lowSatisfaction.length > 0 && (
+        <Group title="رضایت پایین مشتری" count={inbox.lowSatisfaction.length} tone="danger">
+          {inbox.lowSatisfaction.map((l) => (
+            <button key={l.id} className="card low-card" onClick={() => onOpenSurvey(l.id)}>
+              <span className="low-card-top">
+                <strong>{l.customerName ?? "مشتری"}</strong>
+                <span className="case-code" dir="ltr">{caseCode(l.number)}</span>
+              </span>
+              <span className="muted small">{l.assetTitle ?? ""}</span>
+              <span className="low-card-score"><StarRow rating={l.score} /><span>رضایت پایین مشتری ({scoreText(l.score)})</span></span>
+              {l.comment && <span className="low-card-comment">«{l.comment}»</span>}
+              <span className="small link-text">تماس بگیرید و «پیگیری شد» را بزنید ‹</span>
+            </button>
+          ))}
+        </Group>
+      )}
+
+      {!manager && score?.enabled && (score.responses ?? 0) > 0 && score.average != null && (
+        <div className="card my-score">
+          <span className="muted small">رضایت مشتری از کارهای شما ({formatNumber(score.days ?? 90)} روز اخیر)</span>
+          <span className="my-score-value"><StarRow rating={score.average} /><strong className="font-num">{scoreText(score.average)}</strong></span>
+          <span className="muted small">{formatNumber(score.responses ?? 0)} نظر، {formatNumber(score.satisfiedPercent ?? 0)}٪ راضی</span>
+        </div>
       )}
 
       {!manager && inbox.mine.length > 0 && (
@@ -108,7 +141,7 @@ function Tile({ label, value, sub, tone, onClick }: { label: string; value: numb
   );
 }
 
-function Group({ title, count, tone, children }: { title: string; count: number; tone?: "warn" | "good"; children: ReactNode }) {
+function Group({ title, count, tone, children }: { title: string; count: number; tone?: "warn" | "good" | "danger"; children: ReactNode }) {
   return (
     <section className="group">
       <h3 className={`group-title${tone ? ` ${tone}` : ""}`}>

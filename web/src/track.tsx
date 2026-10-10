@@ -1,14 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, api } from "./api";
 import { applyTheme } from "./App";
 import { WAIT_REASONS } from "./labels";
 import { formatNumber } from "./ui";
 
+type Survey = { state: "open" | "answered" | "expired"; questions: { id: string; text: string }[] | null; score: number | null };
+
 type Track = {
   shop: { name: string; phone: string | null; address: string | null };
+  survey: Survey | null;
   photos: { id: string; stageKey: string; caption: string | null; createdAt: string }[];
   case: {
-    number: number; customer: string | null; openedAt: string; promisedAt: string | null; closedAt: string | null; warrantyUntil: string | null;
+    customer: string | null; openedAt: string; promisedAt: string | null; closedAt: string | null; warrantyUntil: string | null;
     vehicle: { title: string; kind: string; identifier: string | null } | null; reportedProblems: string[]; requestedServices: string[];
   };
   status: { name: string; key: string; category: string; waitReason: string | null; stageEnteredAt: string };
@@ -17,7 +20,7 @@ type Track = {
   money: { totalRials: number; paidRials: number; balanceRials: number } | null;
 };
 
-type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "clock" | "close" | "document" | "moon" | "phone" | "sun" | "wrench" | "wallet";
+type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "clock" | "close" | "document" | "moon" | "phone" | "star" | "sun" | "wrench" | "wallet";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -31,6 +34,7 @@ function Icon({ name }: { name: IconName }) {
     document: <><path d="M6 2h8l4 4v16H6z" /><path d="M14 2v5h5M9 12h6M9 16h6" /></>,
     moon: <path d="M20.5 14.2A8.4 8.4 0 0 1 9.8 3.5a9 9 0 1 0 10.7 10.7Z" />,
     phone: <path d="M5 3h4l2 5-2.5 1.5a15 15 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2C10.2 20.5 3.5 13.8 3 5a2 2 0 0 1 2-2Z" />,
+    star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />,
     sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
     wrench: <path d="M14.7 6.3a4.5 4.5 0 0 0-5.6 5.6L3 18l3 3 6.1-6.1a4.5 4.5 0 0 0 5.6-5.6L15 12l-3-3 2.7-2.7Z" />,
     wallet: <><rect x="3" y="6" width="18" height="14" rx="3" /><path d="M3 10h18M16 15h2" /></>,
@@ -84,22 +88,106 @@ function now(t: Track): { title: string; note: string } {
   return { title: "وسیله‌ی شما پذیرش شد و در نوبت کار است", note: "با شروع کار، مراحل در همین صفحه به‌روز می‌شود." };
 }
 
-/** The customer's page (/t/{code}): no sign-in, read-only, only what the shop chose to share. */
-export function TrackPage({ code }: { code: string }) {
+const RATING_WORDS = ["", "خیلی ناراضی", "ناراضی", "متوسط", "راضی", "خیلی راضی"];
+
+/** Five large stars (≥ 44px each) for one question; the chosen word is said below. */
+function Stars({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="tk-q">
+      <p id={`q-${label}`}>{label}</p>
+      <div className="tk-stars" role="radiogroup" aria-labelledby={`q-${label}`}>
+        {[1, 2, 3, 4, 5].map((v) => (
+          <button key={v} type="button" role="radio" aria-checked={value === v} aria-label={`${formatNumber(v)} از ۵، ${RATING_WORDS[v]}`}
+            className={v <= value ? "on" : ""} onClick={() => onChange(v)}>
+            <Icon name="star" />
+          </button>
+        ))}
+      </div>
+      <span className="tk-q-word" aria-hidden="true">{value ? RATING_WORDS[value] : " "}</span>
+    </div>
+  );
+}
+
+/** The satisfaction survey after delivery: every question once, an optional comment, then thanks. */
+function SurveyCard({ code, survey, customer, focus, onDone }: { code: string; survey: Survey; customer: string | null; focus: boolean; onDone: () => void }) {
+  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => { if (focus) ref.current?.scrollIntoView({ block: "start" }); }, [focus]);
+
+  if (survey.state === "answered")
+    return (
+      <section className="tk-card tk-survey done" ref={ref} id="survey">
+        <span className="tk-survey-icon"><Icon name="check" /></span>
+        <strong>نظر شما ثبت شد</strong>
+        <p>از وقتی که گذاشتید سپاسگزاریم؛ نظرتان مستقیم به مدیر تعمیرگاه می‌رسد.</p>
+      </section>
+    );
+  if (survey.state === "expired")
+    return <section className="tk-card tk-survey done" ref={ref} id="survey"><p>زمان این نظرسنجی تمام شده است.</p></section>;
+
+  const questions = survey.questions ?? [];
+  const missing = questions.filter((q) => !ratings[q.id]).length;
+  async function submit() {
+    if (missing > 0) { setError("لطفاً به همه‌ی سؤال‌ها جواب دهید."); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/v1/track/${encodeURIComponent(code)}/survey`, {
+        method: "POST", body: { answers: questions.map((q) => ({ questionId: q.id, rating: ratings[q.id] })), comment: comment.trim() || undefined },
+      });
+      onDone();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "ثبت نشد. اتصال را بررسی کنید و دوباره بزنید.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="tk-card tk-survey" ref={ref} id="survey">
+      <div className="tk-section-title">
+        <span className="tk-section-icon"><Icon name="star" /></span>
+        <div><span>نظرسنجی</span><h2>{customer ? `${customer} عزیز، نظرتان چیست؟` : "نظرتان چیست؟"}</h2></div>
+      </div>
+      <p className="tk-survey-lead">چند ثانیه بیشتر طول نمی‌کشد و به ما کمک می‌کند بهتر شویم.</p>
+      {questions.map((q) => (
+        <Stars key={q.id} label={q.text} value={ratings[q.id] ?? 0} onChange={(v) => { setRatings((r) => ({ ...r, [q.id]: v })); setError(null); }} />
+      ))}
+      <label className="tk-q">
+        <p>اگر نکته‌ای دارید بنویسید (اختیاری)</p>
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={3} placeholder="مثلاً از چه چیزی راضی بودید یا چه چیزی بهتر شود" />
+      </label>
+      {error && <p className="tk-error" role="alert">{error}</p>}
+      <button type="button" className="tk-submit" onClick={submit} disabled={busy} aria-busy={busy}>
+        {busy ? "در حال ثبت…" : missing > 0 ? `ثبت نظر (${formatNumber(missing)} سؤال مانده)` : "ثبت نظر"}
+      </button>
+    </section>
+  );
+}
+
+/**
+ * The customer's page (/t/{code}): no sign-in, read-only, only what the shop chose to share. After delivery it
+ * carries the satisfaction survey; the survey SMS links to /s/{code}, which opens the same page at the survey.
+ */
+export function TrackPage({ code, survey: surveyFirst = false }: { code: string; survey?: boolean }) {
   const [t, setT] = useState<Track | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [photo, setPhoto] = useState<number | null>(null);
   const [theme, setTheme] = useState(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
 
-  useEffect(() => {
-    document.title = "پیگیری پرونده";
+  const load = () =>
     api<Track>(`/api/v1/track/${encodeURIComponent(code)}`)
       .then((d) => { setT(d); document.title = `پیگیری پرونده · ${d.shop.name}`; })
       .catch((e) => setError(e instanceof ApiError && e.status === 404
         ? "این لینک معتبر نیست یا پرونده دیگر در دسترس نیست."
         : "ارتباط برقرار نشد. کمی بعد دوباره امتحان کنید."));
-  }, [code]);
+  useEffect(() => {
+    document.title = "پیگیری پرونده";
+    load();
+  }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (photo === null) return;
@@ -145,7 +233,6 @@ export function TrackPage({ code }: { code: string }) {
             <div className="tk-hero-copy">
               <div className="tk-greeting">
                 <span>{t.case.customer ? `${t.case.customer} عزیز` : "مشتری گرامی"}</span>
-                <bdi className="tk-case" dir="ltr">CASE-{t.case.number}</bdi>
               </div>
               <h1>{t.case.vehicle?.title ?? "پرونده‌ی شما"}</h1>
               {t.case.vehicle?.identifier && <bdi className="tk-plate font-num" dir="ltr">{t.case.vehicle.identifier}</bdi>}
@@ -163,6 +250,8 @@ export function TrackPage({ code }: { code: string }) {
             )}
           </div>
         </section>
+
+        {t.survey && <SurveyCard code={code} survey={t.survey} customer={t.case.customer} focus={surveyFirst} onDone={load} />}
 
         {(problems.length > 0 || services.length > 0) && (
           <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">

@@ -15,7 +15,7 @@ public static class StaffEndpoints
     public sealed record UpdateStaff(
         string? Role, string[]? Permissions, bool? IsActive,
         string? PayModel, decimal? CommissionPercent, long? FixedMonthlyRials,
-        string? DisplayName, string? CommissionType, long? CommissionFixedRials, string? CommissionBase);
+        string? DisplayName, string? CommissionType, long? CommissionFixedRials, string? CommissionBase, bool? SurveyNotify = null);
 
     public static void MapStaff(this IEndpointRouteBuilder app)
     {
@@ -29,7 +29,7 @@ public static class StaffEndpoints
                     m.Id, m.UserId, m.User!.Mobile, m.User.DisplayName, m.Role,
                     Permissions = m.Role == Roles.Owner ? Permissions.All.ToArray() : m.Permissions,
                     m.IsActive, m.PayModel, m.CommissionPercent, m.FixedMonthlyRials,
-                    m.CommissionType, m.CommissionFixedRials, m.CommissionBase,
+                    m.CommissionType, m.CommissionFixedRials, m.CommissionBase, m.SurveyNotify,
                 })
                 .ToListAsync(ct)));
 
@@ -61,6 +61,8 @@ public static class StaffEndpoints
             var membership = new Membership
             {
                 UserId = user.Id, Role = role, Permissions = granted, CreatedAt = clock.UtcNow,
+                // Supervisors follow customer feedback by default; the manager can switch it per member.
+                SurveyNotify = role == Roles.Supervisor,
             };
             db.Memberships.Add(membership);
             audit.Record("staff.added", me.RequiredMembership.TenantId, me.RequiredUserId, $"{membership.Id} {role}");
@@ -120,6 +122,7 @@ public static class StaffEndpoints
             if (req.CommissionType is not null) target.CommissionType = req.CommissionType;
             if (req.CommissionFixedRials is not null) target.CommissionFixedRials = req.CommissionFixedRials == 0 ? null : req.CommissionFixedRials;
             if (req.CommissionBase is not null) target.CommissionBase = req.CommissionBase;
+            if (req.SurveyNotify is { } notify) target.SurveyNotify = notify;
             if (displayName is not null && target.User is not null) target.User.DisplayName = displayName.Length == 0 ? null : displayName;
 
             audit.Record("staff.updated", target.TenantId, me.RequiredUserId,

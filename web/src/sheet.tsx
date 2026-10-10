@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Bottom sheet for frequent quick actions (assign, move stage, note, wait reason).
@@ -22,7 +23,8 @@ export function BottomSheet({ open, title, onClose, children }: { open: boolean;
     };
   }, [open, onClose]);
 
-  return (
+  // Rendered at the page root, so a sheet opened from the sticky top bar still sits above everything.
+  return createPortal(
     <div className="sheet-root" hidden={!open}>
       <div className="sheet-scrim" onClick={onClose} aria-hidden="true" />
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
@@ -33,7 +35,8 @@ export function BottomSheet({ open, title, onClose, children }: { open: boolean;
         </header>
         <div className="sheet-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
