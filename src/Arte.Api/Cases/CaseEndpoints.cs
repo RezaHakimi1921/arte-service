@@ -139,16 +139,24 @@ public static class CaseEndpoints
                 Stage = new { r.s.Id, r.s.Key, r.s.Name, r.s.Category, r.s.Color, r.s.IsTerminal },
                 AssetIdentifier = r.a == null ? null : r.a.Identifier,
                 r.AssigneeName, r.c.AssigneeId, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices, r.c.ReportedProblems,
-                r.c.WaitReason,
+                r.c.WaitReason, r.c.OdometerKm, r.c.FuelLevel, r.c.CreditDueAt, AssetKind = r.a == null ? null : r.a.Kind,
                 LastEvent = db.CaseEvents.Where(e => e.CaseId == r.c.Id).OrderByDescending(e => e.Id)
                     .Select(e => new { e.Type, e.OccurredAt, e.Data }).FirstOrDefault(),
             })
             .ToListAsync(ct);
         var now = DateTimeOffset.UtcNow;
+        var money = await BillingEndpoints.Totals(db, items.Select(i => i.Id).ToList(), ct);
         return Results.Ok(items.Select(i => new
         {
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
             i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.OpenedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason,
+            i.OdometerKm, i.FuelLevel, i.AssetKind,
+            TotalRials = money.GetValueOrDefault(i.Id)?.TotalRials ?? 0,
+            PaidRials = money.GetValueOrDefault(i.Id)?.PaidRials ?? 0,
+            BalanceRials = money.GetValueOrDefault(i.Id)?.BalanceRials ?? 0,
+            // Delivered and still owing: نسیه.
+            IsCredit = i.Stage.Key == "delivered" && (money.GetValueOrDefault(i.Id)?.BalanceRials ?? 0) > 0,
+            i.CreditDueAt,
             LastEvent = i.LastEvent == null ? null : new { i.LastEvent.Type, i.LastEvent.OccurredAt, Data = i.LastEvent.Data?.RootElement },
             Alert = CaseAlerts.Primary(i.Stage.IsTerminal, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
         }));
@@ -218,7 +226,7 @@ public static class CaseEndpoints
             c.WarrantyUntil, c.CreditDueAt,
             Billing = await BillingEndpoints.MoneyView(db, c.Id, me, ct),
             PhotosVisibleByDefault = await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct),
-            Photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id).OrderBy(a => a.CreatedAt)
+            Photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.Purpose == AttachmentPurposes.Photo).OrderBy(a => a.CreatedAt)
                 .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt, a.VisibleToCustomer }).ToListAsync(ct),
             Survey = await Arte.Api.Surveys.SurveyEndpoints.CaseViewAsync(db, c, ct),
             CanFollowUp = CaseAccess.CanSeeAll(me),
@@ -635,15 +643,19 @@ public static class CaseEndpoints
                 Stage = new { s.Id, s.Key, s.Name, s.Category, s.Color, s.IsTerminal },
                 AssigneeName = mem == null ? null : mem.User!.DisplayName ?? mem.User.Mobile,
                 c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.ReportedProblems, c.WaitReason, c.OpenedAt,
+                c.OdometerKm, c.FuelLevel, AssetKind = a == null ? null : a.Kind,
                 LastEvent = db.CaseEvents.Where(e => e.CaseId == c.Id).OrderByDescending(e => e.Id)
                     .Select(e => new { e.Type, e.OccurredAt, e.Data }).FirstOrDefault(),
             })
             .Take(500).ToListAsync(ct);
 
-        var balances = await BillingEndpoints.Balances(db, open.Select(o => o.Id).ToList(), ct);
+        var totals = await BillingEndpoints.Totals(db, open.Select(o => o.Id).ToList(), ct);
         var cards = open.Select(i => new
         {
-            BalanceRials = balances.GetValueOrDefault(i.Id),
+            BalanceRials = totals.GetValueOrDefault(i.Id)?.BalanceRials ?? 0,
+            TotalRials = totals.GetValueOrDefault(i.Id)?.TotalRials ?? 0,
+            PaidRials = totals.GetValueOrDefault(i.Id)?.PaidRials ?? 0,
+            i.OdometerKm, i.FuelLevel, i.AssetKind,
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
             i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason, i.OpenedAt,
             Mine = i.AssigneeId == m.Id,

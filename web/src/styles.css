@@ -1830,3 +1830,56 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .package-fields.with-cost { grid-template-columns: 4.5rem 1fr 1fr; }
 .package-fields .field { margin: 0; }
 .package-total { margin: 0.25rem 0 0; }
+
+/* ── credit and receipts ── */
+.credit-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.6rem 0.75rem; border: 1px solid color-mix(in srgb, var(--stage-orange) 45%, var(--border)); border-radius: 12px; background: var(--warn-bg); }
+.credit-bar strong { color: var(--stage-orange); }
+.credit-bar button { flex: 0 0 auto; min-height: 40px; }
+.receipt-button { display: flex; align-items: center; justify-content: center; min-height: 48px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.receipt-picked { display: flex; align-items: center; gap: 0.75rem; }
+.receipt-picked img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.receipt-image { width: 100%; max-height: 70dvh; object-fit: contain; border-radius: 12px; }
+
+/* ── case card panels ── */
+.case-badges { display: inline-flex; align-items: center; gap: 0.35rem; }
+.badge.credit { background: var(--warn-bg); color: var(--stage-orange); font-weight: 800; }
+.case-panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; width: 100%; }
+.case-panel { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: 0.45rem 0.55rem; border-radius: 10px; background: var(--surface-2); }
+.case-panel.owe { background: var(--warn-bg); }
+.case-panel.owe .panel-sub { color: var(--stage-orange); font-weight: 700; }
+.panel-label { color: var(--muted); font-size: 0.72rem; }
+.panel-value { overflow: hidden; font-size: 0.85rem; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.panel-sub { color: var(--muted); font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fuel-mini { display: flex; gap: 2px; margin-top: 2px; }
+.fuel-mini i { flex: 1; height: 5px; border-radius: 2px; background: var(--border); }
+.fuel-mini i.on.f0 { background: var(--fuel-0); }
+.fuel-mini i.on.f1 { background: var(--fuel-1); }
+.fuel-mini i.on.f2 { background: var(--fuel-2); }
+.fuel-mini i.on.f3 { background: var(--fuel-3); }
+.fuel-mini i.on.f4 { background: var(--fuel-4); }
+
+/* ── fuel gauge (intake) ── */
+.fuel-gauge { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.fuel-gauge svg { width: 100%; max-width: 300px; direction: ltr; touch-action: none; cursor: grab; user-select: none; }
+.fuel-gauge svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 12px; }
+.fg-track { fill: none; stroke: var(--surface-2); stroke-width: 22; stroke-linecap: round; }
+.fg-seg { fill: none; stroke-width: 14; stroke-linecap: round; opacity: 0.85; }
+.fg-seg.f0 { stroke: var(--fuel-0); }
+.fg-seg.f1 { stroke: var(--fuel-1); }
+.fg-seg.f2 { stroke: var(--fuel-3); }
+.fg-seg.f3 { stroke: var(--fuel-4); }
+.fg-tick { stroke: var(--border-strong); stroke-width: 2; }
+.fg-tick.on { stroke: var(--text); stroke-width: 3; }
+.fg-end, .fg-half { fill: var(--muted); font-size: 15px; font-weight: 800; text-anchor: middle; }
+.fg-needle { stroke: var(--text); stroke-width: 5; stroke-linecap: round; transition: all 0.18s var(--ease-out); }
+.fg-hub { fill: var(--text); }
+.fuel-gauge.unset .fg-hub { fill: var(--border-strong); }
+.fg-value { font-weight: 800; }
+.fuel-gauge.level-0 .fg-value { color: var(--fuel-0); }
+.fuel-gauge.level-1 .fg-value { color: var(--fuel-1); }
+.fuel-gauge.level-2 .fg-value { color: var(--fuel-2); }
+.fuel-gauge.level-3 .fg-value { color: var(--fuel-3); }
+.fuel-gauge.level-4 .fg-value { color: var(--fuel-4); }
+.fuel-gauge.unset .fg-value { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+#intake-condition { scroll-margin-top: 72px; }
+@media (prefers-reduced-motion: reduce) { .fg-needle { transition: none; } }

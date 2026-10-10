@@ -19,7 +19,7 @@ public static class TenantEndpoints
         bool? RequireCustomerApproval, bool? RequireFinalReview, string? BusinessType = null, string[]? VehicleKinds = null,
         bool? CustomerSmsEnabled = null, bool? SmsOnOpened = null, bool? SmsOnReady = null, bool? SmsOnDelivered = null,
         bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null, bool? PhotosVisibleByDefault = null,
-        bool? SurveySendOn = null, int? SurveyDelayMinutes = null, int? SurveyAlertBelow = null);
+        bool? SurveySendOn = null, int? SurveyDelayMinutes = null, int? SurveyAlertBelow = null, bool? RequireTransferReceipt = null);
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -59,7 +59,7 @@ public static class TenantEndpoints
                     t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                     t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                     t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
-                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt,
                 }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
 
@@ -99,6 +99,7 @@ public static class TenantEndpoints
             if (req.SurveySendOn is { } ss) t.SurveySendOn = ss;
             if (req.SurveyDelayMinutes is { } sdm) t.SurveyDelayMinutes = sdm;
             if (req.SurveyAlertBelow is { } sab) t.SurveyAlertBelow = sab;
+            if (req.RequireTransferReceipt is { } rr) t.RequireTransferReceipt = rr;
             audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
             await db.SaveChangesAsync(ct);
             // Optional workflow steps follow the settings.
@@ -109,7 +110,7 @@ public static class TenantEndpoints
                 t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                 t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                 t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
-                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt,
             });
         }).RequirePermission(Permissions.SettingsManage);
 

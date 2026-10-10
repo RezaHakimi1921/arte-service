@@ -21,6 +21,8 @@ export type CaseCardData = {
   assetIdentifier: string | null; stage: StageRef; assigneeName: string | null; stageEnteredAt: string;
   promisedAt: string | null; request: string; requestedServices: string[]; waitReason: string | null; alert?: Alert | null;
   reasons?: Alert[]; balanceRials?: number; openedAt?: string; reportedProblems?: string[];
+  totalRials?: number; paidRials?: number; isCredit?: boolean; creditDueAt?: string | null;
+  odometerKm?: number | null; fuelLevel?: number | null; assetKind?: string | null;
   lastEvent?: { type: string; occurredAt: string; data: Record<string, unknown> | null } | null;
 };
 type TransitionView = { id: string; label: string; isPrimary: boolean; requiresReason: boolean; toStage: { name: string; category: string; color: string } };
@@ -117,11 +119,16 @@ export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) 
   const status = statusText(c.stage, c.waitReason, null);
   const color = c.waitReason ? "orange" : c.stage.color;
   const sla = c.promisedAt && !c.stage.isTerminal ? slaText(c.promisedAt) : null;
+  const total = c.totalRials ?? 0;
+  const balance = c.balanceRials ?? 0;
   return (
     <button className="case-card" onClick={() => onOpen(c.id)}>
       <span className="case-row-top">
         <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
-        <span className={`status-badge stage-${color}`}><span className="dot" aria-hidden="true" />{status}</span>
+        <span className="case-badges">
+          {c.isCredit && <span className="badge credit">نسیه</span>}
+          <span className={`status-badge stage-${color}`}><span className="dot" aria-hidden="true" />{status}</span>
+        </span>
       </span>
       <span className="case-title">
         <strong>{c.assetTitle ?? "بدون وسیله"}</strong>
@@ -129,19 +136,49 @@ export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) 
       </span>
       <span className="muted">{c.customerName ?? <span dir="ltr" className="font-num">{maskMobile(c.customerMobile)}</span>}</span>
       <Progress stage={c.stage} />
-      <span className="case-facts small">
-        <span>👤 {c.assigneeName ?? "بدون مسئول"}</span>
-        <span>🕐 {c.lastEvent ? `${ago(c.lastEvent.occurredAt)} پیش` : `${ago(c.stageEnteredAt)} پیش`}</span>
-        {c.openedAt && <span className="muted">پذیرش {faShort.format(new Date(c.openedAt))}</span>}
+
+      {/* Three short panels: the vehicle, the work, the money. */}
+      <span className="case-panels">
+        <span className="case-panel">
+          <span className="panel-label">وسیله (کیلومتر)</span>
+          <span className="panel-value">{c.odometerKm != null ? <span className="font-num">{formatNumber(c.odometerKm)}</span> : "—"}</span>
+          {c.fuelLevel == null && <span className="panel-sub">{c.odometerKm != null ? "سوخت ثبت نشده" : "ثبت نشده"}</span>}
+          {c.fuelLevel != null && <FuelMini level={c.fuelLevel} />}
+        </span>
+        <span className="case-panel">
+          <span className="panel-label">تعمیر</span>
+          <span className="panel-value">{c.assigneeName ?? "بدون مسئول"}</span>
+          <span className="panel-sub">{c.lastEvent ? `${ago(c.lastEvent.occurredAt)} پیش` : `${ago(c.stageEnteredAt)} پیش`}</span>
+        </span>
+        <span className={`case-panel${balance > 0 && c.stage.category === "done" ? " owe" : ""}`}>
+          <span className="panel-label">مالی (تومان)</span>
+          {total > 0 ? (
+            <>
+              <span className="panel-value font-num">{formatNumber(Math.round(total / 10))}</span>
+              <span className="panel-sub">
+                {balance > 0 ? <>مانده <span className="font-num">{formatNumber(Math.round(balance / 10))}</span></> : balance === 0 ? "تسویه" : "بستانکار"}
+              </span>
+            </>
+          ) : <><span className="panel-value">—</span><span className="panel-sub">بدون ردیف</span></>}
+        </span>
       </span>
+
+      {c.isCredit && c.creditDueAt && (
+        <span className="alert-line warn">موعد پرداخت نسیه: {faShort.format(new Date(c.creditDueAt))}</span>
+      )}
       {sla && <span className={`alert-line ${sla.late ? "danger" : "warn"}`}>⏱ {sla.text}</span>}
       {c.lastEvent && <span className="last-activity muted small">آخرین فعالیت: {eventText(c.lastEvent.type, c.lastEvent.data)}</span>}
-      {c.stage.category === "done" && !!c.balanceRials && c.balanceRials > 0 && (
-        <span className="alert-line warn">مانده: <span className="font-num">{tomanFmt(c.balanceRials)}</span></span>
-      )}
       {alerts.filter((a) => !a.code.startsWith("due") && a.code !== "overdue").slice(0, 1).map((a) => <AlertLine key={a.code} alert={a} />)}
-      <span className="open-link small">باز کردن پرونده ‹</span>
     </button>
+  );
+}
+
+/** Fuel at intake as a small five-step bar (red empty … green full). */
+function FuelMini({ level }: { level: number }) {
+  return (
+    <span className="fuel-mini" role="img" aria-label={`سوخت: ${FUEL_LEVELS[level] ?? ""}`}>
+      {[0, 1, 2, 3, 4].map((i) => <i key={i} className={i <= level ? `on f${level}` : ""} />)}
+    </span>
   );
 }
 
@@ -340,6 +377,15 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
           </button>
         </div>
         <MoneyBar money={c.billing.money} />
+        {c.stage.key === "delivered" && c.billing.money.balanceRials > 0 && (
+          <div className="credit-bar" role="status">
+            <span>
+              <strong>نسیه</strong> · مانده <span className="font-num">{tomanFmt(c.billing.money.balanceRials)}</span>
+              {c.creditDueAt && <> · موعد {new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}</>}
+            </span>
+            {c.billing.canRecordPayments && <button className="primary" onClick={() => setPaySignal((n) => n + 1)}>ثبت پرداخت</button>}
+          </div>
+        )}
         {(c.warrantyUntil || c.creditDueAt) && (
           <p className="muted small">
             {c.warrantyUntil && `ضمانت تا ${new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", year: "numeric" }).format(new Date(c.warrantyUntil))}`}

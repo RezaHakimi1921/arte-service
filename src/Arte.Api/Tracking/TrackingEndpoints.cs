@@ -83,7 +83,7 @@ public static class TrackingEndpoints
             }
 
             // Only the photos the shop marked for the customer.
-            var photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.VisibleToCustomer)
+            var photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.VisibleToCustomer && a.Purpose == AttachmentPurposes.Photo)
                 .OrderBy(a => a.CreatedAt).Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt }).ToListAsync(ct);
 
             // The satisfaction survey, once the vehicle is delivered (the SMS links here too).
@@ -130,7 +130,7 @@ public static class TrackingEndpoints
             var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
             var photo = await (from a in db.CaseAttachments.IgnoreQueryFilters([ArteDbContext.TenantFilter])
                                join c in db.Cases.IgnoreQueryFilters([ArteDbContext.TenantFilter]) on a.CaseId equals c.Id
-                               where a.Id == photoId && a.VisibleToCustomer && c.TrackingCode == code && !c.IsSample
+                               where a.Id == photoId && a.VisibleToCustomer && a.Purpose == AttachmentPurposes.Photo && c.TrackingCode == code && !c.IsSample
                                      && a.DeletedAt == null && c.DeletedAt == null
                                select new { a.StoragePath, a.ContentType }).SingleOrDefaultAsync(ct);
             if (photo is null) return Results.NotFound();

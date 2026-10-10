@@ -209,7 +209,7 @@ type BusinessSettings = {
   businessType: string; vehicleKinds: string[];
   customerSmsEnabled: boolean; smsOnOpened: boolean; smsOnReady: boolean; smsOnDelivered: boolean;
   trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean; photosVisibleByDefault: boolean;
-  surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number; surveyAlertBelow: number;
+  surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number; surveyAlertBelow: number; requireTransferReceipt: boolean;
 };
 
 function delayText(m: number) {
@@ -304,6 +304,8 @@ export function IntakeRulesPage({ onBack, onSaved }: { onBack: () => void; onSav
             checked={s.requireFinalReview} disabled={false} onChange={(v) => save({ requireFinalReview: v })} />
           <Switch title="تأیید هزینه توسط مشتری قبل از تعمیر" sub="بعد از عیب‌یابی، کار تا تأیید مشتری متوقف می‌ماند. معمولاً لازم نیست چون مشتری خودش کار را سپرده است."
             checked={s.requireCustomerApproval} disabled={false} onChange={(v) => save({ requireCustomerApproval: v })} />
+          <Switch title="رسید کارت به کارت لازم باشد" sub="با هر پرداخت کارت به کارت باید عکس رسید بارگذاری شود؛ برای بقیه‌ی روش‌ها اختیاری است."
+            checked={s.requireTransferReceipt} disabled={false} onChange={(v) => save({ requireTransferReceipt: v })} />
         </div>
       )}
     </SubPage>

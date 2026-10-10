@@ -81,6 +81,8 @@ public sealed class Payment : ITenantOwned, ISoftDeletable
     public DateTimeOffset PaidAt { get; set; }
     public Guid RecordedBy { get; set; }
     public string? Note { get; set; }
+    /// <summary>Photo of the bank receipt (CaseAttachment with purpose receipt), optional unless the business requires it.</summary>
+    public Guid? ReceiptId { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
 }

@@ -12,7 +12,7 @@ const STAGE_HINT: Record<string, string> = {
 };
 
 /** Shrink to at most 1600px on the long side and re-encode as JPEG; also strips the camera's metadata. */
-async function compress(file: File): Promise<Blob> {
+export async function compress(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) return file;
   const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));

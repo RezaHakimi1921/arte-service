@@ -53,9 +53,13 @@ public static class AttachmentEndpoints
         if (file.Length > MaxBytes) return Results.Problem(statusCode: 400, title: "حجم عکس حداکثر ۶ مگابایت است.");
         var caption = form["caption"].ToString().Trim();
         if (caption.Length > 200) caption = caption[..200];
+        // A receipt belongs to a payment: never in the gallery, never shown to the customer.
+        var receipt = form["purpose"].ToString() == AttachmentPurposes.Receipt;
+        if (receipt && !m.Has(Arte.Core.Identity.Permissions.PaymentsRecord))
+            return Results.Problem(statusCode: 403, title: "ثبت پرداخت و رسید برای شما فعال نیست.");
         // Visible to the customer: as chosen at upload, otherwise the business default.
-        var visible = bool.TryParse(form["visibleToCustomer"].ToString(), out var v) ? v
-            : await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct);
+        var visible = !receipt && (bool.TryParse(form["visibleToCustomer"].ToString(), out var v) ? v
+            : await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct));
 
         await using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, ct);
@@ -74,10 +78,11 @@ public static class AttachmentEndpoints
         {
             Id = id, CaseId = c.Id, StageKey = stageKey, ContentType = kind.Type, SizeBytes = bytes.Length,
             StoragePath = relative.Replace('\\', '/'), Caption = caption.Length == 0 ? null : caption, VisibleToCustomer = visible,
+            Purpose = receipt ? AttachmentPurposes.Receipt : AttachmentPurposes.Photo,
             CreatedBy = me.RequiredUserId, CreatedAt = clock.UtcNow,
         };
         db.CaseAttachments.Add(attachment);
-        db.CaseEvents.Add(new CaseEvent
+        if (!receipt) db.CaseEvents.Add(new CaseEvent
         {
             CaseId = c.Id, Type = "case.photo_added", ActorUserId = me.RequiredUserId, OccurredAt = attachment.CreatedAt,
             Data = System.Text.Json.JsonSerializer.SerializeToDocument(new { stage = stageKey, caption = attachment.Caption }),

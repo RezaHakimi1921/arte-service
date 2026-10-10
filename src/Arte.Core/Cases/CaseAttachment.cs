@@ -3,6 +3,12 @@ using Arte.Core.Tenancy;
 
 namespace Arte.Core.Cases;
 
+public static class AttachmentPurposes
+{
+    public const string Photo = "photo";
+    public const string Receipt = "receipt";
+}
+
 /// <summary>A photo on a case (work done, delivery, damage). The file lives on disk, never publicly reachable.</summary>
 public sealed class CaseAttachment : ITenantOwned, ISoftDeletable
 {
@@ -18,6 +24,8 @@ public sealed class CaseAttachment : ITenantOwned, ISoftDeletable
     public string? Caption { get; set; }
     /// <summary>Shown on the customer's tracking page. Chosen at upload (default from Settings), changeable later.</summary>
     public bool VisibleToCustomer { get; set; }
+    /// <summary>photo (the case gallery) or receipt (a payment's bank receipt; never shown to the customer).</summary>
+    public string Purpose { get; set; } = AttachmentPurposes.Photo;
     public Guid CreatedBy { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

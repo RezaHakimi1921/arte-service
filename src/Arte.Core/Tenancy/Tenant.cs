@@ -53,6 +53,8 @@ public sealed class Tenant
     public bool TrackShowAmounts { get; set; } = true;
     /// <summary>New photos start as visible to the customer (each photo can still be switched).</summary>
     public bool PhotosVisibleByDefault { get; set; }
+    /// <summary>Business setting: a card-to-card payment must come with a photo of its receipt.</summary>
+    public bool RequireTransferReceipt { get; set; }
 
     // ── Customer satisfaction survey (a paid add-on) ──
     /// <summary>The add-on is on for this business. Only the platform admin changes it.</summary>

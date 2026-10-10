@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { api, ApiError } from "./api";
+import { api, apiBlob, ApiError } from "./api";
 import { useFeedback } from "./feedback";
 import { BottomSheet, SheetOption } from "./sheet";
+import { compress } from "./photos";
 import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
 
 /* ───────── types ───────── */
@@ -11,11 +12,11 @@ export type Item = {
   discountRials: number; supplier: string; status: string; performedBy: string | null; performedByName: string | null;
   warrantyDays: number | null; lineTotalRials: number; profitRials: number | null;
 };
-export type PaymentRow = { id: string; amountRials: number; method: string; paidAt: string; note: string | null };
+export type PaymentRow = { id: string; amountRials: number; method: string; paidAt: string; note: string | null; receiptId: string | null };
 export type Billing = {
   items: Item[]; payments: PaymentRow[];
   money: { totalRials: number; paidRials: number; balanceRials: number; partsRials: number; laborRials: number; servicesRials: number; costRials: number | null; profitRials: number | null };
-  canEditItems: boolean; canRecordPayments: boolean; canSeeCost: boolean;
+  canEditItems: boolean; canRecordPayments: boolean; canSeeCost: boolean; requireTransferReceipt: boolean;
 };
 type CatalogRow = { id: string; kind: string; title: string; defaultPriceRials: number; defaultCostRials: number | null; defaultWarrantyDays: number | null; isActive: boolean };
 type Assignable = { id: string; name: string; role: string };
@@ -70,6 +71,14 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
   const { notify } = useFeedback();
   const [editing, setEditing] = useState<{ kind: string; item?: Item } | null>(null);
   const [paying, setPaying] = useState(false);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  async function openReceipt(id: string) {
+    try {
+      setReceiptUrl(URL.createObjectURL(await apiBlob(`/api/v1/attachments/${id}`)));
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "رسید باز نشد", "error");
+    }
+  }
   const [busy, setBusy] = useState(false);
 
   async function run(work: () => Promise<Billing>, ok: string, undo?: () => Promise<Billing>) {
@@ -150,6 +159,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                   <strong className="font-num">{toman(p.amountRials)}</strong> · {METHOD_LABELS[p.method] ?? p.method}
                   <span className="muted small"> · {faDate.format(new Date(p.paidAt))}{p.note ? ` · ${p.note}` : ""}</span>
                 </span>
+                {p.receiptId && <button className="link" onClick={() => openReceipt(p.receiptId!)}>رسید</button>}
                 {billing.canRecordPayments && (
                   <button className="link danger" disabled={busy}
                     onClick={() => run(() => api<Billing>(`/api/v1/cases/${caseId}/payments/${p.id}`, { method: "DELETE" }), "پرداخت باطل شد")}>
@@ -193,7 +203,11 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
           return b;
         }, `«${title}» به پرونده اضافه شد`)} />
 
-      <PaymentSheet open={paying} suggested={Math.max(0, m.balanceRials)} busy={busy} onClose={() => setPaying(false)}
+      <BottomSheet open={!!receiptUrl} title="رسید پرداخت" onClose={() => { if (receiptUrl) URL.revokeObjectURL(receiptUrl); setReceiptUrl(null); }}>
+        {receiptUrl && <img className="receipt-image" src={receiptUrl} alt="رسید پرداخت" />}
+      </BottomSheet>
+
+      <PaymentSheet open={paying} caseId={caseId} requireReceipt={billing.requireTransferReceipt} suggested={Math.max(0, m.balanceRials)} busy={busy} onClose={() => setPaying(false)}
         onSave={(body) => run(async () => { const b = await api<Billing>(`/api/v1/cases/${caseId}/payments`, { body }); setPaying(false); return b; }, "پرداخت ثبت شد")} />
     </>
   );
@@ -355,21 +369,23 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     setSuggestions([]);
   }
 
-  const showCost = canSeeCost && supplier === "shop";
+  const showCost = canSeeCost && supplier === "shop" && kind === "part";
   const costError = showCost && cost && price && toRials(cost) > toRials(price) ? "قیمت فروش نباید از قیمت خرید کمتر باشد." : null;
 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (costError) return;
     if (!title.trim()) { setError("عنوان را بنویسید."); return; }
-    const q = Number(toLatinDigits(qty).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, ""));
+    const goods = kind === "part";
+    // Work is one line with one amount: no quantity, purchase price or warranty.
+    const q = goods ? Number(toLatinDigits(qty).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "")) : 1;
     if (!(q > 0)) { setError("تعداد نامعتبر است."); return; }
     const body: Record<string, unknown> = {
       kind, title: title.trim(), quantity: q, unitPriceRials: toRials(price), discountRials: toRials(discount),
-      status, warrantyDays: warranty,
+      status: goods ? status : "used", warrantyDays: goods ? warranty : 0,
     };
-    if (kind === "part") body.supplier = supplier;
-    if (canSeeCost && cost) body.unitCostRials = toRials(cost);
+    if (goods) body.supplier = supplier;
+    if (goods && canSeeCost && cost) body.unitCostRials = toRials(cost);
     if (kind !== "part" && performedBy) body.performedBy = performedBy;
     if (catalogId) body.catalogItemId = catalogId;
     else if (standardId) body.standardItemId = standardId;
@@ -439,17 +455,23 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
             <NumberInput value={cost} onChange={setCost} max={11} suffix="تومان" />
           </Field>
         )}
-        <Field label={supplier === "customer" && kind === "part" ? "قیمت (برای سابقه)" : "قیمت فروش هر عدد"} error={costError}>
+        <Field label={kind !== "part" ? "مبلغ اجرت" : supplier === "customer" ? "قیمت (برای سابقه)" : "قیمت فروش هر عدد"} error={costError}>
           <NumberInput value={price} onChange={setPrice} max={11} suffix="تومان" />
         </Field>
-        <div className="grid-2">
-          <Field label="تعداد">
-            <input inputMode="decimal" dir="ltr" className="font-num" value={qty} onChange={(e) => setQty(toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 7))} />
-          </Field>
-          <Field label="تخفیف این ردیف">
+        {kind === "part" ? (
+          <div className="grid-2">
+            <Field label="تعداد">
+              <input inputMode="decimal" dir="ltr" className="font-num" value={qty} onChange={(e) => setQty(toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 7))} />
+            </Field>
+            <Field label="تخفیف این ردیف">
+              <NumberInput value={discount} onChange={setDiscount} max={11} suffix="تومان" />
+            </Field>
+          </div>
+        ) : (
+          <Field label="تخفیف">
             <NumberInput value={discount} onChange={setDiscount} max={11} suffix="تومان" />
           </Field>
-        </div>
+        )}
 
         {kind === "part" && (
           <label className="check">
@@ -467,7 +489,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
           </Field>
         )}
 
-        <div className="field">
+        {kind === "part" && <div className="field">
           <span className="label">ضمانت</span>
           <div className="chips">
             {WARRANTY_OPTIONS.map((d) => (
@@ -476,7 +498,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         {standardId && <p className="hint">قیمتی که این‌جا ثبت کنید، دفعه‌ی بعد خودش می‌آید.</p>}
         {!item && !catalogId && !standardId && title.trim() && (
@@ -495,43 +517,83 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
 
 /* ───────── payment sheet ───────── */
 
-function PaymentSheet({ open, suggested, busy, onClose, onSave }: {
-  open: boolean; suggested: number; busy: boolean; onClose: () => void; onSave: (body: Record<string, unknown>) => void;
+function PaymentSheet({ open, caseId, requireReceipt, suggested, busy, onClose, onSave }: {
+  open: boolean; caseId: string; requireReceipt: boolean; suggested: number; busy: boolean; onClose: () => void;
+  onSave: (body: { amountRials: number; method: string; note?: string; receiptId?: string }) => void;
 }) {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("card");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<{ id: string; url: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setAmount(toTomanDigits(suggested));
+    setAmount(suggested > 0 ? String(Math.round(suggested / 10)) : "");
     setMethod("card");
     setNote("");
     setError(null);
+    setReceipt(null);
   }, [open, suggested]);
 
+  async function upload(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const blob = await compress(file);
+      const form = new FormData();
+      form.append("file", blob, "receipt.jpg");
+      form.append("purpose", "receipt");
+      const r = await api<{ id: string }>(`/api/v1/cases/${caseId}/attachments`, { body: form });
+      setReceipt({ id: r.id, url: URL.createObjectURL(blob) });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "بارگذاری رسید انجام نشد.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const needsReceipt = requireReceipt && method === "transfer";
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!amount) { setError("مبلغ را وارد کنید."); return; }
-    onSave({ amountRials: toRials(amount), method, note: note.trim() || undefined });
+    if (needsReceipt && !receipt) { setError("برای کارت به کارت، عکس رسید را بارگذاری کنید."); return; }
+    onSave({ amountRials: toRials(amount), method, note: note.trim() || undefined, receiptId: receipt?.id });
   }
 
   return (
     <BottomSheet open={open} title="ثبت پرداخت" onClose={onClose}>
       <form onSubmit={submit} noValidate>
-        <Field label={suggested > 0 ? `مبلغ (مانده: ${toman(suggested)})` : "مبلغ (بیعانه یا پیش‌پرداخت)"} error={error}>
-          <NumberInput value={amount} onChange={setAmount} max={11} suffix="تومان" autoFocus />
+        <Field label={suggested > 0 ? `مبلغ (مانده: ${toman(suggested)})` : "مبلغ (بیعانه یا پیش‌پرداخت)"}>
+          <NumberInput value={amount} onChange={setAmount} max={11} suffix="تومان" />
         </Field>
         <div className="chips" role="radiogroup" aria-label="روش پرداخت">
           {Object.entries(METHOD_LABELS).map(([k, label]) => (
             <button type="button" key={k} role="radio" aria-checked={method === k} className={`chip-button${method === k ? " active" : ""}`} onClick={() => setMethod(k)}>{label}</button>
           ))}
         </div>
+        <div className="field">
+          <span className="label">عکس رسید واریز {needsReceipt ? "(لازم)" : "(اختیاری)"}</span>
+          {receipt ? (
+            <div className="receipt-picked">
+              <img src={receipt.url} alt="رسید انتخاب‌شده" />
+              <button type="button" className="link danger" onClick={() => setReceipt(null)}>برداشتن</button>
+            </div>
+          ) : (
+            <label className={`button receipt-button${uploading ? " busy" : ""}`} aria-busy={uploading}>
+              <input type="file" accept="image/*" hidden disabled={uploading} onChange={(e) => { void upload(e.target.files); e.target.value = ""; }} />
+              {uploading ? "در حال بارگذاری رسید…" : "عکس رسید (دوربین یا گالری)"}
+            </label>
+          )}
+        </div>
         <Field label="توضیح (اختیاری)">
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="مثلاً بیعانه خرید قطعه" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="مثلاً تسویه‌ی نسیه" />
         </Field>
-        <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت…" : "ثبت پرداخت"}</button>
+        {error && <span className="error" role="alert">{error}</span>}
+        <button className="primary block" disabled={busy || uploading} aria-busy={busy}>{busy ? "در حال ثبت…" : "ثبت پرداخت"}</button>
       </form>
     </BottomSheet>
   );

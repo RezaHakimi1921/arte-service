@@ -1,3 +1,4 @@
+import { FuelGauge } from "./fuel";
 import { SelectField, SelectSheet } from "./sheet";
 import { ROLE_NAMES } from "./labels";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -6,7 +7,7 @@ import { MotoPlateInput, PlateInput, PlateView, emptyMotoPlate, emptyPlate } fro
 import { ServicePicker } from "./services";
 import { Combobox, Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import {
-  ACCOMPANYING, COLORS, FUELS, FUEL_LEVELS, GEARBOXES, VEHICLE_CATALOG, VEHICLE_KINDS, problemsFor,
+  ACCOMPANYING, COLORS, FUELS, GEARBOXES, VEHICLE_CATALOG, VEHICLE_KINDS, problemsFor,
   formatMotoPlate, formatPlate, modelYears, type MotoPlateParts, type PlateParts, type VehicleKind,
 } from "./vehicles";
 
@@ -93,6 +94,13 @@ export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreate
   const [linkParent, setLinkParent] = useState(true);
 
   const [full, setFull] = useState(false);
+  // After «تکمیل پذیرش», land on the new part (vehicle condition), not wherever the button was.
+  const [jumpToCondition, setJumpToCondition] = useState(false);
+  useEffect(() => {
+    if (!jumpToCondition) return;
+    document.getElementById("intake-condition")?.scrollIntoView({ block: "start" });
+    setJumpToCondition(false);
+  }, [jumpToCondition]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -460,21 +468,14 @@ export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreate
 
       {full && (
         <>
+          <div id="intake-condition" aria-hidden="true" />
           <Section icon="gauge" title="وضعیت هنگام پذیرش" badge={fuel === null && <span className="badge warn">سوخت مشخص نشده</span>}>
             <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
               <NumberInput value={odometer} onChange={setOdometer} max={7} suffix="کیلومتر" />
             </Field>
             <div className="field">
               <span className="label">میزان سوخت</span>
-              <div className="fuel" role="radiogroup" aria-label="میزان سوخت">
-                {FUEL_LEVELS.map((label, i) => (
-                  <button type="button" key={label} role="radio" aria-checked={fuel === i}
-                    className={fuel !== null && i <= fuel ? `filled level-${fuel}` : ""} onClick={() => setFuel(i)}>
-                    <span className="fuel-bar" />
-                    <span className="fuel-label">{label}</span>
-                  </button>
-                ))}
-              </div>
+              <FuelGauge value={fuel} onChange={setFuel} />
             </div>
           </Section>
 
@@ -507,7 +508,7 @@ export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreate
       <div className="intake-footer">
         <button className="primary block big" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت پذیرش…" : full ? "ثبت پذیرش" : "ثبت سریع"}</button>
         {!full && (
-          <button type="button" className="block secondary" onClick={() => setFull(true)}>
+          <button type="button" className="block secondary" onClick={() => { setFull(true); setJumpToCondition(true); }}>
             تکمیل پذیرش (کیلومتر، سوخت، بدنه…)
           </button>
         )}

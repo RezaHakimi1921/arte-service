@@ -19,7 +19,7 @@ public static class BillingEndpoints
 
     public sealed record BatchInput(List<ItemInput>? Lines, string? Package);
 
-    public sealed record PaymentInput(long? AmountRials, string? Method, string? Note, DateTimeOffset? PaidAt);
+    public sealed record PaymentInput(long? AmountRials, string? Method, string? Note, DateTimeOffset? PaidAt, Guid? ReceiptId = null);
 
     public sealed record CatalogInput(string? Kind, string? Title, long? DefaultPriceRials, long? DefaultCostRials, int? DefaultWarrantyDays, bool? IsActive);
 
@@ -210,9 +210,14 @@ public static class BillingEndpoints
     {
         var m = me.RequiredMembership;
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == caseId, ct);
-        if (c is null) return Results.NotFound();
+        if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
 
         var errors = new Dictionary<string, string[]>();
+        if (req.ReceiptId is { } rid && !await db.CaseAttachments.AnyAsync(a => a.Id == rid && a.CaseId == c.Id && a.Purpose == AttachmentPurposes.Receipt, ct))
+            errors["receiptId"] = ["رسید پیدا نشد؛ دوباره بارگذاری کنید."];
+        if (req.ReceiptId is null && req.Method == PaymentMethods.Transfer
+            && await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.RequireTransferReceipt).SingleAsync(ct))
+            errors["receiptId"] = ["برای کارت به کارت، عکس رسید را بارگذاری کنید."];
         if (req.AmountRials is not > 0 || req.AmountRials > MaxRials) errors["amountRials"] = ["مبلغ نامعتبر است."];
         if (req.Method is null || !PaymentMethods.All.Contains(req.Method)) errors["method"] = ["روش پرداخت را انتخاب کنید."];
         if (req.Note is { Length: > 300 }) errors["note"] = ["حداکثر ۳۰۰ حرف."];
@@ -225,9 +230,10 @@ public static class BillingEndpoints
             CaseId = c.Id, CustomerId = c.CustomerId, AmountRials = req.AmountRials!.Value, Method = req.Method!,
             PaidAt = (req.PaidAt ?? now).ToUniversalTime(), RecordedBy = me.RequiredUserId,
             Note = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim(),
+            ReceiptId = req.ReceiptId,
         };
         db.Payments.Add(payment);
-        AddEvent(db, c, CaseEventTypes.PaymentRecorded, me.RequiredUserId, now, new { payment.AmountRials, payment.Method, payment.Note });
+        AddEvent(db, c, CaseEventTypes.PaymentRecorded, me.RequiredUserId, now, new { payment.AmountRials, payment.Method, payment.Note, Receipt = payment.ReceiptId != null });
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/cases/{c.Id}/payments/{payment.Id}", await MoneyView(db, c.Id, m, ct));
     }
@@ -352,7 +358,7 @@ public static class BillingEndpoints
                 i.WarrantyDays, i.LineTotalRials,
                 ProfitRials = showCost && i.UnitCostRials != null ? i.LineTotalRials - i.LineCostRials : (long?)null,
             }),
-            Payments = payments.Select(p => new { p.Id, p.AmountRials, p.Method, p.PaidAt, p.Note }),
+            Payments = payments.Select(p => new { p.Id, p.AmountRials, p.Method, p.PaidAt, p.Note, p.ReceiptId }),
             Money = new
             {
                 money.TotalRials, money.PaidRials, money.BalanceRials, money.PartsRials, money.LaborRials, money.ServicesRials,
@@ -362,7 +368,19 @@ public static class BillingEndpoints
             CanEditItems = true,
             CanRecordPayments = m.Has(Permissions.PaymentsRecord),
             CanSeeCost = showCost,
+            RequireTransferReceipt = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.RequireTransferReceipt).SingleAsync(ct),
         };
+    }
+
+    /// <summary>Total, paid and balance of several cases in two queries.</summary>
+    public static async Task<Dictionary<Guid, CaseMoney>> Totals(ArteDbContext db, List<Guid> caseIds, CancellationToken ct)
+    {
+        if (caseIds.Count == 0) return [];
+        var items = await db.CaseItems.AsNoTracking().Where(x => caseIds.Contains(x.CaseId)).ToListAsync(ct);
+        var payments = await db.Payments.AsNoTracking().Where(x => caseIds.Contains(x.CaseId)).ToListAsync(ct);
+        var itemsBy = items.ToLookup(x => x.CaseId);
+        var paysBy = payments.ToLookup(x => x.CaseId);
+        return caseIds.ToDictionary(id => id, id => CaseMoney.Of(itemsBy[id], paysBy[id]));
     }
 
     public static async Task<Dictionary<Guid, long>> Balances(ArteDbContext db, List<Guid> caseIds, CancellationToken ct)
