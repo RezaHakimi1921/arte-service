@@ -4,6 +4,7 @@ import { useFeedback } from "./feedback";
 import { BottomSheet, SheetOption } from "./sheet";
 import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { resetWorkflow } from "./workflow";
+import { SMS_PATTERNS, fillSms, type SmsKey } from "./smsTexts";
 
 export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
 
@@ -211,6 +212,13 @@ type BusinessSettings = {
   surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number;
 };
 
+function delayText(m: number) {
+  const n = (x: number) => new Intl.NumberFormat("fa-IR").format(x);
+  if (m < 60) return `${n(m)} دقیقه`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? `${n(h)} ساعت و ${n(r)} دقیقه` : `${n(h)} ساعت`;
+}
+
 const SURVEY_DELAYS: [number, string][] = [[15, "۱۵ دقیقه"], [30, "۳۰ دقیقه"], [60, "۱ ساعت"], [180, "۳ ساعت"], [1440, "۲۴ ساعت"]];
 
 export const BUSINESS_TYPES: { key: string; label: string; hint: string; kinds: string[] }[] = [
@@ -345,6 +353,9 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
   const { s, save } = useBusinessSettings(onSaved);
   const [confirmSms, setConfirmSms] = useState(false);
   const [support, setSupport] = useState<string | null>(null);
+  const [preview, setPreview] = useState<SmsKey | null>(null);
+  const [delay, setDelay] = useState("");
+  useEffect(() => { if (s) setDelay(String(s.surveyDelayMinutes)); }, [s?.surveyDelayMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api<{ supportPhone: string | null }>("/api/v1/public/info").then((i) => setSupport(i.supportPhone)).catch(() => {}); }, []);
   return (
     <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
@@ -364,6 +375,15 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
               checked={s.smsOnReady} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnReady: v })} />
             <Switch title="هنگام تحویل" sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
               checked={s.smsOnDelivered} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
+          </div>
+          <span className="label">مشتری پیامک را چطور می‌بیند؟</span>
+          <div className="settings-list">
+            {SMS_PATTERNS.filter((p) => p.key !== "survey.request" || s.surveyEnabled).map((p) => (
+              <button type="button" key={p.key} className="settings-row" onClick={() => setPreview(p.key)}>
+                <span className="settings-row-text"><span>{p.title}</span><span className="muted small">دیدن متن کامل پیامک</span></span>
+                <span className="muted" aria-hidden="true">‹</span>
+              </button>
+            ))}
           </div>
           <h3>صفحه‌ی پیگیری مشتری</h3>
           <p className="hint">وضعیت فعلی، قول تحویل و نام و تلفن تعمیرگاه همیشه نشان داده می‌شود.</p>
@@ -396,6 +416,18 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
                     className={`chip-button${s.surveyDelayMinutes === m ? " active" : ""}`} onClick={() => save({ surveyDelayMinutes: m })}>{label}</button>
                 ))}
               </div>
+              <form className="delay-form" onSubmit={(e) => {
+                e.preventDefault();
+                const m = Number(delay);
+                if (m >= 5 && m <= 4320) save({ surveyDelayMinutes: m });
+              }}>
+                <Field label="یا زمان دلخواه (۵ تا ۴۳۲۰ دقیقه)"
+                  error={delay && (Number(delay) < 5 || Number(delay) > 4320) ? "بین ۵ دقیقه تا ۷۲ ساعت (۴۳۲۰ دقیقه)." : undefined}>
+                  <NumberInput value={delay} onChange={setDelay} max={4} suffix="دقیقه" />
+                </Field>
+                <button type="submit" disabled={!s.surveySendOn || !delay || Number(delay) === s.surveyDelayMinutes || Number(delay) < 5 || Number(delay) > 4320}>ثبت</button>
+              </form>
+              <p className="hint">الان: {delayText(s.surveyDelayMinutes)} بعد از تحویل.</p>
             </>
           ) : (
             <p className="hint">
@@ -405,6 +437,20 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
           )}
         </>
       )}
+      <BottomSheet open={!!preview} title={SMS_PATTERNS.find((p) => p.key === preview)?.title ?? "متن پیامک"} onClose={() => setPreview(null)}>
+        {preview && s && (
+          <>
+            <div className="sms-preview" dir="rtl">
+              {fillSms(SMS_PATTERNS.find((p) => p.key === preview)!.text, {
+                shop: s.name, name: "سیما کریمی",
+                vehicle: s.businessType === "motorcycle_repair" ? "موتور هوندا CG 125" : "خودرو پژو ۲۰۶",
+                code: "k7m2q9xd4p",
+              })}
+            </div>
+            <p className="hint">نمونه با نام نمونه‌ی مشتری و وسیله؛ در پیامک واقعی نام مشتری، وسیله و لینک همان پرونده می‌آید.</p>
+          </>
+        )}
+      </BottomSheet>
       <BottomSheet open={confirmSms} title="ارسال پیامک به مشتری روشن شود؟" onClose={() => setConfirmSms(false)}>
         <p>
           با روشن کردن این گزینه، در مرحله‌هایی که پایین‌تر روشن کرده‌اید (پذیرش، آماده‌ی تحویل، تحویل) برای مشتری پیامک

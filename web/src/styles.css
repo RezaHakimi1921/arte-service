@@ -1741,3 +1741,11 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .my-score { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1rem; }
 .my-score-value { display: flex; align-items: center; gap: 0.5rem; font-size: 1.1rem; }
 .report-score { display: flex; flex: 0 0 auto; align-items: center; gap: 0.4rem; }
+.delay-form { display: flex; align-items: flex-start; gap: 0.5rem; }
+.delay-form .field { flex: 1; margin: 0; }
+.delay-form > button { min-height: 48px; margin-top: 1.55rem; }
+.sms-preview {
+  align-self: flex-start; max-width: 92%; padding: 0.8rem 1rem; border-radius: 16px 16px 16px 4px;
+  background: var(--surface-2); border: 1px solid var(--border); white-space: pre-line; line-height: 1.9; font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}

@@ -6,8 +6,15 @@ import { createPortal } from "react-dom";
  * Enters from the bottom and leaves to the bottom; CSS transitions with @starting-style, so it is
  * interruptible and needs no JS timers. Esc and the scrim close it.
  */
+/** Each sheet that opens goes above the ones already open (a picker opened from inside a sheet stays on top). */
+let openedSheets = 0;
+/** How many open sheets hold the page scroll; it is released when the last one closes. */
+let lockedSheets = 0;
+
 export function BottomSheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
+  const [layer, setLayer] = useState(0);
+  useEffect(() => { if (open) setLayer(++openedSheets); }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -16,16 +23,17 @@ export function BottomSheet({ open, title, onClose, children }: { open: boolean;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
+    lockedSheets++;
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      if (--lockedSheets === 0) document.body.style.overflow = "";
       previous?.focus?.();
     };
   }, [open, onClose]);
 
   // Rendered at the page root, so a sheet opened from the sticky top bar still sits above everything.
   return createPortal(
-    <div className="sheet-root" hidden={!open}>
+    <div className="sheet-root" hidden={!open} style={{ zIndex: 50 + layer }}>
       <div className="sheet-scrim" onClick={onClose} aria-hidden="true" />
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title} ref={panel}>
         <div className="sheet-handle" aria-hidden="true" />
