@@ -1681,32 +1681,92 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .photo-share input { width: 20px; height: 20px; accent-color: var(--accent); }
 .photo-shared { position: absolute; top: 6px; inset-inline-start: 6px; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--accent); color: var(--accent-text); font-size: 0.7rem; font-weight: 700; }
 
-/* ── customer survey (tracking page) ── */
-.tk-survey { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 80px; border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
-.tk-survey .tk-section-title { margin-bottom: 0; }
-.tk-survey-lead { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.9; }
-.tk-q { display: flex; flex-direction: column; gap: 8px; }
-.tk-q > p { margin: 0; font-size: 0.95rem; font-weight: 700; line-height: 1.8; }
-.tk-stars { display: flex; justify-content: space-between; gap: 4px; }
-.tk-stars button { display: grid; flex: 1 1 0; min-width: 44px; height: 52px; padding: 0; place-items: center; border: 1px solid var(--border); color: var(--border-strong); border-radius: 14px; background: var(--surface-2); }
-.tk-stars button svg { width: 28px; height: 28px; }
+/* ── customer survey (tracking page, «نظرسنجی» tab) ── */
+.tk-tabs { display: flex; gap: 2px; padding: 4px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.tk-tabs button { min-height: 40px; padding: 0 16px; white-space: nowrap; border: 0; color: var(--muted); border-radius: 12px; background: none; font-size: 0.82rem; font-weight: 700; }
+.tk-tabs button.on { color: var(--accent-text); background: var(--accent); }
+.tk-tabs.top { display: none; }
+.tk-tabs.bottom {
+  position: fixed; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: 50%; z-index: 40; transform: translateX(-50%);
+  background: var(--material); box-shadow: 0 12px 35px rgba(15, 23, 42, 0.16); backdrop-filter: blur(16px) saturate(180%);
+}
+.tk-page:has(.tk-tabs.bottom) .tk-content { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 640px) {
+  .tk-tabs.top { display: flex; }
+  .tk-tabs.bottom { display: none; }
+  .tk-page:has(.tk-tabs.bottom) .tk-content { padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px)); }
+}
+
+.tk-survey-invite { display: flex; align-items: center; gap: 12px; width: 100%; text-align: start; color: inherit; font: inherit; border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.tk-survey-invite > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.tk-survey-invite > span:last-child span { color: var(--muted); font-size: 0.85rem; }
+
+.tk-survey-hero {
+  padding: 32px 20px 84px; color: #ffffff; text-align: center;
+  background: radial-gradient(circle at 18% 12%, rgba(138, 177, 255, 0.22), transparent 36%), linear-gradient(135deg, #183579, #10285f 58%, #0c1e49);
+}
+.tk-survey-hero h1 { max-width: 560px; margin: 18px auto 0; font-size: 1.55rem; font-weight: 900; line-height: 1.6; }
+.tk-survey-hero p { max-width: 480px; margin: 10px auto 0; color: rgba(219, 230, 255, 0.82); font-size: 0.92rem; line-height: 1.9; }
+.tk-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid rgba(255, 255, 255, 0.16); color: #dbe6ff; border-radius: 999px; background: rgba(255, 255, 255, 0.1); font-size: 0.78rem; font-weight: 700; }
+.tk-chip svg { width: 16px; height: 16px; }
+
+.tk-survey-wrap { position: relative; margin-top: -60px; }
+.tk-survey { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: 26px; background: var(--surface); box-shadow: 0 24px 70px rgba(15, 23, 42, 0.1); }
+.tk-progress { padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.tk-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tk-progress-top div { display: flex; flex-direction: column; gap: 3px; }
+.tk-progress-top span { color: var(--muted); font-size: 0.76rem; font-weight: 700; }
+.tk-progress-top strong { font-size: 0.92rem; }
+.tk-progress-ring { display: grid; width: 48px; height: 48px; flex: 0 0 auto; place-items: center; color: var(--accent) !important; border-radius: 50%; background: var(--accent-soft); font-size: 0.85rem !important; font-weight: 900 !important; }
+.tk-progress-bar { height: 6px; margin-top: 14px; overflow: hidden; border-radius: 999px; background: var(--surface-2); }
+.tk-progress-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.4s var(--ease-out); }
+
+.tk-q { display: flex; flex-direction: column; gap: 14px; padding: 24px 20px; border-bottom: 1px solid var(--border); }
+.tk-q-head { display: flex; align-items: flex-start; gap: 12px; }
+.tk-q-head p, .tk-q-title { margin: 0; font-size: 0.97rem; font-weight: 800; line-height: 1.8; }
+.tk-q-num { display: grid; width: 28px; height: 28px; flex: 0 0 auto; margin-top: 2px; place-items: center; color: var(--accent); border-radius: 9px; background: var(--accent-soft); font-size: 0.8rem; font-weight: 900; }
+.tk-q-hint { margin: -8px 0 0; color: var(--muted); font-size: 0.8rem; line-height: 1.8; }
+.tk-q-word { display: block; margin-top: 2px; font-size: 0.8rem; font-weight: 800; color: var(--star); }
+.tk-q textarea { width: 100%; min-height: 112px; padding: 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; line-height: 1.9; resize: none; }
+.tk-q textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--surface); }
+.tk-counter { align-self: flex-end; margin-top: -6px; color: var(--soft-text); font-size: 0.72rem; }
+
+.tk-stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.tk-stars button { display: grid; height: 58px; padding: 0; place-items: center; border: 1px solid var(--border); color: var(--border-strong); border-radius: 16px; background: var(--surface-2); }
+.tk-stars button svg { width: 26px; height: 26px; }
 /* Stars take the colour of the chosen score: red (1) … green (5), the same scale as the fuel gauge. */
-.tk-stars { --star: var(--fuel-2); }
-.tk-stars.r1, .star-row.r1 { --star: var(--fuel-0); }
-.tk-stars.r2, .star-row.r2 { --star: var(--fuel-1); }
-.tk-stars.r3, .star-row.r3 { --star: var(--fuel-2); }
-.tk-stars.r4, .star-row.r4 { --star: var(--fuel-3); }
-.tk-stars.r5, .star-row.r5 { --star: var(--fuel-4); }
-.tk-stars button.on { border-color: color-mix(in srgb, var(--star) 55%, transparent); color: var(--star); background: color-mix(in srgb, var(--star) 14%, var(--surface)); transition: color var(--dur-fade), background-color var(--dur-fade), border-color var(--dur-fade); }
+.tk-stars, .tk-q-word, .tk-thanks-stars { --star: var(--fuel-2); }
+.r1 { --star: var(--fuel-0); }
+.r2 { --star: var(--fuel-1); }
+.r3 { --star: var(--fuel-2); }
+.r4 { --star: var(--fuel-3); }
+.r5 { --star: var(--fuel-4); }
+.tk-stars button.on {
+  border-color: color-mix(in srgb, var(--star) 55%, transparent); color: var(--star);
+  background: color-mix(in srgb, var(--star) 14%, var(--surface)); box-shadow: 0 8px 20px color-mix(in srgb, var(--star) 14%, transparent);
+  transition: color var(--dur-fade), background-color var(--dur-fade), border-color var(--dur-fade);
+}
 .tk-stars button.on svg { fill: currentColor; }
-.tk-q-word { min-height: 1.4em; color: var(--muted); font-size: 0.82rem; text-align: center; }
-.tk-q textarea { width: 100%; min-height: 88px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; resize: vertical; }
+
+.tk-survey-foot { display: flex; flex-direction: column; gap: 10px; padding: 20px; background: var(--surface-2); }
 .tk-error { margin: 0; color: var(--danger); font-size: 0.88rem; }
-.tk-submit { min-height: 52px; border: 0; color: var(--accent-text); border-radius: 14px; background: var(--accent); font-size: 1rem; font-weight: 800; }
-.tk-survey.done { align-items: center; gap: 6px; text-align: center; }
-.tk-survey.done p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.9; }
-.tk-survey-icon { display: grid; width: 48px; height: 48px; place-items: center; color: var(--success); border-radius: 50%; background: var(--good-bg); }
-.tk-survey-icon svg { width: 24px; height: 24px; }
+.tk-submit { width: 100%; min-height: 54px; border: 0; color: var(--accent-text); border-radius: 16px; background: var(--accent); font-size: 1rem; font-weight: 800; }
+.tk-submit:disabled { color: var(--muted); background: var(--border); opacity: 1; }
+.tk-privacy { margin: 0; color: var(--soft-text); font-size: 0.72rem; line-height: 1.8; text-align: center; }
+
+.tk-thanks { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 16px; padding: 32px 22px; text-align: center; border-radius: 28px; }
+.tk-thanks h1 { margin: 0; font-size: 1.4rem; font-weight: 900; line-height: 1.7; }
+.tk-thanks-icon { display: grid; width: 76px; height: 76px; margin-bottom: 12px; place-items: center; color: var(--success); border-radius: 50%; background: var(--good-bg); }
+.tk-thanks-icon svg { width: 34px; height: 34px; }
+.tk-thanks-eyebrow { margin: 0; color: var(--accent); font-size: 0.85rem; font-weight: 800; }
+.tk-thanks-note { max-width: 340px; margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.9; }
+.tk-thanks-score { display: flex; flex-direction: column; gap: 8px; width: 100%; margin: 16px 0 8px; padding: 16px; border-radius: 16px; background: var(--surface-2); }
+.tk-thanks-score > span { color: var(--muted); font-size: 0.78rem; }
+.tk-thanks-stars { display: flex; justify-content: center; gap: 4px; }
+.tk-thanks-stars span { color: var(--border-strong); }
+.tk-thanks-stars span.on { color: var(--star); }
+.tk-thanks-stars svg { width: 28px; height: 28px; }
+.tk-thanks-stars span.on svg { fill: currentColor; }
 
 /* ── top bar bell, notifications ── */
 .topbar-text { display: flex; flex-direction: column; min-width: 0; }
@@ -1759,3 +1819,4 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .setting-row.block { flex-direction: column; align-items: stretch; gap: 0.6rem; cursor: default; }
 .setting-row.block .chips { margin-bottom: 0; }
 .setting-row .row-link { align-self: flex-start; min-height: 32px; padding: 0.15rem 0; font-size: 0.85rem; font-weight: 700; }
+.tk-content[hidden] { display: none; }

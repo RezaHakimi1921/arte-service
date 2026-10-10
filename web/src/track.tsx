@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, api } from "./api";
 import { applyTheme } from "./App";
 import { WAIT_REASONS } from "./labels";
@@ -20,7 +20,7 @@ type Track = {
   money: { totalRials: number; paidRials: number; balanceRials: number } | null;
 };
 
-type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "clock" | "close" | "document" | "moon" | "phone" | "star" | "sun" | "wrench" | "wallet";
+type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -34,6 +34,7 @@ function Icon({ name }: { name: IconName }) {
     document: <><path d="M6 2h8l4 4v16H6z" /><path d="M14 2v5h5M9 12h6M9 16h6" /></>,
     moon: <path d="M20.5 14.2A8.4 8.4 0 0 1 9.8 3.5a9 9 0 1 0 10.7 10.7Z" />,
     phone: <path d="M5 3h4l2 5-2.5 1.5a15 15 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2C10.2 20.5 3.5 13.8 3 5a2 2 0 0 1 2-2Z" />,
+    sparkle: <path d="m12 3 1.2 3.8L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3Zm7 11 .7 2.3L22 17l-2.3.7L19 20l-.7-2.3L16 17l2.3-.7L19 14ZM5 13l.7 2.3L8 16l-2.3.7L5 19l-.7-2.3L2 16l2.3-.7L5 13Z" />,
     star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />,
     sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
     wrench: <path d="M14.7 6.3a4.5 4.5 0 0 0-5.6 5.6L3 18l3 3 6.1-6.1a4.5 4.5 0 0 0 5.6-5.6L15 12l-3-3 2.7-2.7Z" />,
@@ -88,56 +89,79 @@ function now(t: Track): { title: string; note: string } {
   return { title: "وسیله‌ی شما پذیرش شد و در نوبت کار است", note: "با شروع کار، مراحل در همین صفحه به‌روز می‌شود." };
 }
 
-const RATING_WORDS = ["", "خیلی ناراضی", "ناراضی", "متوسط", "راضی", "خیلی راضی"];
+const RATING_WORDS = ["", "خیلی بد", "بد", "معمولی", "خوب", "عالی"];
 
-/** Five large stars (≥ 44px each) for one question; the chosen word is said below. */
-function Stars({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+/** Five large stars (58px) for one question, coloured by the score (red 1 … green 5). */
+function Stars({ id, value, onChange }: { id: string; value: number; onChange: (v: number) => void }) {
   return (
-    <div className="tk-q">
-      <p id={`q-${label}`}>{label}</p>
-      <div className={`tk-stars${value ? ` r${value}` : ""}`} role="radiogroup" aria-labelledby={`q-${label}`}>
-        {[1, 2, 3, 4, 5].map((v) => (
-          <button key={v} type="button" role="radio" aria-checked={value === v} aria-label={`${formatNumber(v)} از ۵، ${RATING_WORDS[v]}`}
-            className={v <= value ? "on" : ""} onClick={() => onChange(v)}>
-            <Icon name="star" />
-          </button>
-        ))}
-      </div>
-      <span className="tk-q-word" aria-hidden="true">{value ? RATING_WORDS[value] : " "}</span>
+    <div className={`tk-stars${value ? ` r${value}` : ""}`} role="radiogroup" aria-labelledby={id}>
+      {[1, 2, 3, 4, 5].map((v) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} aria-label={`${formatNumber(v)} از ۵، ${RATING_WORDS[v]}`}
+          className={v <= value ? "on" : ""} onClick={() => onChange(v)}>
+          <Icon name="star" />
+        </button>
+      ))}
     </div>
   );
 }
 
-/** The satisfaction survey after delivery: every question once, an optional comment, then thanks. */
-function SurveyCard({ code, survey, customer, focus, onDone }: { code: string; survey: Survey; customer: string | null; focus: boolean; onDone: () => void }) {
+/**
+ * The survey tab: a navy header with the customer's name, a progress line, numbered questions, an optional note,
+ * then a thank-you page with the overall score. One answer per case.
+ */
+function SurveyView({ code, survey, customer, vehicle, shop, onDone, onBack }: {
+  code: string; survey: Survey; customer: string | null; vehicle: string | null; shop: string; onDone: () => void; onBack: () => void;
+}) {
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ref = useRef<HTMLElement>(null);
-  useEffect(() => { if (focus) ref.current?.scrollIntoView({ block: "start" }); }, [focus]);
 
-  if (survey.state === "answered")
+  if (survey.state !== "open") {
+    const score = survey.score ?? 0;
+    const r = Math.min(5, Math.max(1, Math.round(score)));
     return (
-      <section className="tk-card tk-survey done" ref={ref} id="survey">
-        <span className="tk-survey-icon"><Icon name="check" /></span>
-        <strong>نظر شما ثبت شد</strong>
-        <p>از وقتی که گذاشتید سپاسگزاریم؛ نظرتان مستقیم به مدیر تعمیرگاه می‌رسد.</p>
-      </section>
+      <div className="tk-content">
+        <section className="tk-card tk-thanks">
+          <span className="tk-thanks-icon"><Icon name={survey.state === "answered" ? "check" : "clock"} /></span>
+          {survey.state === "answered" ? (
+            <>
+              <p className="tk-thanks-eyebrow">نظر شما ثبت شد</p>
+              <h1>ممنون که کمک می‌کنید بهتر شویم</h1>
+              <p className="tk-thanks-note">پاسخ شما مستقیم به مدیریت {shop} رسید.</p>
+              {score > 0 && (
+                <div className="tk-thanks-score">
+                  <span>امتیاز کلی شما</span>
+                  <div className={`tk-thanks-stars r${r}`} aria-label={`${formatNumber(r)} از ۵`}>
+                    {[1, 2, 3, 4, 5].map((v) => <span key={v} className={v <= r ? "on" : ""}><Icon name="star" /></span>)}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <h1>زمان این نظرسنجی تمام شده است</h1>
+              <p className="tk-thanks-note">برای گفتن نظرتان می‌توانید با تعمیرگاه تماس بگیرید.</p>
+            </>
+          )}
+          <button type="button" className="tk-submit" onClick={onBack}>بازگشت به صفحه‌ی پیگیری</button>
+        </section>
+      </div>
     );
-  if (survey.state === "expired")
-    return <section className="tk-card tk-survey done" ref={ref} id="survey"><p>زمان این نظرسنجی تمام شده است.</p></section>;
+  }
 
   const questions = survey.questions ?? [];
-  const missing = questions.filter((q) => !ratings[q.id]).length;
+  const answered = questions.filter((q) => ratings[q.id]).length;
+  const percent = questions.length ? Math.round((answered / questions.length) * 100) : 0;
   async function submit() {
-    if (missing > 0) { setError("لطفاً به همه‌ی سؤال‌ها جواب دهید."); return; }
+    if (answered < questions.length) { setError("لطفاً به همه‌ی سؤال‌ها جواب دهید."); return; }
     setBusy(true);
     setError(null);
     try {
       await api(`/api/v1/track/${encodeURIComponent(code)}/survey`, {
         method: "POST", body: { answers: questions.map((q) => ({ questionId: q.id, rating: ratings[q.id] })), comment: comment.trim() || undefined },
       });
+      window.scrollTo(0, 0);
       onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "ثبت نشد. اتصال را بررسی کنید و دوباره بزنید.");
@@ -145,25 +169,68 @@ function SurveyCard({ code, survey, customer, focus, onDone }: { code: string; s
       setBusy(false);
     }
   }
+
   return (
-    <section className="tk-card tk-survey" ref={ref} id="survey">
-      <div className="tk-section-title">
-        <span className="tk-section-icon"><Icon name="star" /></span>
-        <div><span>نظرسنجی</span><h2>{customer ? `${customer} عزیز، نظرتان چیست؟` : "نظرتان چیست؟"}</h2></div>
+    <>
+      <section className="tk-survey-hero">
+        <span className="tk-chip"><Icon name="sparkle" />کمتر از یک دقیقه</span>
+        <h1>{customer ? `${customer} عزیز، نظرتان برای ما مهم است` : "نظرتان برای ما مهم است"}</h1>
+        <p>{vehicle ? `تجربه‌تان از تعمیر «${vehicle}» را با ما در میان بگذارید.` : "تجربه‌تان را با ما در میان بگذارید."}</p>
+      </section>
+      <div className="tk-content tk-survey-wrap">
+        <section className="tk-survey">
+          <div className="tk-progress">
+            <div className="tk-progress-top">
+              <div>
+                <span>میزان تکمیل</span>
+                <strong>{answered === questions.length ? "آماده‌ی ثبت نظر" : `${formatNumber(answered)} از ${formatNumber(questions.length)} سؤال پاسخ داده شده`}</strong>
+              </div>
+              <span className="tk-progress-ring font-num">{formatNumber(percent)}٪</span>
+            </div>
+            <div className="tk-progress-bar" aria-hidden="true"><i style={{ width: `${percent}%` }} /></div>
+          </div>
+
+          {questions.map((q, i) => (
+            <div className="tk-q" key={q.id}>
+              <div className="tk-q-head">
+                <span className="tk-q-num font-num">{formatNumber(i + 1)}</span>
+                <div>
+                  <p id={`q-${q.id}`}>{q.text}</p>
+                  {ratings[q.id] ? <span className={`tk-q-word r${ratings[q.id]}`}>{RATING_WORDS[ratings[q.id]]}</span> : null}
+                </div>
+              </div>
+              <Stars id={`q-${q.id}`} value={ratings[q.id] ?? 0} onChange={(v) => { setRatings((r) => ({ ...r, [q.id]: v })); setError(null); }} />
+            </div>
+          ))}
+
+          <div className="tk-q">
+            <label className="tk-q-title" htmlFor="tk-comment">نکته‌ای هست که دوست دارید بدانیم؟</label>
+            <p className="tk-q-hint">این بخش اختیاری است و مستقیم برای مدیر تعمیرگاه فرستاده می‌شود.</p>
+            <textarea id="tk-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={4}
+              placeholder="مثلاً چه چیزی خوب بود یا چه چیزی می‌تواند بهتر شود…" />
+            <span className="tk-counter font-num" dir="ltr">{formatNumber(comment.length)} / ۵۰۰</span>
+          </div>
+
+          <div className="tk-survey-foot">
+            {error && <p className="tk-error" role="alert">{error}</p>}
+            <button type="button" className="tk-submit" onClick={submit} disabled={busy || answered < questions.length} aria-busy={busy}>
+              {busy ? "در حال ثبت…" : "ثبت نظر"}
+            </button>
+            <p className="tk-privacy">پاسخ‌های شما فقط برای بهتر شدن خدمات این تعمیرگاه استفاده می‌شود.</p>
+          </div>
+        </section>
       </div>
-      <p className="tk-survey-lead">چند ثانیه بیشتر طول نمی‌کشد و به ما کمک می‌کند بهتر شویم.</p>
-      {questions.map((q) => (
-        <Stars key={q.id} label={q.text} value={ratings[q.id] ?? 0} onChange={(v) => { setRatings((r) => ({ ...r, [q.id]: v })); setError(null); }} />
-      ))}
-      <label className="tk-q">
-        <p>اگر نکته‌ای دارید بنویسید (اختیاری)</p>
-        <textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={3} placeholder="مثلاً از چه چیزی راضی بودید یا چه چیزی بهتر شود" />
-      </label>
-      {error && <p className="tk-error" role="alert">{error}</p>}
-      <button type="button" className="tk-submit" onClick={submit} disabled={busy} aria-busy={busy}>
-        {busy ? "در حال ثبت…" : missing > 0 ? `ثبت نظر (${formatNumber(missing)} سؤال مانده)` : "ثبت نظر"}
-      </button>
-    </section>
+    </>
+  );
+}
+
+/** «پیگیری تعمیر» / «نظرسنجی»: in the top bar on wide screens, floating at the bottom on phones. */
+function Tabs({ view, onChange, className }: { view: "tracking" | "survey"; onChange: (v: "tracking" | "survey") => void; className: string }) {
+  return (
+    <div className={className} role="tablist" aria-label="بخش‌های صفحه">
+      <button type="button" role="tab" aria-selected={view === "tracking"} className={view === "tracking" ? "on" : ""} onClick={() => onChange("tracking")}>پیگیری تعمیر</button>
+      <button type="button" role="tab" aria-selected={view === "survey"} className={view === "survey" ? "on" : ""} onClick={() => onChange("survey")}>نظرسنجی</button>
+    </div>
   );
 }
 
@@ -177,6 +244,9 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
   const [requestsOpen, setRequestsOpen] = useState(false);
   const [photo, setPhoto] = useState<number | null>(null);
   const [theme, setTheme] = useState(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
+  // The survey SMS (/s/) opens the survey tab; the tracking link (/t/) opens the tracking tab.
+  const [view, setView] = useState<"tracking" | "survey">(surveyFirst ? "survey" : "tracking");
+  const go = (v: "tracking" | "survey") => { setView(v); window.scrollTo(0, 0); };
 
   const load = () =>
     api<Track>(`/api/v1/track/${encodeURIComponent(code)}`)
@@ -220,13 +290,19 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
             <span className="tk-mark" aria-hidden="true"><Icon name="wrench" /></span>
             <div><strong>{t.shop.name}</strong>{t.shop.address && <span>{t.shop.address}</span>}</div>
           </div>
+          {t.survey && <Tabs view={view} onChange={go} className="tk-tabs top" />}
           <button className="tk-icon-button" type="button" onClick={toggleTheme} aria-label={theme === "light" ? "حالت تاریک" : "حالت روشن"}>
             <Icon name={theme === "light" ? "moon" : "sun"} />
           </button>
         </div>
       </header>
 
-      <div className="tk-content">
+      {t.survey && view === "survey" && (
+        <SurveyView code={code} survey={t.survey} customer={t.case.customer} vehicle={t.case.vehicle?.title ?? null} shop={t.shop.name}
+          onDone={load} onBack={() => go("tracking")} />
+      )}
+
+      <div className="tk-content" hidden={!!t.survey && view === "survey"}>
         <section className="tk-hero">
           <div className="tk-hero-main">
             <div className="tk-vehicle-icon"><Icon name={vehicleIcon} /></div>
@@ -251,7 +327,12 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </div>
         </section>
 
-        {t.survey && <SurveyCard code={code} survey={t.survey} customer={t.case.customer} focus={surveyFirst} onDone={load} />}
+        {t.survey?.state === "open" && (
+          <button type="button" className="tk-card tk-survey-invite" onClick={() => go("survey")}>
+            <span className="tk-section-icon"><Icon name="star" /></span>
+            <span><strong>نظرتان درباره‌ی این تعمیر چیست؟</strong><span>کمتر از یک دقیقه طول می‌کشد.</span></span>
+          </button>
+        )}
 
         {(problems.length > 0 || services.length > 0) && (
           <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">
@@ -366,6 +447,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </div>
         </div>
       )}
+      {t.survey && <Tabs view={view} onChange={go} className="tk-tabs bottom" />}
     </main>
   );
 }

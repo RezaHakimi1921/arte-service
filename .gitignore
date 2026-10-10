@@ -7,3 +7,5 @@ dist/
 .env
 appsettings.*.local.json
 uploads/
+survay/
+survay.zip
