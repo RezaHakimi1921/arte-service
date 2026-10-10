@@ -110,6 +110,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         b.Entity<Tenant>().Property(x => x.DeactivatedReason).HasMaxLength(300);
         b.Entity<Tenant>().Property(x => x.SurveySendOn).HasDefaultValue(true);
         b.Entity<Tenant>().Property(x => x.SurveyDelayMinutes).HasDefaultValue(30);
+        b.Entity<Tenant>().Property(x => x.SurveyAlertBelow).HasDefaultValue(3);
 
         b.Entity<SurveyQuestion>(e =>
         {

@@ -107,7 +107,7 @@ public sealed class SurveySender(IServiceScopeFactory scopes, IClock clock, ILog
             .SingleAsync(x => x.Id == c.CustomerId, ct);
         var tokens = new Dictionary<string, string>
         {
-            ["shop"] = Cut(t.Name, 40),
+            ["shop"] = Cut(t.Name, 60),
             ["name"] = Cut(string.IsNullOrWhiteSpace(customer.FullName) ? "مشتری" : customer.FullName.Trim(), 60),
             ["code"] = c.TrackingCode,
         };

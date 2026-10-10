@@ -83,7 +83,7 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
 
         var tokens = new Dictionary<string, string>
         {
-            ["shop"] = Cut(t.Name, 40),
+            ["shop"] = Cut(t.Name, 60),
             ["name"] = Cut(string.IsNullOrWhiteSpace(customer.FullName) ? "مشتری" : customer.FullName.Trim(), 60),
             ["vehicle"] = Cut(vehicle, 120),
             ["code"] = c.TrackingCode!,

@@ -97,11 +97,12 @@ public sealed class SurveyService(ArteDbContext db, IClock clock)
         if (comment is { Length: > 500 }) return "متن نظر حداکثر ۵۰۰ حرف.";
 
         var ratings = questions.Select(q => given[q.Id]).ToList();
+        var threshold = await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.SurveyAlertBelow).SingleAsync(ct);
         foreach (var q in questions)
             db.SurveyAnswers.Add(new SurveyAnswer { TenantId = c.TenantId, InviteId = invite.Id, QuestionId = q.Id, QuestionText = q.Text, Rating = given[q.Id] });
         invite.AnsweredAt = now;
         invite.Score = Math.Round((decimal)ratings.Average(), 2);
-        invite.IsLow = SurveyRules.IsLow(ratings);
+        invite.IsLow = SurveyRules.IsLow(ratings, threshold);
         invite.Comment = string.IsNullOrEmpty(comment) ? null : comment;
 
         db.CaseEvents.Add(new CaseEvent
@@ -109,7 +110,8 @@ public sealed class SurveyService(ArteDbContext db, IClock clock)
             TenantId = c.TenantId, CaseId = c.Id, Type = "survey.answered", OccurredAt = now,
             Data = JsonSerializer.SerializeToDocument(new { invite.Score, invite.IsLow }, Json),
         });
-        await NotifyAsync(c, invite, now, ct);
+        // The bell is for what needs attention: only low satisfaction notifies (every answer is on the case and in reports).
+        if (invite.IsLow) await NotifyAsync(c, invite, now, ct);
         await db.SaveChangesAsync(ct);
         return null;
     }

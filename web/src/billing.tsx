@@ -20,7 +20,9 @@ export type Billing = {
 type CatalogRow = { id: string; kind: string; title: string; defaultPriceRials: number; defaultCostRials: number | null; defaultWarrantyDays: number | null; isActive: boolean };
 type Assignable = { id: string; name: string; role: string };
 
-export const KIND_LABELS: Record<string, string> = { part: "قطعه", labor: "اجرت", service: "خدمت" };
+/** Two kinds for the user: goods used, and work (labor and services are one; old «service» rows show as work). */
+export const KIND_LABELS: Record<string, string> = { part: "کالای مصرف‌شده", labor: "اجرت و خدمات", service: "اجرت و خدمات" };
+const OFFERED_KINDS: [string, string][] = [["part", "کالای مصرف‌شده"], ["labor", "اجرت و خدمات"]];
 export const METHOD_LABELS: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
 const WARRANTY_OPTIONS = [0, 30, 90, 180, 365];
 
@@ -80,16 +82,16 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
   return (
     <>
       <details className="card collapsible" open data-tour="billing">
-        <summary>قطعات و اجرت {billing.items.length > 0 && <span className="count font-num">{formatNumber(billing.items.length)}</span>}</summary>
+        <summary>کالا و اجرت {billing.items.length > 0 && <span className="count font-num">{formatNumber(billing.items.length)}</span>}</summary>
         <div className="collapsible-body">
-          {billing.items.length === 0 && <p className="muted">هنوز قطعه یا اجرتی ثبت نشده. هر قطعه‌ای که مصرف شد و هر کاری که انجام شد را این‌جا ثبت کنید تا در صورت‌حساب فراموش نشود.</p>}
+          {billing.items.length === 0 && <p className="muted">هنوز کالا یا اجرتی ثبت نشده. هر کالایی که مصرف شد و هر کاری که انجام شد را این‌جا ثبت کنید تا در صورت‌حساب فراموش نشود.</p>}
           <ul className="items">
             {billing.items.map((i) => (
               <li key={i.id}>
                 <button className="item-row" onClick={() => setEditing({ kind: i.kind, item: i })} disabled={!billing.canEditItems}>
                   <span className="item-top">
                     <span><span className={`kind-badge ${i.kind}`}>{KIND_LABELS[i.kind]}</span> {i.title}</span>
-                    <strong className="font-num">{i.supplier === "customer" ? "قطعه مشتری" : i.status === "needed" ? "—" : toman(i.lineTotalRials)}</strong>
+                    <strong className="font-num">{i.supplier === "customer" ? "کالای مشتری" : i.status === "needed" ? "—" : toman(i.lineTotalRials)}</strong>
                   </span>
                   <span className="muted small">
                     {formatNumber(i.quantity)} × {toman(i.unitPriceRials)}
@@ -110,16 +112,14 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
           )}
           {billing.canEditItems && (
             <div className="quick-actions">
-              <button onClick={() => setEditing({ kind: "part" })}>+ قطعه</button>
-              <button onClick={() => setEditing({ kind: "labor" })}>+ اجرت</button>
-              <button onClick={() => setEditing({ kind: "service" })}>+ خدمت</button>
+              <button onClick={() => setEditing({ kind: "part" })}>+ کالای مصرف‌شده</button>
+              <button onClick={() => setEditing({ kind: "labor" })}>+ اجرت و خدمات</button>
             </div>
           )}
           {m.totalRials > 0 && (
             <div className="totals">
-              {m.partsRials > 0 && <span>قطعات: <span className="font-num">{toman(m.partsRials)}</span></span>}
-              {m.laborRials > 0 && <span>اجرت: <span className="font-num">{toman(m.laborRials)}</span></span>}
-              {m.servicesRials > 0 && <span>خدمات: <span className="font-num">{toman(m.servicesRials)}</span></span>}
+              {m.partsRials > 0 && <span>کالا: <span className="font-num">{toman(m.partsRials)}</span></span>}
+              {m.laborRials + m.servicesRials > 0 && <span>اجرت و خدمات: <span className="font-num">{toman(m.laborRials + m.servicesRials)}</span></span>}
               {billing.canSeeCost && m.profitRials != null && <span className="cost-line">سود پرونده: <span className="font-num">{toman(m.profitRials)}</span></span>}
             </div>
           )}
@@ -250,7 +250,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     };
     if (kind === "part") body.supplier = supplier;
     if (canSeeCost && cost) body.unitCostRials = toRials(cost);
-    if (kind === "labor" && performedBy) body.performedBy = performedBy;
+    if (kind !== "part" && performedBy) body.performedBy = performedBy;
     if (catalogId) body.catalogItemId = catalogId;
     onSave(body, saveToCatalog);
   }
@@ -260,12 +260,12 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
       <form onSubmit={submit} noValidate>
         {!item && (
           <div className="segmented wide" role="radiogroup" aria-label="نوع">
-            {Object.entries(KIND_LABELS).map(([k, label]) => (
+            {OFFERED_KINDS.map(([k, label]) => (
               <button type="button" key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => { setKind(k); setCatalogId(null); }}>{label}</button>
             ))}
           </div>
         )}
-        <Field label={kind === "labor" ? "شرح کار" : kind === "service" ? "نام خدمت" : "نام قطعه"} error={error}>
+        <Field label={kind === "part" ? "نام کالا" : "شرح کار یا خدمت"} error={error}>
           <input value={title} onChange={(e) => { setTitle(e.target.value); setCatalogId(null); }} maxLength={120} autoComplete="off" />
         </Field>
         {suggestions.length > 0 && (
@@ -279,8 +279,8 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
         )}
 
         {kind === "part" && (
-          <div className="segmented wide" role="radiogroup" aria-label="تأمین قطعه">
-            <button type="button" role="radio" aria-checked={supplier === "shop"} className={supplier === "shop" ? "on" : ""} onClick={() => setSupplier("shop")}>قطعه تعمیرگاه</button>
+          <div className="segmented wide" role="radiogroup" aria-label="تأمین کالا">
+            <button type="button" role="radio" aria-checked={supplier === "shop"} className={supplier === "shop" ? "on" : ""} onClick={() => setSupplier("shop")}>از تعمیرگاه</button>
             <button type="button" role="radio" aria-checked={supplier === "customer"} className={supplier === "customer" ? "on" : ""} onClick={() => setSupplier("customer")}>مشتری آورده</button>
           </div>
         )}
@@ -310,7 +310,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
           </label>
         )}
 
-        {kind === "labor" && canAssignLabor && staff.length > 0 && (
+        {kind !== "part" && canAssignLabor && staff.length > 0 && (
           <Field label="انجام‌دهنده">
             <select value={performedBy} onChange={(e) => setPerformedBy(e.target.value)}>
               <option value="">خودم</option>
@@ -481,7 +481,7 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
 
   function open(row: CatalogRow | "new") {
     setEditing(row);
-    setKind(row === "new" ? "part" : row.kind);
+    setKind(row === "new" ? "part" : row.kind === "service" ? "labor" : row.kind);
     setTitle(row === "new" ? "" : row.title);
     setPrice(row === "new" ? "" : toTomanDigits(row.defaultPriceRials));
     setCost(row === "new" ? "" : toTomanDigits(row.defaultCostRials));
@@ -516,7 +516,7 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
     <section>
       <button className="link back" onClick={onBack}>→ تنظیمات</button>
       <div className="toolbar"><h2 style={{ margin: 0, flex: 1 }}>فهرست قیمت</h2><button className="primary" onClick={() => open("new")}>+ افزودن</button></div>
-      {rows.length === 0 && <p className="empty muted">قطعه‌ها، اجرت‌ها و خدمات پرتکرار را با قیمت این‌جا ثبت کنید تا هنگام ثبت در پرونده با چند حرف پیدا شوند.</p>}
+      {rows.length === 0 && <p className="empty muted">کالاها و اجرت‌ها و خدمات پرتکرار را با قیمت این‌جا ثبت کنید تا هنگام ثبت در پرونده با چند حرف پیدا شوند.</p>}
       <ul className="list">
         {rows.map((r) => (
           <li key={r.id} className={`row-static${r.isActive ? "" : " inactive"}`}>
@@ -531,7 +531,7 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
       <BottomSheet open={!!editing} title={editing === "new" ? "قلم جدید" : "ویرایش قلم"} onClose={() => setEditing(null)}>
         <form onSubmit={save}>
           <div className="segmented wide" role="radiogroup" aria-label="نوع">
-            {Object.entries(KIND_LABELS).map(([k, label]) => (
+            {OFFERED_KINDS.map(([k, label]) => (
               <button type="button" key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{label}</button>
             ))}
           </div>

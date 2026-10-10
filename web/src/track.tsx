@@ -64,7 +64,7 @@ const dayTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "long",
 const time = new Intl.DateTimeFormat("fa-IR", { hour: "2-digit", minute: "2-digit" });
 const shortDay = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
-const KIND: Record<string, string> = { part: "قطعه", labor: "اجرت", service: "خدمت" };
+const KIND: Record<string, string> = { part: "کالا", labor: "اجرت", service: "اجرت" };
 const STAGE_NAMES: Record<string, string> = {
   received: "پذیرش", diagnosing: "عیب‌یابی", awaiting_approval: "تأیید", awaiting_parts: "انتظار قطعه",
   repairing: "تعمیر", review: "بازبینی", ready: "آماده‌ی تحویل", delivered: "تحویل",
@@ -315,7 +315,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         )}
 
         {(t.items || t.money) && (
-          <Section icon="wallet" eyebrow="صورت‌حساب" title="قطعات، کارها و هزینه">
+          <Section icon="wallet" eyebrow="صورت‌حساب" title="کالا، کارها و هزینه">
             {t.items && t.items.length > 0 ? (
               <ul className="tk-items">
                 {t.items.map((i, k) => (
@@ -324,7 +324,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                     <span className="tk-item-title">
                       {i.title}
                       {i.quantity !== 1 && <span className="tk-muted"> × {formatNumber(i.quantity)}</span>}
-                      {i.supplier === "customer" && <span className="tk-muted"> (قطعه‌ی خودتان)</span>}
+                      {i.supplier === "customer" && <span className="tk-muted"> (کالای خودتان)</span>}
                       {i.status === "needed" && <span className="tk-muted"> (در انتظار تهیه)</span>}
                     </span>
                     {i.lineTotalRials != null && i.lineTotalRials > 0 && <strong className="font-num">{toman(i.lineTotalRials)}</strong>}
@@ -332,7 +332,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                 ))}
               </ul>
             ) : (
-              <div className="tk-empty-bill"><strong>هنوز قطعه یا کاری ثبت نشده</strong><p>بعد از ثبت قطعات و اجرت، این‌جا نشان داده می‌شود.</p></div>
+              <div className="tk-empty-bill"><strong>هنوز کالا یا کاری ثبت نشده</strong><p>بعد از ثبت کالا و اجرت، این‌جا نشان داده می‌شود.</p></div>
             )}
             {t.money && t.money.totalRials > 0 && (
               <div className="tk-money">

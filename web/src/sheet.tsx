@@ -15,12 +15,16 @@ export function BottomSheet({ open, title, onClose, children }: { open: boolean;
   const panel = useRef<HTMLDivElement>(null);
   const [layer, setLayer] = useState(0);
   useEffect(() => { if (open) setLayer(++openedSheets); }, [open]);
+  // The latest onClose, without re-running the open effect: callers often pass a new arrow on every render,
+  // and re-running it moved focus to the close button after each keystroke (the phone keyboard closed).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
     panel.current?.querySelector<HTMLElement>("button, input, select, textarea")?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     lockedSheets++;
@@ -29,7 +33,7 @@ export function BottomSheet({ open, title, onClose, children }: { open: boolean;
       if (--lockedSheets === 0) document.body.style.overflow = "";
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // Rendered at the page root, so a sheet opened from the sticky top bar still sits above everything.
   return createPortal(

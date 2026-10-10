@@ -61,4 +61,6 @@ public sealed class Tenant
     public bool SurveySendOn { get; set; } = true;
     /// <summary>Minutes after delivery (then moved into sending hours, 09:00–23:00).</summary>
     public int SurveyDelayMinutes { get; set; } = 30;
+    /// <summary>Low satisfaction: the average or any answer below this many stars (2–5, default 3). Only these notify.</summary>
+    public int SurveyAlertBelow { get; set; } = 3;
 }

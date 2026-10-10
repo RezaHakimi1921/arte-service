@@ -75,8 +75,10 @@ public static class SurveyRules
     public const int SendFromHour = 9, SendUntilHour = 23;
     private static readonly TimeSpan Tehran = TimeSpan.FromHours(3.5);   // Iran has no DST since 2022.
 
-    /// <summary>Low satisfaction: any answer of 2 or less, or an average under 3.</summary>
-    public static bool IsLow(IReadOnlyCollection<int> ratings) => ratings.Any(r => r <= 2) || ratings.Average() < 3;
+    public const int MinAlertBelow = 2, MaxAlertBelow = 5;
+
+    /// <summary>Low satisfaction: the average or any single answer below the business's threshold (default 3 stars).</summary>
+    public static bool IsLow(IReadOnlyCollection<int> ratings, int below = 3) => ratings.Any(r => r < below) || ratings.Average() < below;
 
     /// <summary>The same moment if it falls in sending hours, otherwise the next 09:00 Tehran time.</summary>
     public static DateTimeOffset IntoSendingHours(DateTimeOffset utc)

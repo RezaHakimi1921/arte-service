@@ -218,13 +218,13 @@ public sealed class SurveyTests(ArteApiFactory api)
         foreach (var code in new[] { theirCode, otherCode })
         {
             var track = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
-            await Json(await api.Client().PostAsJsonAsync($"/api/v1/track/{code}/survey", new { answers = Answers(track, 5, 5, 4) }));
+            await Json(await api.Client().PostAsJsonAsync($"/api/v1/track/{code}/survey", new { answers = Answers(track, 2, 3, 3) }));
         }
 
         var (tech, _) = await api.LoginAsync(techMobile);
         var bell = await Json(await tech.GetAsync("/api/v1/notifications"));
         Assert.Equal(theirs, bell.GetProperty("items").EnumerateArray().Single().GetProperty("caseId").GetGuid());
-        Assert.False(bell.GetProperty("items")[0].GetProperty("isAlert").GetBoolean());
+        Assert.True(bell.GetProperty("items")[0].GetProperty("isAlert").GetBoolean());
         Assert.Equal(2, (await Json(await owner.GetAsync("/api/v1/notifications"))).GetProperty("unread").GetInt32());
         // A technician cannot mark a follow-up.
         Assert.Equal(HttpStatusCode.Forbidden, (await tech.PostAsJsonAsync($"/api/v1/cases/{theirs}/survey/follow-up", new { })).StatusCode);
@@ -268,6 +268,31 @@ public sealed class SurveyTests(ArteApiFactory api)
         Assert.Single((await Json(await admin.GetAsync($"/api/v1/admin/survey-questions?tenantId={tenantId}"))).EnumerateArray());
     }
 
+    [Fact]
+    public async Task Only_answers_below_the_business_threshold_notify()
+    {
+        var (owner, _, _) = await BusinessWithSurveyAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync("/api/v1/settings/business", new { surveyAlertBelow = 1 })).StatusCode);
+        Assert.Equal(3, (await Json(await owner.GetAsync("/api/v1/settings/business"))).GetProperty("surveyAlertBelow").GetInt32());
+
+        // Default 3: a 4-4-5 answer is fine and does not ring the bell.
+        var (happy, happyCode, _) = await OpenCase(owner);
+        await Deliver(owner, happy);
+        var track = await Json(await api.Client().GetAsync($"/api/v1/track/{happyCode}"));
+        await Json(await api.Client().PostAsJsonAsync($"/api/v1/track/{happyCode}/survey", new { answers = Answers(track, 4, 4, 5) }));
+        Assert.Equal(0, (await Json(await owner.GetAsync("/api/v1/notifications"))).GetProperty("unread").GetInt32());
+        Assert.False((await Json(await owner.GetAsync($"/api/v1/cases/{happy}"))).GetProperty("survey").GetProperty("isLow").GetBoolean());
+
+        // Stricter: below 5 stars counts as low.
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { surveyAlertBelow = 5 }));
+        var (strict, strictCode, _) = await OpenCase(owner);
+        await Deliver(owner, strict);
+        track = await Json(await api.Client().GetAsync($"/api/v1/track/{strictCode}"));
+        await Json(await api.Client().PostAsJsonAsync($"/api/v1/track/{strictCode}/survey", new { answers = Answers(track, 5, 5, 4) }));
+        var bell = await Json(await owner.GetAsync("/api/v1/notifications"));
+        Assert.Equal(strict, bell.GetProperty("items").EnumerateArray().Single().GetProperty("caseId").GetGuid());
+    }
+
     [Theory]
     [InlineData("2026-10-10T08:30:00Z", "2026-10-10T08:30:00Z")]   // 12:00 Tehran: now
     [InlineData("2026-10-10T19:45:00Z", "2026-10-11T05:30:00Z")]   // 23:15 Tehran: next morning 09:00
@@ -283,5 +308,6 @@ public sealed class SurveyTests(ArteApiFactory api)
         Assert.True(SurveyRules.IsLow([3, 3, 2]));
         Assert.False(SurveyRules.IsLow([3, 3, 3]));
         Assert.False(SurveyRules.IsLow([4, 5, 3]));
+        Assert.True(SurveyRules.IsLow([4, 5, 3], below: 4));
     }
 }

@@ -81,9 +81,9 @@ export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () 
             <Stat label="تحویل" value={`${formatNumber(data.delivered)} پرونده`} />
             <Stat label="فروش (پرونده‌های تحویل‌شده)" value={toman(data.salesRials)} wide />
             <Stat label="دریافتی" value={toman(data.receivedRials)} />
-            {data.partsProfitRials != null && <Stat label="سود قطعه" value={toman(data.partsProfitRials)} />}
+            {data.partsProfitRials != null && <Stat label="سود کالا" value={toman(data.partsProfitRials)} />}
             <Stat label="اجرت و خدمات" value={toman(data.workRials)} />
-            <Stat label="فروش قطعه" value={toman(data.partsRials)} />
+            <Stat label="فروش کالا" value={toman(data.partsRials)} />
             <button type="button" className={`report-stat wide report-link${data.receivablesRials > 0 ? " warn" : ""}`} onClick={onReceivables}>
               <span className="muted small">نسیه‌ها · طلب از مشتریان (الان)</span>
               <strong className="font-num">{toman(data.receivablesRials)}</strong>

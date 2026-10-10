@@ -35,7 +35,7 @@ export const ALERT_ICON: Record<string, string> = { warn: "⚠", danger: "⏰" }
 export const caseCode = (n: number) => `CASE-${n}`;
 
 const tomanText = (rials: unknown) => `${new Intl.NumberFormat("fa-IR").format(Math.round(Number(rials ?? 0) / 10))} تومان`;
-const ITEM_KIND: Record<string, string> = { part: "قطعه", labor: "اجرت", service: "خدمت" };
+const ITEM_KIND: Record<string, string> = { part: "کالا", labor: "اجرت", service: "اجرت" };
 const METHOD: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
 const FIELD_NAMES: Record<string, string> = {
   request: "شرح مشتری", requestedServices: "خدمات درخواستی", reportedProblems: "ایراد اعلامی", fuelLevel: "میزان سوخت",

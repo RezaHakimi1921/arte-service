@@ -19,7 +19,7 @@ public static class TenantEndpoints
         bool? RequireCustomerApproval, bool? RequireFinalReview, string? BusinessType = null, string[]? VehicleKinds = null,
         bool? CustomerSmsEnabled = null, bool? SmsOnOpened = null, bool? SmsOnReady = null, bool? SmsOnDelivered = null,
         bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null, bool? PhotosVisibleByDefault = null,
-        bool? SurveySendOn = null, int? SurveyDelayMinutes = null);
+        bool? SurveySendOn = null, int? SurveyDelayMinutes = null, int? SurveyAlertBelow = null);
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -59,7 +59,7 @@ public static class TenantEndpoints
                     t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                     t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                     t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
-                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow,
                 }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
 
@@ -74,6 +74,8 @@ public static class TenantEndpoints
                 errors["vehicleKinds"] = ["دست‌کم یک نوع وسیله را انتخاب کنید."];
             if (req.SurveyDelayMinutes is < Arte.Core.Surveys.SurveyRules.MinDelayMinutes or > Arte.Core.Surveys.SurveyRules.MaxDelayMinutes)
                 errors["surveyDelayMinutes"] = ["زمان ارسال بین ۵ دقیقه تا ۷۲ ساعت بعد از تحویل."];
+            if (req.SurveyAlertBelow is < Arte.Core.Surveys.SurveyRules.MinAlertBelow or > Arte.Core.Surveys.SurveyRules.MaxAlertBelow)
+                errors["surveyAlertBelow"] = ["حد رضایت پایین بین ۲ تا ۵ ستاره."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var t = await db.Tenants.SingleAsync(x => x.Id == me.RequiredMembership.TenantId, ct);
@@ -96,6 +98,7 @@ public static class TenantEndpoints
             // The survey add-on itself (SurveyEnabled) is switched by the platform admin only.
             if (req.SurveySendOn is { } ss) t.SurveySendOn = ss;
             if (req.SurveyDelayMinutes is { } sdm) t.SurveyDelayMinutes = sdm;
+            if (req.SurveyAlertBelow is { } sab) t.SurveyAlertBelow = sab;
             audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
             await db.SaveChangesAsync(ct);
             // Optional workflow steps follow the settings.
@@ -106,7 +109,7 @@ public static class TenantEndpoints
                 t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                 t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                 t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
-                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow,
             });
         }).RequirePermission(Permissions.SettingsManage);
 

@@ -1749,3 +1749,6 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
   background: var(--surface-2); border: 1px solid var(--border); white-space: pre-line; line-height: 1.9; font-size: 0.95rem;
   overflow-wrap: anywhere;
 }
+.setting-row.block { flex-direction: column; align-items: stretch; gap: 0.6rem; cursor: default; }
+.setting-row.block .chips { margin-bottom: 0; }
+.setting-row .row-link { align-self: flex-start; min-height: 32px; padding: 0.15rem 0; font-size: 0.85rem; font-weight: 700; }

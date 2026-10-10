@@ -82,7 +82,7 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
       {(can("cases.create") || can("payments.record") || can("reports.view")) && (
         <Group title="فروش">
           {can("reports.view") && <Row icon="report" title="گزارش‌ها" sub="فروش، دریافتی، نسیه‌ها، دستمزد کارکنان" onClick={() => onOpen("reports")} />}
-          {can("cases.create") && <Row icon="price" title="فهرست قیمت" sub="قطعه، اجرت، خدمت" onClick={() => onOpen("catalog")} />}
+          {can("cases.create") && <Row icon="price" title="فهرست قیمت" sub="کالا، اجرت و خدمات" onClick={() => onOpen("catalog")} />}
         </Group>
       )}
       {can("staff.manage") && (
@@ -209,7 +209,7 @@ type BusinessSettings = {
   businessType: string; vehicleKinds: string[];
   customerSmsEnabled: boolean; smsOnOpened: boolean; smsOnReady: boolean; smsOnDelivered: boolean;
   trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean; photosVisibleByDefault: boolean;
-  surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number;
+  surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number; surveyAlertBelow: number;
 };
 
 function delayText(m: number) {
@@ -219,7 +219,7 @@ function delayText(m: number) {
   return r ? `${n(h)} ساعت و ${n(r)} دقیقه` : `${n(h)} ساعت`;
 }
 
-const SURVEY_DELAYS: [number, string][] = [[15, "۱۵ دقیقه"], [30, "۳۰ دقیقه"], [60, "۱ ساعت"], [180, "۳ ساعت"], [1440, "۲۴ ساعت"]];
+const SURVEY_DELAYS: [number, string][] = [[30, "۳۰ دقیقه"], [60, "۱ ساعت"], [180, "۳ ساعت"], [1440, "۲۴ ساعت"]];
 
 export const BUSINESS_TYPES: { key: string; label: string; hint: string; kinds: string[] }[] = [
   { key: "motorcycle_repair", label: "موتورسازی", hint: "تعمیر موتورسیکلت", kinds: ["motorcycle"] },
@@ -276,10 +276,17 @@ export function BusinessPage({ onBack, onSaved }: { onBack: () => void; onSaved:
   );
 }
 
-function Switch({ title, sub, checked, disabled, onChange }: { title: string; sub: string; checked: boolean; disabled: boolean; onChange: (v: boolean) => void }) {
+function Switch({ title, sub, checked, disabled, onChange, link }: {
+  title: string; sub: string; checked: boolean; disabled: boolean; onChange: (v: boolean) => void;
+  /** A small action inside the row (e.g. see the SMS text); tapping it never flips the switch. */
+  link?: { label: string; onClick: () => void };
+}) {
   return (
     <label className="setting-row">
-      <span><strong>{title}</strong><span className="muted small">{sub}</span></span>
+      <span>
+        <strong>{title}</strong><span className="muted small">{sub}</span>
+        {link && <button type="button" className="link row-link" onClick={(e) => { e.preventDefault(); link.onClick(); }}>{link.label}</button>}
+      </span>
       <input type="checkbox" role="switch" className="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );
@@ -355,7 +362,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
   const [support, setSupport] = useState<string | null>(null);
   const [preview, setPreview] = useState<SmsKey | null>(null);
   const [delay, setDelay] = useState("");
-  useEffect(() => { if (s) setDelay(String(s.surveyDelayMinutes)); }, [s?.surveyDelayMinutes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [customDelay, setCustomDelay] = useState(false);
   useEffect(() => { api<{ supportPhone: string | null }>("/api/v1/public/info").then((i) => setSupport(i.supportPhone)).catch(() => {}); }, []);
   return (
     <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
@@ -367,30 +374,22 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
           </p>
           <h3>پیامک به مشتری</h3>
           <div className="settings-list">
-            <Switch title="ارسال پیامک به مشتری" sub="با نام تعمیرگاه، نام مشتری و لینک پیگیری."
+            <Switch title="ارسال پیامک به مشتری" sub="با نام تعمیرگاه، نام مشتری و لینک پیگیری. پیامک «ارسال دوباره‌ی لینک» از صفحه‌ی پرونده فرستاده می‌شود."
+              link={{ label: "دیدن متن پیامک لینک", onClick: () => setPreview("case.link") }}
               checked={s.customerSmsEnabled} disabled={false} onChange={(v) => (v ? setConfirmSms(true) : save({ customerSmsEnabled: false }))} />
-            <Switch title="هنگام پذیرش" sub="«… شما پذیرش شد و در نوبت کار قرار گرفت.»"
+            <Switch title="هنگام پذیرش" link={{ label: "دیدن متن پیامک", onClick: () => setPreview("case.opened") }} sub="«… شما پذیرش شد و در نوبت کار قرار گرفت.»"
               checked={s.smsOnOpened} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnOpened: v })} />
-            <Switch title="آماده‌ی تحویل" sub="«… شما آماده‌ی تحویل است.»"
+            <Switch title="آماده‌ی تحویل" link={{ label: "دیدن متن پیامک", onClick: () => setPreview("case.ready") }} sub="«… شما آماده‌ی تحویل است.»"
               checked={s.smsOnReady} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnReady: v })} />
-            <Switch title="هنگام تحویل" sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
+            <Switch title="هنگام تحویل" link={{ label: "دیدن متن پیامک", onClick: () => setPreview("case.delivered") }} sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
               checked={s.smsOnDelivered} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
-          </div>
-          <span className="label">مشتری پیامک را چطور می‌بیند؟</span>
-          <div className="settings-list">
-            {SMS_PATTERNS.filter((p) => p.key !== "survey.request" || s.surveyEnabled).map((p) => (
-              <button type="button" key={p.key} className="settings-row" onClick={() => setPreview(p.key)}>
-                <span className="settings-row-text"><span>{p.title}</span><span className="muted small">دیدن متن کامل پیامک</span></span>
-                <span className="muted" aria-hidden="true">‹</span>
-              </button>
-            ))}
           </div>
           <h3>صفحه‌ی پیگیری مشتری</h3>
           <p className="hint">وضعیت فعلی، قول تحویل و نام و تلفن تعمیرگاه همیشه نشان داده می‌شود.</p>
           <div className="settings-list">
             <Switch title="همه‌ی مراحل کار" sub="هر مرحله با ساعتش؛ خاموش: فقط وضعیت فعلی."
               checked={s.trackShowStages} disabled={false} onChange={(v) => save({ trackShowStages: v })} />
-            <Switch title="قطعات و کارها" sub="فهرست قطعه‌ها، اجرت و خدمت‌های ثبت‌شده (قیمت خرید هیچ‌وقت نشان داده نمی‌شود)."
+            <Switch title="کالا و کارها" sub="فهرست کالاهای مصرف‌شده و اجرت‌ها (قیمت خرید هیچ‌وقت نشان داده نمی‌شود)."
               checked={s.trackShowItems} disabled={false} onChange={(v) => save({ trackShowItems: v })} />
             <Switch title="مبلغ‌ها" sub="جمع، پرداخت‌شده و مانده‌ی حساب."
               checked={s.trackShowAmounts} disabled={false} onChange={(v) => save({ trackShowAmounts: v })} />
@@ -407,27 +406,47 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
               </p>
               <div className="settings-list">
                 <Switch title="ارسال نظرسنجی بعد از تحویل" sub="مشتری از لینک پیگیری هم می‌تواند نظر بدهد."
+                  link={{ label: "دیدن متن پیامک", onClick: () => setPreview("survey.request") }}
                   checked={s.surveySendOn} disabled={false} onChange={(v) => save({ surveySendOn: v })} />
+                <div className="setting-row block">
+                  <span><strong>چه مدت بعد از تحویل؟</strong><span className="muted small">الان: {delayText(s.surveyDelayMinutes)} بعد از تحویل (فقط ساعت ۹ تا ۲۳).</span></span>
+                  <div className="chips" role="radiogroup" aria-label="زمان ارسال نظرسنجی">
+                    {SURVEY_DELAYS.map(([m, label]) => (
+                      <button type="button" key={m} role="radio" aria-checked={!customDelay && s.surveyDelayMinutes === m} disabled={!s.surveySendOn}
+                        className={`chip-button${!customDelay && s.surveyDelayMinutes === m ? " active" : ""}`}
+                        onClick={() => { setCustomDelay(false); save({ surveyDelayMinutes: m }); }}>{label}</button>
+                    ))}
+                    <button type="button" role="radio" aria-checked={customDelay || !SURVEY_DELAYS.some(([m]) => m === s.surveyDelayMinutes)} disabled={!s.surveySendOn}
+                      className={`chip-button${customDelay || !SURVEY_DELAYS.some(([m]) => m === s.surveyDelayMinutes) ? " active" : ""}`}
+                      onClick={() => { setCustomDelay(true); setDelay(String(s.surveyDelayMinutes)); }}>دلخواه</button>
+                  </div>
+                  {customDelay && (
+                    <form className="delay-form" onSubmit={(e) => {
+                      e.preventDefault();
+                      const m = Number(delay);
+                      if (m >= 5 && m <= 4320) { save({ surveyDelayMinutes: m }); setCustomDelay(false); }
+                    }}>
+                      <Field label="چند دقیقه بعد از تحویل؟ (۵ تا ۴۳۲۰)"
+                        error={delay && (Number(delay) < 5 || Number(delay) > 4320) ? "بین ۵ دقیقه تا ۷۲ ساعت (۴۳۲۰ دقیقه)." : undefined}>
+                        <NumberInput value={delay} onChange={setDelay} max={4} suffix="دقیقه" autoFocus />
+                      </Field>
+                      <button type="submit" className="primary" disabled={!delay || Number(delay) < 5 || Number(delay) > 4320}>ثبت</button>
+                    </form>
+                  )}
+                </div>
+                <div className="setting-row block">
+                  <span><strong>رضایت پایین یعنی کمتر از چند ستاره؟</strong>
+                    <span className="muted small">برای امتیاز کمتر از {formatNumber(s.surveyAlertBelow)} اعلان می‌آید و پرونده در خانه در «رضایت پایین مشتری» می‌ماند تا پیگیری شود.</span></span>
+                  <div className="chips" role="radiogroup" aria-label="حد رضایت پایین">
+                    {[2, 3, 4, 5].map((n) => (
+                      <button type="button" key={n} role="radio" aria-checked={s.surveyAlertBelow === n}
+                        className={`chip-button${s.surveyAlertBelow === n ? " active" : ""}`} onClick={() => save({ surveyAlertBelow: n })}>
+                        کمتر از {formatNumber(n)}{n === 3 ? " (پیش‌فرض)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <span className="label">چه مدت بعد از تحویل فرستاده شود؟</span>
-              <div className="chips" role="radiogroup" aria-label="زمان ارسال نظرسنجی">
-                {SURVEY_DELAYS.map(([m, label]) => (
-                  <button type="button" key={m} role="radio" aria-checked={s.surveyDelayMinutes === m} disabled={!s.surveySendOn}
-                    className={`chip-button${s.surveyDelayMinutes === m ? " active" : ""}`} onClick={() => save({ surveyDelayMinutes: m })}>{label}</button>
-                ))}
-              </div>
-              <form className="delay-form" onSubmit={(e) => {
-                e.preventDefault();
-                const m = Number(delay);
-                if (m >= 5 && m <= 4320) save({ surveyDelayMinutes: m });
-              }}>
-                <Field label="یا زمان دلخواه (۵ تا ۴۳۲۰ دقیقه)"
-                  error={delay && (Number(delay) < 5 || Number(delay) > 4320) ? "بین ۵ دقیقه تا ۷۲ ساعت (۴۳۲۰ دقیقه)." : undefined}>
-                  <NumberInput value={delay} onChange={setDelay} max={4} suffix="دقیقه" />
-                </Field>
-                <button type="submit" disabled={!s.surveySendOn || !delay || Number(delay) === s.surveyDelayMinutes || Number(delay) < 5 || Number(delay) > 4320}>ثبت</button>
-              </form>
-              <p className="hint">الان: {delayText(s.surveyDelayMinutes)} بعد از تحویل.</p>
             </>
           ) : (
             <p className="hint">
@@ -488,9 +507,9 @@ type StaffRow = {
 };
 
 const COMMISSION_BASES: { value: string; label: string; hint: string }[] = [
-  { value: "case_total", label: "کل مبلغ پرونده", hint: "قطعه + اجرت + خدمات" },
-  { value: "labor", label: "فقط اجرت و خدمات", hint: "بدون قطعه" },
-  { value: "labor_plus_parts_profit", label: "اجرت + سود قطعه", hint: "فروش قطعه منهای خرید آن" },
+  { value: "case_total", label: "کل مبلغ پرونده", hint: "کالا + اجرت و خدمات" },
+  { value: "labor", label: "فقط اجرت و خدمات", hint: "بدون کالا" },
+  { value: "labor_plus_parts_profit", label: "اجرت + سود کالا", hint: "فروش کالا منهای خرید آن" },
 ];
 const tomanDigits = (rials: number | null | undefined) => (rials ? String(Math.round(rials / 10)) : "");
 
@@ -607,7 +626,7 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
           )}
           {type !== "none" && (
             <p className="hint">
-              مثال: پرونده‌ای با <span className="font-num">۳٬۰۰۰٬۰۰۰</span> تومان قطعه (سود <span className="font-num">۵۰۰٬۰۰۰</span>) و <span className="font-num">۱٬۰۰۰٬۰۰۰</span> تومان اجرت
+              مثال: پرونده‌ای با <span className="font-num">۳٬۰۰۰٬۰۰۰</span> تومان کالا (سود <span className="font-num">۵۰۰٬۰۰۰</span>) و <span className="font-num">۱٬۰۰۰٬۰۰۰</span> تومان اجرت
               ← سهم این همکار <strong className="font-num">{formatNumber(example)}</strong> تومان.
             </p>
           )}
