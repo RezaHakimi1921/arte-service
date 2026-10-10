@@ -21,7 +21,7 @@ export const scoreText = (score: number) => `${faScore.format(score)} از ۵`;
 /** Read-only stars: filled up to the rating, with the number spoken for screen readers. */
 export function StarRow({ rating }: { rating: number }) {
   return (
-    <span className="star-row" role="img" aria-label={scoreText(rating)}>
+    <span className={`star-row r${Math.min(5, Math.max(1, Math.round(rating)))}`} role="img" aria-label={scoreText(rating)}>
       {[1, 2, 3, 4, 5].map((v) => (
         <svg key={v} viewBox="0 0 24 24" className={v <= Math.round(rating) ? "on" : ""} aria-hidden="true">
           <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />

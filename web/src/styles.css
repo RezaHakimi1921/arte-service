@@ -1690,7 +1690,14 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .tk-stars { display: flex; justify-content: space-between; gap: 4px; }
 .tk-stars button { display: grid; flex: 1 1 0; min-width: 44px; height: 52px; padding: 0; place-items: center; border: 1px solid var(--border); color: var(--border-strong); border-radius: 14px; background: var(--surface-2); }
 .tk-stars button svg { width: 28px; height: 28px; }
-.tk-stars button.on { border-color: color-mix(in srgb, var(--fuel-2) 55%, transparent); color: var(--fuel-2); background: color-mix(in srgb, var(--fuel-2) 14%, var(--surface)); }
+/* Stars take the colour of the chosen score: red (1) … green (5), the same scale as the fuel gauge. */
+.tk-stars { --star: var(--fuel-2); }
+.tk-stars.r1, .star-row.r1 { --star: var(--fuel-0); }
+.tk-stars.r2, .star-row.r2 { --star: var(--fuel-1); }
+.tk-stars.r3, .star-row.r3 { --star: var(--fuel-2); }
+.tk-stars.r4, .star-row.r4 { --star: var(--fuel-3); }
+.tk-stars.r5, .star-row.r5 { --star: var(--fuel-4); }
+.tk-stars button.on { border-color: color-mix(in srgb, var(--star) 55%, transparent); color: var(--star); background: color-mix(in srgb, var(--star) 14%, var(--surface)); transition: color var(--dur-fade), background-color var(--dur-fade), border-color var(--dur-fade); }
 .tk-stars button.on svg { fill: currentColor; }
 .tk-q-word { min-height: 1.4em; color: var(--muted); font-size: 0.82rem; text-align: center; }
 .tk-q textarea { width: 100%; min-height: 88px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; resize: vertical; }
@@ -1731,7 +1738,7 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .survey-followed { margin: 0; color: var(--stage-green); }
 .star-row { display: inline-flex; flex: 0 0 auto; gap: 1px; }
 .star-row svg { width: 18px; height: 18px; fill: none; stroke: var(--border-strong); stroke-width: 1.6; stroke-linejoin: round; }
-.star-row svg.on { fill: var(--fuel-2); stroke: var(--fuel-2); }
+.star-row svg.on { fill: var(--star, var(--fuel-2)); stroke: var(--star, var(--fuel-2)); }
 .group-title.danger { color: var(--danger); }
 .low-card { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; width: 100%; text-align: start; border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
 .low-card-top { display: flex; justify-content: space-between; gap: 0.5rem; }

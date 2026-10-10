@@ -95,7 +95,7 @@ function Stars({ label, value, onChange }: { label: string; value: number; onCha
   return (
     <div className="tk-q">
       <p id={`q-${label}`}>{label}</p>
-      <div className="tk-stars" role="radiogroup" aria-labelledby={`q-${label}`}>
+      <div className={`tk-stars${value ? ` r${value}` : ""}`} role="radiogroup" aria-labelledby={`q-${label}`}>
         {[1, 2, 3, 4, 5].map((v) => (
           <button key={v} type="button" role="radio" aria-checked={value === v} aria-label={`${formatNumber(v)} از ۵، ${RATING_WORDS[v]}`}
             className={v <= value ? "on" : ""} onClick={() => onChange(v)}>
