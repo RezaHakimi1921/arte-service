@@ -38,6 +38,9 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
     public DbSet<CaseAttachment> CaseAttachments => Set<CaseAttachment>();
+    public DbSet<StandardItem> StandardItems => Set<StandardItem>();
+    public DbSet<ServicePackage> ServicePackages => Set<ServicePackage>();
+    public DbSet<ServicePackageLine> ServicePackageLines => Set<ServicePackageLine>();
     public DbSet<SurveyQuestion> SurveyQuestions => Set<SurveyQuestion>();
     public DbSet<SurveyInvite> SurveyInvites => Set<SurveyInvite>();
     public DbSet<SurveyAnswer> SurveyAnswers => Set<SurveyAnswer>();
@@ -111,6 +114,32 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         b.Entity<Tenant>().Property(x => x.SurveySendOn).HasDefaultValue(true);
         b.Entity<Tenant>().Property(x => x.SurveyDelayMinutes).HasDefaultValue(30);
         b.Entity<Tenant>().Property(x => x.SurveyAlertBelow).HasDefaultValue(3);
+
+        // Shared starter catalog (platform admin). Seeded once; after that the admin panel edits it.
+        b.Entity<StandardItem>(e =>
+        {
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Title).HasMaxLength(120);
+            e.Property(x => x.Category).HasMaxLength(40);
+            e.HasIndex(x => x.SortOrder);
+            e.HasData(StandardCatalogSeed.Items);
+        });
+        b.Entity<ServicePackage>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(80);
+            e.Property(x => x.Description).HasMaxLength(200);
+            e.HasData(StandardCatalogSeed.Packages);
+        });
+        b.Entity<ServicePackageLine>(e =>
+        {
+            e.Property(x => x.Quantity).HasPrecision(10, 2);
+            e.HasIndex(x => new { x.PackageId, x.SortOrder });
+            e.HasOne<ServicePackage>().WithMany().HasForeignKey(x => x.PackageId);
+            e.HasOne<StandardItem>().WithMany().HasForeignKey(x => x.StandardItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasData(StandardCatalogSeed.Lines);
+        });
+        b.Entity<CatalogItem>().HasIndex(x => new { x.TenantId, x.StandardItemId }).IsUnique().HasFilter("\"StandardItemId\" IS NOT NULL");
+        b.Entity<CatalogItem>().HasOne<StandardItem>().WithMany().HasForeignKey(x => x.StandardItemId).OnDelete(DeleteBehavior.Restrict);
 
         b.Entity<SurveyQuestion>(e =>
         {

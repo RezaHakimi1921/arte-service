@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
 import { useFeedback } from "./feedback";
 import { BottomSheet, SheetOption } from "./sheet";
@@ -19,6 +19,10 @@ export type Billing = {
 };
 type CatalogRow = { id: string; kind: string; title: string; defaultPriceRials: number; defaultCostRials: number | null; defaultWarrantyDays: number | null; isActive: boolean };
 type Assignable = { id: string; name: string; role: string };
+/** A shared starter item, with this business's remembered price (null until first used). */
+type StdItem = { id: string; kind: string; title: string; category: string; priceRials: number | null; costRials: number | null };
+type StdPackage = { id: string; title: string; description: string | null; lines: { item: StdItem; quantity: number; optional: boolean }[] };
+type Standard = { items: StdItem[]; packages: StdPackage[] };
 
 /** Two kinds for the user: goods used, and work (labor and services are one; old «service» rows show as work). */
 export const KIND_LABELS: Record<string, string> = { part: "کالای مصرف‌شده", labor: "اجرت و خدمات", service: "اجرت و خدمات" };
@@ -53,9 +57,16 @@ export function MoneyBar({ money }: { money: Billing["money"] }) {
 
 /* ───────── items + payments section ───────── */
 
-export function BillingSection({ caseId, billing, onChange, canAssignLabor, paySignal }: {
-  caseId: string; billing: Billing; onChange: (b: Billing) => void; canAssignLabor: boolean; paySignal: number;
+export function BillingSection({ caseId, billing, onChange, canAssignLabor, paySignal, vehicleKind }: {
+  caseId: string; billing: Billing; onChange: (b: Billing) => void; canAssignLabor: boolean; paySignal: number; vehicleKind: string | null;
 }) {
+  const [standard, setStandard] = useState<Standard | null>(null);
+  const [packages, setPackages] = useState(false);
+  // The starter list for this vehicle, with remembered prices; reloaded after every save so prices stay current.
+  const loadStandard = useCallback(() => {
+    api<Standard>(`/api/v1/catalog/standard${vehicleKind ? `?vehicleKind=${vehicleKind}` : ""}`).then(setStandard).catch(() => {});
+  }, [vehicleKind]);
+  useEffect(() => { if (billing.canEditItems) loadStandard(); }, [billing.canEditItems, loadStandard]);
   const { notify } = useFeedback();
   const [editing, setEditing] = useState<{ kind: string; item?: Item } | null>(null);
   const [paying, setPaying] = useState(false);
@@ -67,6 +78,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
     try {
       onChange(await work());
       notify(ok);
+      loadStandard();
       if (undo) setLastUndo(() => undo);
     } catch (err) {
       notify(err instanceof ApiError ? err.message : "خطا", "error");
@@ -114,6 +126,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
             <div className="quick-actions">
               <button onClick={() => setEditing({ kind: "part" })}>+ کالای مصرف‌شده</button>
               <button onClick={() => setEditing({ kind: "labor" })}>+ اجرت و خدمات</button>
+              {standard && standard.packages.length > 0 && <button onClick={() => setPackages(true)}>+ بسته‌ی آماده</button>}
             </div>
           )}
           {m.totalRials > 0 && (
@@ -152,6 +165,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
 
       <ItemSheet
         open={!!editing} kind={editing?.kind ?? "part"} item={editing?.item} canSeeCost={billing.canSeeCost} canAssignLabor={canAssignLabor}
+        standard={standard?.items ?? []}
         busy={busy} onClose={() => setEditing(null)}
         onSave={(body, saveToCatalog) => run(async () => {
           if (saveToCatalog && !editing?.item) {
@@ -172,6 +186,13 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
         } : undefined}
       />
 
+      <PackageSheet open={packages} packages={standard?.packages ?? []} canSeeCost={billing.canSeeCost} busy={busy} onClose={() => setPackages(false)}
+        onAdd={(title, lines) => run(async () => {
+          const b = await api<Billing>(`/api/v1/cases/${caseId}/items/batch`, { body: { package: title, lines } });
+          setPackages(false);
+          return b;
+        }, `«${title}» به پرونده اضافه شد`)} />
+
       <PaymentSheet open={paying} suggested={Math.max(0, m.balanceRials)} busy={busy} onClose={() => setPaying(false)}
         onSave={(body) => run(async () => { const b = await api<Billing>(`/api/v1/cases/${caseId}/payments`, { body }); setPaying(false); return b; }, "پرداخت ثبت شد")} />
     </>
@@ -180,8 +201,93 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
 
 /* ───────── item sheet ───────── */
 
-function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, busy, onClose, onSave, onDelete }: {
-  open: boolean; kind: string; item?: Item; canSeeCost: boolean; canAssignLabor: boolean; busy: boolean;
+const norm = (x: string) => x.replace(/[‌\s]/g, "").replace(/ي/g, "ی").replace(/ك/g, "ک").toLowerCase();
+
+/**
+ * A ready-made package («تعویض روغن»…): pick one, tick the lines that apply, check the quantities and prices
+ * (remembered from last time), and add them all at once.
+ */
+function PackageSheet({ open, packages, canSeeCost, busy, onClose, onAdd }: {
+  open: boolean; packages: StdPackage[]; canSeeCost: boolean; busy: boolean; onClose: () => void;
+  onAdd: (title: string, lines: Record<string, unknown>[]) => void;
+}) {
+  const [chosen, setChosen] = useState<StdPackage | null>(null);
+  const [rows, setRows] = useState<{ on: boolean; qty: string; price: string; cost: string }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { if (!open) setChosen(null); }, [open]);
+
+  function choose(p: StdPackage) {
+    setChosen(p);
+    setError(null);
+    setRows(p.lines.map((l) => ({ on: !l.optional, qty: String(l.quantity), price: toTomanDigits(l.item.priceRials), cost: toTomanDigits(l.item.costRials) })));
+  }
+  const set = (i: number, patch: Partial<{ on: boolean; qty: string; price: string; cost: string }>) =>
+    setRows((r) => r.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+
+  function add() {
+    if (!chosen) return;
+    const picked = chosen.lines.map((l, i) => ({ l, r: rows[i] })).filter((x) => x.r.on);
+    if (picked.length === 0) { setError("دست‌کم یک ردیف را انتخاب کنید."); return; }
+    if (picked.some((x) => !(Number(x.r.qty) > 0))) { setError("تعداد هر ردیف را بنویسید."); return; }
+    if (picked.some((x) => canSeeCost && x.r.cost && x.r.price && toRials(x.r.cost) > toRials(x.r.price))) {
+      setError("قیمت فروش هیچ ردیفی نباید از قیمت خریدش کمتر باشد."); return;
+    }
+    onAdd(chosen.title, picked.map(({ l, r }) => {
+      const line: Record<string, unknown> = { standardItemId: l.item.id, quantity: Number(r.qty), unitPriceRials: toRials(r.price) };
+      if (canSeeCost && r.cost) line.unitCostRials = toRials(r.cost);
+      return line;
+    }));
+  }
+
+  const total = chosen ? chosen.lines.reduce((sum, _l, i) => sum + (rows[i]?.on ? toRials(rows[i].price) * (Number(rows[i].qty) || 0) : 0), 0) : 0;
+  return (
+    <BottomSheet open={open} title={chosen ? chosen.title : "بسته‌ی آماده"} onClose={onClose}>
+      {!chosen ? (
+        <>
+          <p className="muted small">ردیف‌های هر بسته با یک لمس به پرونده اضافه می‌شوند؛ قیمت‌ها از دفعه‌ی قبل می‌آیند و قابل تغییرند.</p>
+          {packages.map((p) => <SheetOption key={p.id} label={p.title} hint={p.description ?? undefined} onClick={() => choose(p)} />)}
+        </>
+      ) : (
+        <>
+          <button type="button" className="link" onClick={() => setChosen(null)}>→ بسته‌های دیگر</button>
+          <ul className="package-lines">
+            {chosen.lines.map((l, i) => (
+              <li key={l.item.id} className={rows[i]?.on ? "" : "off"}>
+                <label className="check">
+                  <input type="checkbox" checked={rows[i]?.on ?? false} onChange={(e) => set(i, { on: e.target.checked })} />
+                  <span>{l.item.title}{l.optional && <span className="muted small"> (اختیاری)</span>}</span>
+                </label>
+                {rows[i]?.on && (
+                  <div className={`package-fields${canSeeCost && l.item.kind === "part" ? " with-cost" : ""}`}>
+                    <Field label="تعداد">
+                      <input inputMode="decimal" dir="ltr" className="font-num" value={rows[i].qty}
+                        onChange={(e) => set(i, { qty: toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 6) })} />
+                    </Field>
+                    {canSeeCost && l.item.kind === "part" && (
+                      <Field label="خرید هر عدد"><NumberInput value={rows[i].cost} onChange={(v) => set(i, { cost: v })} max={11} suffix="تومان" /></Field>
+                    )}
+                    <Field label={l.item.kind === "part" ? "فروش هر عدد" : "اجرت"}>
+                      <NumberInput value={rows[i].price} onChange={(v) => set(i, { price: v })} max={11} suffix="تومان" />
+                    </Field>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="package-total">جمع: <strong className="font-num">{toman(total)}</strong></p>
+          {error && <span className="error" role="alert">{error}</span>}
+          <button type="button" className="primary block" disabled={busy} aria-busy={busy} onClick={add}>
+            {busy ? "در حال افزودن…" : "افزودن به پرونده"}
+          </button>
+        </>
+      )}
+    </BottomSheet>
+  );
+}
+
+
+function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, standard, busy, onClose, onSave, onDelete }: {
+  open: boolean; kind: string; item?: Item; canSeeCost: boolean; canAssignLabor: boolean; standard: StdItem[]; busy: boolean;
   onClose: () => void; onSave: (body: Record<string, unknown>, saveToCatalog: boolean) => void; onDelete?: () => void;
 }) {
   const [kind, setKind] = useState(initialKind);
@@ -195,6 +301,8 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
   const [warranty, setWarranty] = useState(0);
   const [performedBy, setPerformedBy] = useState("");
   const [catalogId, setCatalogId] = useState<string | null>(null);
+  const [standardId, setStandardId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [saveToCatalog, setSaveToCatalog] = useState(false);
   const [suggestions, setSuggestions] = useState<CatalogRow[]>([]);
   const [staff, setStaff] = useState<Assignable[]>([]);
@@ -213,6 +321,8 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     setWarranty(item?.warrantyDays ?? 0);
     setPerformedBy(item?.performedBy ?? "");
     setCatalogId(null);
+    setStandardId(null);
+    setShowAll(false);
     setSaveToCatalog(false);
     setError(null);
     if (canAssignLabor) api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => {});
@@ -226,7 +336,17 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     return () => clearTimeout(t);
   }, [open, item, title, kind, catalogId]);
 
+  function pickStandard(x: StdItem) {
+    setStandardId(x.id);
+    setCatalogId(null);
+    setTitle(x.title);
+    setPrice(toTomanDigits(x.priceRials));
+    setCost(toTomanDigits(x.costRials));
+    setSuggestions([]);
+  }
+
   function pick(c: CatalogRow) {
+    setStandardId(null);
     setCatalogId(c.id);
     setTitle(c.title);
     setPrice(toTomanDigits(c.defaultPriceRials));
@@ -252,7 +372,8 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     if (canSeeCost && cost) body.unitCostRials = toRials(cost);
     if (kind !== "part" && performedBy) body.performedBy = performedBy;
     if (catalogId) body.catalogItemId = catalogId;
-    onSave(body, saveToCatalog);
+    else if (standardId) body.standardItemId = standardId;
+    onSave(body, saveToCatalog && !standardId);
   }
 
   return (
@@ -261,22 +382,49 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
         {!item && (
           <div className="segmented wide" role="radiogroup" aria-label="نوع">
             {OFFERED_KINDS.map(([k, label]) => (
-              <button type="button" key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => { setKind(k); setCatalogId(null); }}>{label}</button>
+              <button type="button" key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => { setKind(k); setCatalogId(null); setStandardId(null); }}>{label}</button>
             ))}
           </div>
         )}
         <Field label={kind === "part" ? "نام کالا" : "شرح کار یا خدمت"} error={error}>
-          <input value={title} onChange={(e) => { setTitle(e.target.value); setCatalogId(null); }} maxLength={120} autoComplete="off" />
+          <input value={title} onChange={(e) => { setTitle(e.target.value); setCatalogId(null); setStandardId(null); }} maxLength={120} autoComplete="off" />
         </Field>
-        {suggestions.length > 0 && (
-          <div className="suggestions">
-            {suggestions.map((s) => (
-              <button type="button" key={s.id} className="suggestion" onClick={() => pick(s)}>
-                <span>{s.title}</span><span className="muted small font-num">{toman(s.defaultPriceRials)}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {(() => {
+          if (item || catalogId || standardId) return null;
+          const mine = kind === "part" ? standard.filter((x) => x.kind === "part") : standard.filter((x) => x.kind !== "part");
+          const q = norm(title.trim());
+          const known = new Set(suggestions.map((s) => norm(s.title)));
+          const matches = q.length >= 2 ? mine.filter((x) => norm(x.title).includes(q) && !known.has(norm(x.title))).slice(0, 6) : [];
+          if (suggestions.length > 0 || matches.length > 0)
+            return (
+              <div className="suggestions">
+                {suggestions.map((s) => (
+                  <button type="button" key={s.id} className="suggestion" onClick={() => pick(s)}>
+                    <span>{s.title}</span><span className="muted small font-num">{toman(s.defaultPriceRials)}</span>
+                  </button>
+                ))}
+                {matches.map((x) => (
+                  <button type="button" key={x.id} className="suggestion" onClick={() => pickStandard(x)}>
+                    <span>{x.title}</span><span className="muted small">{x.priceRials ? toman(x.priceRials) : x.category}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          // Nothing typed yet: the common ones for this vehicle, one tap away.
+          if (q.length > 0 || mine.length === 0) return null;
+          const shown = showAll ? mine : mine.slice(0, 10);
+          return (
+            <div className="field">
+              <span className="label">پرمصرف‌ها برای این وسیله</span>
+              <div className="chips">
+                {shown.map((x) => (
+                  <button type="button" key={x.id} className="chip-button" onClick={() => pickStandard(x)}>{x.title}</button>
+                ))}
+                {!showAll && mine.length > 10 && <button type="button" className="chip-button" onClick={() => setShowAll(true)}>بیشتر…</button>}
+              </div>
+            </div>
+          );
+        })()}
 
         {kind === "part" && (
           <div className="segmented wide" role="radiogroup" aria-label="تأمین کالا">
@@ -330,7 +478,8 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
           </div>
         </div>
 
-        {!item && !catalogId && title.trim() && (
+        {standardId && <p className="hint">قیمتی که این‌جا ثبت کنید، دفعه‌ی بعد خودش می‌آید.</p>}
+        {!item && !catalogId && !standardId && title.trim() && (
           <label className="check">
             <input type="checkbox" checked={saveToCatalog} onChange={(e) => setSaveToCatalog(e.target.checked)} />
             <span>در فهرست قیمت ذخیره شود</span>

@@ -15,7 +15,9 @@ public static class BillingEndpoints
 {
     public sealed record ItemInput(
         string? Kind, string? Title, decimal? Quantity, long? UnitPriceRials, long? UnitCostRials, long? DiscountRials,
-        string? Supplier, string? Status, Guid? PerformedBy, int? WarrantyDays, Guid? CatalogItemId);
+        string? Supplier, string? Status, Guid? PerformedBy, int? WarrantyDays, Guid? CatalogItemId, Guid? StandardItemId = null);
+
+    public sealed record BatchInput(List<ItemInput>? Lines, string? Package);
 
     public sealed record PaymentInput(long? AmountRials, string? Method, string? Note, DateTimeOffset? PaidAt);
 
@@ -28,6 +30,7 @@ public static class BillingEndpoints
     {
         var cases = app.MapGroup("/api/v1/cases/{caseId:guid}").RequireTenant();
         cases.MapPost("/items", AddItemAsync);
+        cases.MapPost("/items/batch", AddBatchAsync);
         cases.MapPatch("/items/{itemId:guid}", UpdateItemAsync);
         cases.MapDelete("/items/{itemId:guid}", RemoveItemAsync);
         cases.MapPost("/items/{itemId:guid}/restore", RestoreItemAsync);
@@ -45,7 +48,21 @@ public static class BillingEndpoints
     // ───────── items ─────────
 
     /// <summary>Anyone who works on the case adds parts and labor; only cost-viewers set or see purchase prices.</summary>
-    private static async Task<IResult> AddItemAsync(Guid caseId, ItemInput req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
+    private static async Task<IResult> AddItemAsync(Guid caseId, ItemInput req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct) =>
+        await AddLinesAsync(caseId, [req], null, me, db, clock, ct);
+
+    /// <summary>Several lines at once (a service package); all are added or none.</summary>
+    private static async Task<IResult> AddBatchAsync(Guid caseId, BatchInput req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
+    {
+        if (req.Lines is not { Count: > 0 and <= 30 })
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["lines"] = ["دست‌کم یک ردیف (حداکثر ۳۰)."] });
+        if (req.Package is { Length: > 80 })
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["package"] = ["حداکثر ۸۰ حرف."] });
+        return await AddLinesAsync(caseId, req.Lines, req.Package?.Trim(), me, db, clock, ct);
+    }
+
+    private static async Task<IResult> AddLinesAsync(Guid caseId, IReadOnlyList<ItemInput> lines, string? package, RequestUser me,
+        ArteDbContext db, IClock clock, CancellationToken ct)
     {
         var m = me.RequiredMembership;
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == caseId, ct);
@@ -53,45 +70,74 @@ public static class BillingEndpoints
         if (!CanEditMoney(m, c) || await IsClosed(db, c, ct) && !m.Has(Permissions.CasesCreate))
             return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
 
-        var errors = Validate(req, isNew: true, m);
-        if (errors.Count > 0) return Results.ValidationProblem(errors);
-        if (req.PerformedBy is { } pb && !await db.Memberships.AnyAsync(x => x.Id == pb && x.IsActive, ct))
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["performedBy"] = ["همکار پیدا نشد."] });
-
-        CatalogItem? cat = null;
-        if (req.CatalogItemId is { } cid)
+        var now = clock.UtcNow;
+        var added = new List<(CaseItem Item, StandardItem? Std, CatalogItem? Cat)>();
+        foreach (var req in lines)
         {
-            cat = await db.CatalogItems.AsNoTracking().SingleOrDefaultAsync(x => x.Id == cid && x.IsActive, ct);
-            if (cat is null) return Results.ValidationProblem(new Dictionary<string, string[]> { ["catalogItemId"] = ["قلم انتخاب‌شده پیدا نشد."] });
+            var errors = Validate(req, isNew: true, m);
+            if (errors.Count > 0) return Results.ValidationProblem(errors);
+            if (req.PerformedBy is { } pb && !await db.Memberships.AnyAsync(x => x.Id == pb && x.IsActive, ct))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["performedBy"] = ["همکار پیدا نشد."] });
+
+            CatalogItem? cat = null;
+            if (req.CatalogItemId is { } cid)
+            {
+                cat = await db.CatalogItems.SingleOrDefaultAsync(x => x.Id == cid && x.IsActive, ct);
+                if (cat is null) return Results.ValidationProblem(new Dictionary<string, string[]> { ["catalogItemId"] = ["قلم انتخاب‌شده پیدا نشد."] });
+            }
+            StandardItem? std = null;
+            if (req.StandardItemId is { } sid)
+            {
+                std = await db.StandardItems.AsNoTracking().SingleOrDefaultAsync(x => x.Id == sid && x.IsActive, ct);
+                if (std is null) return Results.ValidationProblem(new Dictionary<string, string[]> { ["standardItemId"] = ["قلم انتخاب‌شده پیدا نشد."] });
+                cat ??= await db.CatalogItems.SingleOrDefaultAsync(x => x.StandardItemId == sid, ct);
+            }
+
+            var kind = req.Kind ?? cat?.Kind ?? std?.Kind ?? ItemKinds.Part;
+            var item = new CaseItem
+            {
+                CaseId = c.Id,
+                Kind = kind,
+                Title = (req.Title ?? cat?.Title ?? std?.Title)!.Trim(),
+                Quantity = req.Quantity ?? 1,
+                UnitPriceRials = req.UnitPriceRials ?? cat?.DefaultPriceRials ?? 0,
+                UnitCostRials = m.Has(Permissions.ReportsView) ? req.UnitCostRials ?? cat?.DefaultCostRials : cat?.DefaultCostRials,
+                DiscountRials = req.DiscountRials ?? 0,
+                Supplier = kind == ItemKinds.Part ? req.Supplier ?? Suppliers.Shop : Suppliers.Shop,
+                Status = req.Status ?? ItemStatuses.Used,
+                // Work defaults to whoever records it, so commission reports work without extra taps.
+                PerformedBy = req.PerformedBy ?? (kind != ItemKinds.Part ? m.Id : null),
+                WarrantyDays = req.WarrantyDays ?? cat?.DefaultWarrantyDays,
+                CatalogItemId = cat?.Id,
+                AddedBy = me.RequiredUserId,
+                AddedAt = now,
+                UpdatedAt = now,
+            };
+            if (PriceError(item) is { } priceError) return priceError;
+            db.CaseItems.Add(item);
+            added.Add((item, std, cat));
+            AddEvent(db, c, CaseEventTypes.ItemAdded, me.RequiredUserId, now,
+                new { item.Kind, item.Title, item.Quantity, item.Supplier, item.Status, Total = item.LineTotalRials, Package = package });
         }
 
-        var kind = req.Kind ?? cat?.Kind ?? ItemKinds.Part;
-        var now = clock.UtcNow;
-        var item = new CaseItem
+        // Prices are remembered: the next time this item is picked, the last price used comes up.
+        foreach (var (item, std, cat) in added)
         {
-            CaseId = c.Id,
-            Kind = kind,
-            Title = (req.Title ?? cat?.Title)!.Trim(),
-            Quantity = req.Quantity ?? 1,
-            UnitPriceRials = req.UnitPriceRials ?? cat?.DefaultPriceRials ?? 0,
-            UnitCostRials = m.Has(Permissions.ReportsView) ? req.UnitCostRials ?? cat?.DefaultCostRials : cat?.DefaultCostRials,
-            DiscountRials = req.DiscountRials ?? 0,
-            Supplier = kind == ItemKinds.Part ? req.Supplier ?? Suppliers.Shop : Suppliers.Shop,
-            Status = req.Status ?? ItemStatuses.Used,
-            // Labor defaults to whoever records it, so commission reports work without extra taps.
-            PerformedBy = req.PerformedBy ?? (kind == ItemKinds.Labor ? m.Id : null),
-            WarrantyDays = req.WarrantyDays ?? cat?.DefaultWarrantyDays,
-            CatalogItemId = cat?.Id,
-            AddedBy = me.RequiredUserId,
-            AddedAt = now,
-            UpdatedAt = now,
-        };
-        if (PriceError(item) is { } priceError) return priceError;
-        db.CaseItems.Add(item);
-        AddEvent(db, c, CaseEventTypes.ItemAdded, me.RequiredUserId, now,
-            new { item.Kind, item.Title, item.Quantity, item.Supplier, item.Status, Total = item.LineTotalRials });
+            if (item.Supplier != Suppliers.Shop || item.UnitPriceRials <= 0) continue;
+            var memory = cat;
+            if (memory is null && std is not null)
+            {
+                memory = new CatalogItem { Kind = std.Kind, Title = std.Title, StandardItemId = std.Id, CreatedAt = now };
+                db.CatalogItems.Add(memory);
+                item.CatalogItemId = memory.Id;
+            }
+            if (memory is null) continue;
+            memory.DefaultPriceRials = item.UnitPriceRials;
+            if (m.Has(Permissions.ReportsView) && item.UnitCostRials is { } cost) memory.DefaultCostRials = cost;
+        }
+
         await db.SaveChangesAsync(ct);
-        return Results.Created($"/api/v1/cases/{c.Id}/items/{item.Id}", await MoneyView(db, c.Id, m, ct));
+        return Results.Created($"/api/v1/cases/{c.Id}/items", await MoneyView(db, c.Id, m, ct));
     }
 
     private static async Task<IResult> UpdateItemAsync(Guid caseId, Guid itemId, ItemInput req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
@@ -344,7 +390,7 @@ public static class BillingEndpoints
     {
         var e = new Dictionary<string, string[]>();
         if (req.Kind is not null && !ItemKinds.All.Contains(req.Kind)) e["kind"] = ["نوع ردیف نامعتبر است."];
-        if (isNew && string.IsNullOrWhiteSpace(req.Title) && req.CatalogItemId is null) e["title"] = ["عنوان لازم است."];
+        if (isNew && string.IsNullOrWhiteSpace(req.Title) && req.CatalogItemId is null && req.StandardItemId is null) e["title"] = ["عنوان لازم است."];
         if (req.Title is { Length: > 120 } || req.Title is { } t && string.IsNullOrWhiteSpace(t) && !isNew) e["title"] = ["عنوان ۱ تا ۱۲۰ حرف."];
         if (req.Quantity is { } q && (q <= 0 || q > 10_000)) e["quantity"] = ["تعداد نامعتبر است."];
         if (req.UnitPriceRials is < 0 or > MaxRials) e["unitPriceRials"] = ["قیمت فروش نامعتبر است."];

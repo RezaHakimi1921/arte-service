@@ -19,6 +19,7 @@ type StaffPay = {
 type Summary = {
   opened: number; delivered: number; salesRials: number; partsRials: number; workRials: number; partsProfitRials: number | null;
   receivedRials: number; receivablesRials: number; staff: StaffPay[]; survey: SurveyReport | null;
+  topItems: { kind: string; title: string; cases: number; quantity: number; salesRials: number; profitRials: number | null }[];
 };
 
 const jalaliDay = new Intl.DateTimeFormat("en-u-ca-persian-nu-latn", { day: "numeric" });
@@ -90,6 +91,27 @@ export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () 
               <span className="muted small">فهرست نسیه‌ها و موعد پرداخت ‹</span>
             </button>
           </div>
+
+          <h3>پرفروش‌ها</h3>
+          {data.topItems.length === 0 ? (
+            <p className="muted small">در این بازه پرونده‌ای با کالا یا اجرت تحویل نشده است.</p>
+          ) : (
+            <div className="settings-list">
+              {data.topItems.map((i) => (
+                <div key={`${i.kind}-${i.title}`} className="settings-row static">
+                  <span className="settings-row-text">
+                    <span>{i.title}</span>
+                    <span className="muted small">
+                      {i.kind === "part" ? "کالا" : "اجرت و خدمات"}، {formatNumber(i.cases)} پرونده
+                      {i.kind === "part" && <>، {formatNumber(i.quantity)} عدد</>}
+                      {i.profitRials != null && <>، سود <span className="font-num">{toman(i.profitRials)}</span></>}
+                    </span>
+                  </span>
+                  <strong className="font-num">{toman(i.salesRials)}</strong>
+                </div>
+              ))}
+            </div>
+          )}
 
           <h3>دستمزد کارکنان</h3>
           {payable.length === 0 ? (

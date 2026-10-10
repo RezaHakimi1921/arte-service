@@ -4,7 +4,7 @@ import { useFeedback } from "./feedback";
 import { KIND_NAMES, jalaliDate, licenseHeadline, type LicenseStatus } from "./license";
 import { ROLE_NAMES } from "./labels";
 import { BottomSheet, SelectField, SelectSheet, SheetOption } from "./sheet";
-import { Field, NumberInput, formatNumber } from "./ui";
+import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
 
 type Plan = { id: string; name: string; months: number; priceRials: number; isActive: boolean; sortOrder: number };
 type BusinessRow = {
@@ -50,10 +50,11 @@ function AdminPage({ title, back, onBack, children }: { title: string; back: str
 
 /** Platform admin panel: every business (branch), its subscription and switch, and the price list. */
 export function AdminPanel({ onBack }: { onBack?: () => void }) {
-  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" } | { page: "survey" }>({ page: "list" });
+  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" } | { page: "survey" } | { page: "catalog" }>({ page: "list" });
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
   if (view.page === "business") return <AdminBusiness id={view.id} onBack={() => setView({ page: "list" })} />;
   if (view.page === "plans") return <AdminPlans onBack={() => setView({ page: "list" })} />;
+  if (view.page === "catalog") return <AdminStandardCatalog onBack={() => setView({ page: "list" })} />;
   if (view.page === "survey")
     return (
       <AdminPage title="سؤال‌های نظرسنجی" back="فهرست" onBack={() => setView({ page: "list" })}>
@@ -61,10 +62,12 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
         <SurveyQuestions />
       </AdminPage>
     );
-  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} onSurvey={() => setView({ page: "survey" })} />;
+  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} onSurvey={() => setView({ page: "survey" })} onCatalog={() => setView({ page: "catalog" })} />;
 }
 
-function AdminList({ onBack, onOpen, onPlans, onSurvey }: { onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void; onSurvey: () => void }) {
+function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog }: {
+  onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void; onSurvey: () => void; onCatalog: () => void;
+}) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [rows, setRows] = useState<BusinessRow[] | null>(null);
@@ -91,6 +94,7 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey }: { onBack?: () => void;
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام تعمیرگاه، نام یا موبایل مالک" aria-label="جستجوی کسب‌وکار" />
         <button onClick={onPlans}>پلن‌ها و قیمت‌ها</button>
         <button onClick={onSurvey}>سؤال‌های نظرسنجی</button>
+        <button onClick={onCatalog}>کالا و خدمات پرمصرف</button>
       </div>
       <div className="chips" role="tablist" aria-label="وضعیت">
         {FILTERS.map((f) => (
@@ -516,5 +520,196 @@ function SurveyQuestions({ tenantId }: { tenantId?: string }) {
         </form>
       </BottomSheet>
     </>
+  );
+}
+
+type StdRow = { id: string; kind: string; title: string; category: string; vehicleKinds: string[]; sortOrder: number; isActive: boolean };
+type PkgRow = { id: string; title: string; description: string | null; vehicleKinds: string[]; sortOrder: number; isActive: boolean };
+type PkgLine = { id: string; packageId: string; standardItemId: string; quantity: number; optional: boolean; sortOrder: number };
+
+const GROUPS: { key: string; label: string; kinds: string[] }[] = [
+  { key: "moto", label: "موتورسیکلت", kinds: ["motorcycle"] },
+  { key: "car", label: "خودرو", kinds: ["car", "suv", "van", "pickup"] },
+];
+const groupOf = (kinds: string[]) => (kinds.includes("motorcycle") ? "moto" : "car");
+
+/**
+ * The shared starter list every business sees (no prices; each business keeps its own) and the ready-made packages.
+ * Nothing is deleted: rows are switched off, because cases and price lists point at them.
+ */
+function AdminStandardCatalog({ onBack }: { onBack: () => void }) {
+  const { notify } = useFeedback();
+  const [data, setData] = useState<{ items: StdRow[]; packages: PkgRow[]; lines: PkgLine[] } | null>(null);
+  const [group, setGroup] = useState("moto");
+  const [editing, setEditing] = useState<StdRow | "new" | null>(null);
+  const [pkg, setPkg] = useState<PkgRow | "new" | null>(null);
+  const [form, setForm] = useState({ kind: "part", title: "", category: "", active: true });
+  const [pkgForm, setPkgForm] = useState<{ title: string; description: string; active: boolean; lines: { id: string; qty: string; optional: boolean }[] }>(
+    { title: "", description: "", active: true, lines: [] });
+  const [picking, setPicking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => api<{ items: StdRow[]; packages: PkgRow[]; lines: PkgLine[] }>("/api/v1/admin/standard-catalog").then(setData).catch(() => {}), []);
+  useEffect(() => { load(); }, [load]);
+
+  const kinds = GROUPS.find((g) => g.key === group)!.kinds;
+  const items = (data?.items ?? []).filter((i) => groupOf(i.vehicleKinds) === group);
+  const packages = (data?.packages ?? []).filter((p) => groupOf(p.vehicleKinds) === group);
+  const categories = [...new Set(items.map((i) => i.category))];
+  const byId = new Map((data?.items ?? []).map((i) => [i.id, i]));
+
+  function openItem(row: StdRow | "new") {
+    setEditing(row);
+    setError(null);
+    setForm(row === "new" ? { kind: "part", title: "", category: categories[0] ?? "", active: true } : { kind: row.kind, title: row.title, category: row.category, active: row.isActive });
+  }
+  function openPkg(row: PkgRow | "new") {
+    setPkg(row);
+    setError(null);
+    setPkgForm(row === "new" ? { title: "", description: "", active: true, lines: [] } : {
+      title: row.title, description: row.description ?? "", active: row.isActive,
+      lines: (data?.lines ?? []).filter((l) => l.packageId === row.id).map((l) => ({ id: l.standardItemId, qty: String(l.quantity), optional: l.optional })),
+    });
+  }
+
+  async function save(work: () => Promise<unknown>, done: () => void) {
+    setBusy(true);
+    try {
+      await work();
+      notify("ذخیره شد");
+      done();
+      await load();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function saveItem(e: FormEvent) {
+    e.preventDefault();
+    const body = { kind: form.kind, title: form.title.trim(), category: form.category.trim(), vehicleKinds: kinds, isActive: form.active };
+    void save(() => editing === "new" ? api("/api/v1/admin/standard-catalog/items", { body })
+      : api(`/api/v1/admin/standard-catalog/items/${(editing as StdRow).id}`, { method: "PATCH", body }), () => setEditing(null));
+  }
+  function savePkg(e: FormEvent) {
+    e.preventDefault();
+    const body = {
+      title: pkgForm.title.trim(), description: pkgForm.description.trim(), vehicleKinds: kinds, isActive: pkgForm.active,
+      lines: pkgForm.lines.map((l) => ({ standardItemId: l.id, quantity: Number(l.qty) || 1, optional: l.optional })),
+    };
+    void save(() => pkg === "new" ? api("/api/v1/admin/standard-catalog/packages", { body })
+      : api(`/api/v1/admin/standard-catalog/packages/${(pkg as PkgRow).id}`, { method: "PATCH", body }), () => setPkg(null));
+  }
+
+  return (
+    <AdminPage title="کالا و خدمات پرمصرف" back="فهرست" onBack={onBack}>
+      <p className="muted small">فهرست مشترک همه‌ی کسب‌وکارها، بدون قیمت؛ هر کسب‌وکار قیمت خودش را یک بار می‌زند و برنامه به خاطر می‌سپارد.</p>
+      <div className="segmented wide" role="radiogroup" aria-label="نوع وسیله">
+        {GROUPS.map((g) => (
+          <button type="button" key={g.key} role="radio" aria-checked={group === g.key} className={group === g.key ? "on" : ""} onClick={() => setGroup(g.key)}>{g.label}</button>
+        ))}
+      </div>
+      {!data ? <div className="splash" aria-busy="true" /> : (
+        <>
+          <h3>بسته‌های آماده</h3>
+          <div className="settings-list">
+            {packages.map((p) => (
+              <button type="button" key={p.id} className={`settings-row${p.isActive ? "" : " inactive"}`} onClick={() => openPkg(p)}>
+                <span className="settings-row-text">
+                  <span>{p.title}{!p.isActive && <span className="muted small"> · غیرفعال</span>}</span>
+                  <span className="muted small">
+                    {(data.lines.filter((l) => l.packageId === p.id).map((l) => byId.get(l.standardItemId)?.title).filter(Boolean)).join("، ")}
+                  </span>
+                </span>
+                <span className="muted" aria-hidden="true">‹</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => openPkg("new")}>+ بسته‌ی تازه</button>
+
+          {categories.map((cat) => (
+            <section key={cat}>
+              <h3>{cat}</h3>
+              <div className="settings-list">
+                {items.filter((i) => i.category === cat).map((i) => (
+                  <button type="button" key={i.id} className={`settings-row${i.isActive ? "" : " inactive"}`} onClick={() => openItem(i)}>
+                    <span className="settings-row-text">
+                      <span>{i.title}{!i.isActive && <span className="muted small"> · غیرفعال</span>}</span>
+                      <span className="muted small">{i.kind === "part" ? "کالا" : "اجرت و خدمات"}</span>
+                    </span>
+                    <span className="muted" aria-hidden="true">‹</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+          <button onClick={() => openItem("new")}>+ قلم تازه</button>
+        </>
+      )}
+
+      <BottomSheet open={!!editing} title={editing === "new" ? "قلم تازه" : "ویرایش قلم"} onClose={() => setEditing(null)}>
+        <form onSubmit={saveItem} noValidate>
+          <div className="segmented wide" role="radiogroup" aria-label="نوع">
+            {[["part", "کالای مصرف‌شده"], ["labor", "اجرت و خدمات"]].map(([k, l]) => (
+              <button type="button" key={k} role="radio" aria-checked={form.kind === k} className={form.kind === k ? "on" : ""} onClick={() => setForm({ ...form, kind: k })}>{l}</button>
+            ))}
+          </div>
+          <Field label="عنوان"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={120} /></Field>
+          <Field label="گروه">
+            <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} maxLength={40} list="std-categories" />
+          </Field>
+          <datalist id="std-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
+          {editing !== "new" && (
+            <label className="setting-row">
+              <span><strong>در فهرست نشان داده شود</strong><span className="muted small">خاموش: از پیشنهادها و بسته‌ها برداشته می‌شود.</span></span>
+              <input type="checkbox" role="switch" className="switch" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+            </label>
+          )}
+          {error && <span className="error" role="alert">{error}</span>}
+          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+        </form>
+      </BottomSheet>
+
+      <BottomSheet open={!!pkg} title={pkg === "new" ? "بسته‌ی تازه" : "ویرایش بسته"} onClose={() => setPkg(null)}>
+        <form onSubmit={savePkg} noValidate>
+          <Field label="عنوان"><input value={pkgForm.title} onChange={(e) => setPkgForm({ ...pkgForm, title: e.target.value })} maxLength={80} /></Field>
+          <Field label="توضیح کوتاه (اختیاری)"><input value={pkgForm.description} onChange={(e) => setPkgForm({ ...pkgForm, description: e.target.value })} maxLength={200} /></Field>
+          <span className="label">ردیف‌ها</span>
+          <ul className="package-lines">
+            {pkgForm.lines.map((l, i) => (
+              <li key={l.id}>
+                <span>{byId.get(l.id)?.title}</span>
+                <div className="package-fields">
+                  <Field label="تعداد">
+                    <input inputMode="decimal" dir="ltr" className="font-num" value={l.qty}
+                      onChange={(e) => setPkgForm({ ...pkgForm, lines: pkgForm.lines.map((x, k) => (k === i ? { ...x, qty: toLatinDigits(e.target.value).replace(/[^\d.]/g, "").slice(0, 6) } : x)) })} />
+                  </Field>
+                  <label className="check">
+                    <input type="checkbox" checked={l.optional} onChange={(e) => setPkgForm({ ...pkgForm, lines: pkgForm.lines.map((x, k) => (k === i ? { ...x, optional: e.target.checked } : x)) })} />
+                    <span>اختیاری (پیش‌فرض تیک نخورده)</span>
+                  </label>
+                </div>
+                <button type="button" className="link danger" onClick={() => setPkgForm({ ...pkgForm, lines: pkgForm.lines.filter((_, k) => k !== i) })}>برداشتن</button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => setPicking(true)}>+ افزودن ردیف</button>
+          {pkg !== "new" && (
+            <label className="setting-row">
+              <span><strong>به کسب‌وکارها نشان داده شود</strong><span className="muted small">خاموش: در «بسته‌ی آماده» نمی‌آید.</span></span>
+              <input type="checkbox" role="switch" className="switch" checked={pkgForm.active} onChange={(e) => setPkgForm({ ...pkgForm, active: e.target.checked })} />
+            </label>
+          )}
+          {error && <span className="error" role="alert">{error}</span>}
+          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+        </form>
+      </BottomSheet>
+
+      <SelectSheet open={picking} title="افزودن ردیف به بسته" value={null} onClose={() => setPicking(false)}
+        items={items.filter((i) => i.isActive && !pkgForm.lines.some((l) => l.id === i.id)).map((i) => ({ value: i.id, label: i.title, group: i.category }))}
+        onSelect={(v) => { if (v) setPkgForm({ ...pkgForm, lines: [...pkgForm.lines, { id: v, qty: "1", optional: false }] }); setPicking(false); }} />
+    </AdminPage>
   );
 }

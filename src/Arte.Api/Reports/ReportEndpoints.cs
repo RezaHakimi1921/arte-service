@@ -37,6 +37,19 @@ public static class ReportEndpoints
         var work = billable.Where(i => i.Kind is ItemKinds.Labor or ItemKinds.Service).Sum(i => i.LineTotalRials);
         var partsProfit = billable.Where(i => i.Kind == ItemKinds.Part && i.UnitCostRials != null)
             .Sum(i => i.LineTotalRials - i.LineCostRials);
+        // What was sold most: goods and work of the delivered cases, by name (one name = one row in the catalog).
+        var isOwner = me.RequiredMembership.Role == Roles.Owner;
+        var topItems = billable.GroupBy(i => (Kind: i.Kind == ItemKinds.Part ? ItemKinds.Part : ItemKinds.Labor, i.Title))
+            .Select(g => new
+            {
+                g.Key.Kind, g.Key.Title,
+                Cases = g.Select(i => i.CaseId).Distinct().Count(),
+                Quantity = g.Sum(i => i.Quantity),
+                SalesRials = g.Sum(i => i.LineTotalRials),
+                ProfitRials = isOwner && g.Key.Kind == ItemKinds.Part && g.All(i => i.UnitCostRials != null)
+                    ? g.Sum(i => i.LineTotalRials - i.LineCostRials) : (long?)null,
+            })
+            .OrderByDescending(x => x.SalesRials).Take(15).ToList();
         var received = await db.Payments.Where(p => p.PaidAt >= from && p.PaidAt < to).SumAsync(p => (long?)p.AmountRials, ct) ?? 0;
 
         // Current receivables (not period-bound): delivered cases still owing.
@@ -70,6 +83,7 @@ public static class ReportEndpoints
             PartsProfitRials = me.RequiredMembership.Role == Roles.Owner ? partsProfit : (long?)null,
             ReceivedRials = received, ReceivablesRials = receivables,
             Staff = staff,
+            TopItems = topItems,
             Survey = await Arte.Api.Surveys.SurveyEndpoints.ReportAsync(db, me.RequiredMembership.TenantId, from, to, ct),
         });
     }

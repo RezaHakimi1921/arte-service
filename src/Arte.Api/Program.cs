@@ -191,6 +191,7 @@ app.MapCustomers();
 app.MapWorkflows();
 app.MapCases();
 app.MapBilling();
+Arte.Api.Billing.StandardCatalogEndpoints.MapStandardCatalog(app);
 app.MapAttachments();
 app.MapClientErrors();
 app.MapOnboarding();

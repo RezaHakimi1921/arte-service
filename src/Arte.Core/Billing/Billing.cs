@@ -97,6 +97,8 @@ public sealed class CatalogItem : ITenantOwned
     public int? DefaultWarrantyDays { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>This business's price for a shared starter item; updated to the last price used.</summary>
+    public Guid? StandardItemId { get; set; }
 }
 
 public sealed record CaseMoney(long TotalRials, long PaidRials, long BalanceRials, long PartsRials, long LaborRials,
