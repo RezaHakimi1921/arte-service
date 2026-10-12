@@ -28,6 +28,7 @@ type Me = {
   business: {
     tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean;
     tourDone: boolean; sampleCaseId: string | null; isActive: boolean; license: LicenseStatus; surveyEnabled: boolean; brand: string | null;
+    support: boolean;
     businessType: string; vehicleKinds: string[];
   } | null;
 };
@@ -129,7 +130,8 @@ function ShopApp() {
     // «ورود به شعبه» from the admin panel: /?branch=<id> goes straight into that branch if I am a member there.
     const wanted = ENTER_BRANCH;
     if (s && wanted && !picked) {
-      if (s.tenantId !== wanted && s.memberships.some((m) => m.tenantId === wanted)) {
+      // Members, and the admin with support access (not in the list): the server decides.
+      if (s.tenantId !== wanted) {
         try {
           // One request even if the app starts twice at once (development double start).
           entering ??= api<Session>("/api/v1/auth/select-tenant", { body: { tenantId: wanted } });
@@ -413,6 +415,11 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
           <NotificationBell onOpenCase={(id) => { setTab("cases"); setNewCase(false); setMorePage(null); setCaseId(id); setSurveyCase(id); }} />
         )}
       </header>
+      {me.business!.support && (
+        <div className="support-banner" role="status">
+          حالت پشتیبانی آرته: با دسترسی کامل وارد این شعبه شده‌اید و هر تغییر به نام شما ثبت می‌شود.
+        </div>
+      )}
       {!me.openMode && (
         <LicenseBanner status={me.business!.license}
           onOpen={can("settings.manage") ? () => { go("settings"); setMorePage("license"); } : undefined} />

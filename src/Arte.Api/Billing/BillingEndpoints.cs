@@ -342,7 +342,7 @@ public static class BillingEndpoints
         var items = await db.CaseItems.AsNoTracking().Where(x => x.CaseId == caseId).OrderBy(x => x.AddedAt).ToListAsync(ct);
         var payments = await db.Payments.AsNoTracking().Where(x => x.CaseId == caseId).OrderBy(x => x.PaidAt).ToListAsync(ct);
         var performerIds = items.Where(i => i.PerformedBy != null).Select(i => i.PerformedBy!.Value).Distinct().ToList();
-        var names = await db.Memberships.AsNoTracking().Where(x => performerIds.Contains(x.Id))
+        var names = await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).AsNoTracking().Where(x => performerIds.Contains(x.Id))
             .Select(x => new { x.Id, Name = x.User!.DisplayName ?? x.User.Mobile }).ToDictionaryAsync(x => x.Id, x => x.Name, ct);
         var money = CaseMoney.Of(items, payments);
         var showCost = m.Role == Roles.Owner;

@@ -80,6 +80,41 @@ public sealed class BranchTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task The_admin_enters_any_branch_with_hidden_support_access_that_ends_with_the_admin_flag()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var caseId = await OpenCase(owner);
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.PostAsync($"/api/v1/admin/businesses/{tenantId}/support", null)).StatusCode);
+
+        var adminMobile = ArteApiFactory.NewMobile();
+        var (admin, _) = await api.LoginAsync(adminMobile);
+        await using (var scope = api.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Users.Where(u => u.Mobile == adminMobile)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsPlatformAdmin, true));
+
+        await Json(await admin.PostAsync($"/api/v1/admin/businesses/{tenantId}/support", null));
+        var session = await Json(await admin.PostAsJsonAsync("/api/v1/auth/select-tenant", new { tenantId }));
+        admin.DefaultRequestHeaders.Authorization = new("Bearer", session.GetProperty("accessToken").GetString());
+        // Full access, flagged as support, and not listed as one of the admin's own branches.
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/api/v1/cases/{caseId}")).StatusCode);
+        var me = await Json(await admin.GetAsync("/api/v1/me"));
+        Assert.True(me.GetProperty("business").GetProperty("support").GetBoolean());
+        Assert.Empty(session.GetProperty("memberships").EnumerateArray());
+
+        // Hidden from the branch: staff list, assignees.
+        var staff = await Json(await owner.GetAsync("/api/v1/staff"));
+        Assert.DoesNotContain(staff.EnumerateArray(), m => m.GetProperty("mobile").GetString() == adminMobile);
+        var assignable = await Json(await owner.GetAsync("/api/v1/staff/assignable"));
+        Assert.Single(assignable.EnumerateArray());
+
+        // No longer admin: the support session stops working at once.
+        await using (var scope = api.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Users.Where(u => u.Mobile == adminMobile)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsPlatformAdmin, false));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await admin.GetAsync($"/api/v1/cases/{caseId}")).StatusCode);
+    }
+
+    [Fact]
     public async Task Switching_branch_twice_at_the_same_moment_does_not_fail()
     {
         var ownerMobile = ArteApiFactory.NewMobile();

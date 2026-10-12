@@ -147,6 +147,34 @@ public static class LicenseEndpoints
             });
         });
 
+        // «ورود پشتیبانی»: the admin enters any branch with full access, recorded in the audit log. A real membership
+        // there is used as it is; otherwise a hidden support membership is created (or switched back on).
+        admin.MapPost("/businesses/{id:guid}/support", async (Guid id, RequestUser me, IServiceScopeFactory scopes, IClock clock,
+            Audit audit, ArteDbContext db, CancellationToken ct) =>
+        {
+            if (!await db.Tenants.AnyAsync(t => t.Id == id && t.IsActive, ct)) return Results.NotFound();
+            var userId = me.RequiredUserId;
+            await using var scope = scopes.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<Arte.Core.Tenancy.TenantContext>().Set(id);
+            var tdb = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+            var m = await tdb.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).SingleOrDefaultAsync(x => x.UserId == userId, ct);
+            if (m is null)
+            {
+                tdb.Memberships.Add(new Arte.Core.Identity.Membership
+                {
+                    UserId = userId, Role = Roles.Owner, Permissions = Roles.DefaultPermissions(Roles.Owner),
+                    IsSupport = true, CreatedAt = clock.UtcNow, TourDoneAt = clock.UtcNow,
+                });
+            }
+            else if (m.IsSupport && !m.IsActive) m.IsActive = true;
+            else if (!m.IsSupport && !m.IsActive)
+                return Results.Problem(statusCode: 409, title: "عضویت شما در این شعبه غیرفعال است.");
+            await tdb.SaveChangesAsync(ct);
+            audit.Record("admin.support_enter", id, userId, m is { IsSupport: false } ? "member" : "support");
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { TenantId = id });
+        });
+
         admin.MapPatch("/businesses/{id:guid}", async (Guid id, UpdateBusiness req, RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
         {
             var t = await db.Tenants.SingleOrDefaultAsync(x => x.Id == id, ct);

@@ -23,9 +23,26 @@ type BusinessDetail = {
  * Into a branch's app (the admin is a member there): the main site opens straight in that branch
  * (sign-in first if needed). From adminservice.* that is the service.* site; in development, the same origin.
  */
-function enterBranch(id: string) {
+async function enterBranch(id: string) {
+  // Not a member: Arte support access is opened first (full access, recorded in the audit log).
+  await api(`/api/v1/admin/businesses/${id}/support`, { method: "POST" });
   const main = location.hostname.startsWith("adminservice.") ? location.origin.replace("//adminservice.", "//service.") : location.origin;
   location.href = `${main}/?branch=${id}`;
+}
+
+/** «ورود به شعبه» (a member there) or «ورود پشتیبانی» (Arte support access), with a busy state and errors. */
+function EnterButton({ id, mine, wide }: { id: string; mine: boolean; wide?: boolean }) {
+  const { notify } = useFeedback();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button type="button" className={wide ? "block secondary" : "admin-enter"} disabled={busy} aria-busy={busy}
+      onClick={async () => {
+        setBusy(true);
+        try { await enterBranch(id); } catch (err) { notify(errorText(err), "error"); setBusy(false); }
+      }}>
+      {busy ? "در حال ورود…" : mine ? "ورود به شعبه" : "ورود پشتیبانی"}
+    </button>
+  );
 }
 
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
@@ -134,7 +151,7 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onBrands }: {
             </span>
             <span className="muted" aria-hidden="true">‹</span>
           </button>
-          {b.mine && b.isActive && <button type="button" className="admin-enter" onClick={() => enterBranch(b.id)}>ورود به شعبه</button>}
+          {b.isActive && <EnterButton id={b.id} mine={!!b.mine} />}
           </div>
         ))}
       </div>
@@ -191,7 +208,7 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
         )}
         {!b.isActive && b.deactivatedReason && <p className="muted small">دلیل: {b.deactivatedReason}</p>}
         <button className="primary block" onClick={() => setSheet("grant")}>ثبت اشتراک یا هدیه</button>
-        {b.mine && b.isActive && <button className="block secondary" onClick={() => enterBranch(id)}>ورود به این شعبه</button>}
+        {b.isActive && <EnterButton id={id} mine={b.mine} wide />}
       </div>
 
       <div className="card admin-facts">
@@ -834,7 +851,7 @@ function AdminBrands({ onBack, onOpen }: { onBack: () => void; onOpen: (id: stri
                   <span className="settings-row-text"><span>{x.name}</span>{!x.isActive && <span className="muted small">غیرفعال</span>}</span>
                   <span className="muted" aria-hidden="true">‹</span>
                 </button>
-                {x.isActive && all.find((r) => r.id === x.id)?.mine && <button type="button" className="admin-enter" onClick={() => enterBranch(x.id)}>ورود به شعبه</button>}
+                {x.isActive && <EnterButton id={x.id} mine={!!all.find((r) => r.id === x.id)?.mine} />}
               </div>
             ))}
           </div>

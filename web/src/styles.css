@@ -2002,3 +2002,5 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .admin-row-wrap { display: flex; flex-direction: column; }
 .admin-row-wrap > .settings-row { border-bottom: 0; }
 .admin-enter { align-self: flex-start; min-height: 36px; margin: 0 1rem 0.6rem; padding: 0.25rem 0.9rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 0; font-size: 0.85rem; font-weight: 700; }
+
+.support-banner { padding: 0.5rem 16px; background: var(--warning-bg); color: var(--warning-text); font-size: 0.85rem; font-weight: 700; line-height: 1.8; }

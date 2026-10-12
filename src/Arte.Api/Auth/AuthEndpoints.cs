@@ -198,7 +198,7 @@ public static class AuthEndpoints
 
     private static async Task<List<ActiveMembership>> ActiveMemberships(ArteDbContext db, Guid userId, CancellationToken ct) =>
         await db.Memberships.IgnoreQueryFilters().AsNoTracking()
-            .Where(m => m.UserId == userId && m.IsActive)
+            .Where(m => m.UserId == userId && m.IsActive && !m.IsSupport)
             .Join(db.Tenants, m => m.TenantId, t => t.Id, (m, t) => new ActiveMembership(m, t.Name))
             .ToListAsync(ct);
 

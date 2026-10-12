@@ -53,7 +53,7 @@ public static class StaffEndpoints
                 user = new User { Mobile = mobile, DisplayName = string.IsNullOrEmpty(name) ? null : name, CreatedAt = clock.UtcNow };
                 db.Users.Add(user);
             }
-            else if (await db.Memberships.AnyAsync(m => m.UserId == user.Id, ct))
+            else if (await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).AnyAsync(m => m.UserId == user.Id, ct))
             {
                 return Results.Problem(statusCode: 409, title: "این شماره قبلاً در کارکنان ثبت شده است.");
             }

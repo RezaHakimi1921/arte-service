@@ -2115,6 +2115,9 @@ namespace Arte.Core.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsSupport")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("PayModel")
                         .IsRequired()
                         .HasMaxLength(20)

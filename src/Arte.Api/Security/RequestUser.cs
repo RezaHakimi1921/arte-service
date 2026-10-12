@@ -62,7 +62,8 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next)
                 var membership = await db.Memberships.IgnoreQueryFilters().AsNoTracking()
                     .SingleOrDefaultAsync(m => m.Id == membershipId && m.UserId == userId
                                                && m.TenantId == tenantId && m.IsActive, http.RequestAborted);
-                if (membership is null)
+                if (membership is null
+                    || membership.IsSupport && !await db.Users.AnyAsync(u => u.Id == userId && u.IsPlatformAdmin, http.RequestAborted))
                 {
                     http.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     return;

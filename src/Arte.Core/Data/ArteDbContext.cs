@@ -15,6 +15,8 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
 {
     public const string TenantFilter = "tenant";
     public const string SoftDeleteFilter = "soft_delete";
+    /// <summary>Hides Arte support memberships everywhere except sign-in and request resolution.</summary>
+    public const string SupportFilter = "support";
 
     /// <summary>Read by the global query filters on every query, so it must stay a member of the context.</summary>
     public Guid? CurrentTenantId => tenant.TenantId;
@@ -346,6 +348,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         });
 
         ApplyTenantFilters(b);
+        b.Entity<Membership>().HasQueryFilter(SupportFilter, m => !m.IsSupport);
     }
 
     /// <summary>

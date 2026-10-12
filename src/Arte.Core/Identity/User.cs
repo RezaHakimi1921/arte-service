@@ -45,6 +45,11 @@ public sealed class Membership : ITenantOwned
     /// for their own work. Chosen by the manager per member; on for the owner and supervisors by default.
     /// </summary>
     public bool SurveyNotify { get; set; }
+    /// <summary>
+    /// Arte support access: the platform admin entered this branch from the admin panel. Hidden from staff lists, assignees,
+    /// reports and notifications (query filter «support»); valid only while the user is still platform admin.
+    /// </summary>
+    public bool IsSupport { get; set; }
 
     public bool Has(string permission) => Role == Roles.Owner || Permissions.Contains(permission);
 }

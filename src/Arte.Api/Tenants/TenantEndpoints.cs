@@ -49,9 +49,11 @@ public static class TenantEndpoints
                     m.Role,
                     Permissions = m.Role == Roles.Owner ? [.. Permissions.All] : m.Permissions,
                     IsActive = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.IsActive).SingleAsync(ct),
+                    // Arte support access: the app shows a banner.
+                    Support = m.IsSupport,
                     SurveyEnabled = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.SurveyEnabled).SingleAsync(ct),
                     License = await Arte.Api.Licensing.LicenseService.StatusAsync(db, m.TenantId, clock.UtcNow, ct),
-                    TourDone = await db.Memberships.Where(x => x.Id == m.Id).Select(x => x.TourDoneAt != null).SingleAsync(ct),
+                    TourDone = await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).Where(x => x.Id == m.Id).Select(x => x.TourDoneAt != null).SingleAsync(ct),
                     SampleCaseId = await db.Cases.Where(c => c.IsSample).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct),
                 },
             });
@@ -147,7 +149,7 @@ public static class TenantEndpoints
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             // Sign-up makes the first business only; further branches are created by Arte (admin panel).
-            if (await db.Memberships.IgnoreQueryFilters().AnyAsync(m => m.UserId == me.RequiredUserId && m.IsActive, ct))
+            if (await db.Memberships.IgnoreQueryFilters().AnyAsync(m => m.UserId == me.RequiredUserId && m.IsActive && !m.IsSupport, ct))
                 return Results.Problem(statusCode: 403, title: "ساخت شعبه‌ی جدید با پشتیبانی آرته است.");
 
             var businessType = req.BusinessType ?? BusinessTypes.MotorcycleRepair;

@@ -45,7 +45,7 @@ public static class OnboardingEndpoints
 
         g.MapPost("/tour-done", async (RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct) =>
         {
-            var m = await db.Memberships.SingleAsync(x => x.Id == me.RequiredMembership.Id, ct);
+            var m = await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).SingleAsync(x => x.Id == me.RequiredMembership.Id, ct);
             m.TourDoneAt ??= clock.UtcNow;
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
