@@ -88,6 +88,11 @@ build → test → commit → push → deploy → health check → summary
    - Check: `https://service.artepersia.com/` → 200, `/api/v1/me` → 401 unauthenticated, API log shows migrations applied.
 6. UI changes: check phone width (375px) and both themes in the browser pane; say what still needs a real phone.
 
+## Library docs
+
+- Context7 (MCP server in `.mcp.json`) gives current docs for .NET, EF Core, Npgsql, React, Vite and other libraries.
+  Use it before writing code against an API whose details may have changed, instead of relying on memory.
+
 ## Server notes
 
 - The PersonalWallet stack owns ports 80/443; its Caddy forwards `service.artepersia.com` → `arte-web:80`.
