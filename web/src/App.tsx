@@ -38,6 +38,15 @@ type Tab = "home" | "cases" | "customers" | "settings";
 const ADMIN_HOST = location.hostname.startsWith("adminservice.") || (import.meta.env.DEV && new URLSearchParams(location.search).has("admin"));
 
 /** /t/{code}: the customer's tracking page, public and outside the app. */
+/** «ورود به شعبه» from the admin panel (/?branch=<id>): read once at load, kept until a session uses it. */
+const ENTER_BRANCH = (() => {
+  const id = new URLSearchParams(location.search).get("branch");
+  if (id) history.replaceState(null, "", location.pathname);
+  return id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+})();
+
+let entering: Promise<Session> | null = null;
+
 const TRACK_MATCH = location.pathname.match(/^\/([ts])\/([a-z0-9]{6,16})\/?$/);
 const TRACK_CODE = TRACK_MATCH?.[2] ?? null;
 /** The survey SMS links to /s/{code}: the same customer page, opened at the survey. */
@@ -117,6 +126,18 @@ function ShopApp() {
   // Anyone in more than one branch starts on «شعب شما»; picking a branch (or the top bar) leaves it.
   const [atBranches, setAtBranches] = useState(false);
   const signIn = useCallback(async (s: Session | null, picked = false) => {
+    // «ورود به شعبه» from the admin panel: /?branch=<id> goes straight into that branch if I am a member there.
+    const wanted = ENTER_BRANCH;
+    if (s && wanted && !picked) {
+      if (s.tenantId !== wanted && s.memberships.some((m) => m.tenantId === wanted)) {
+        try {
+          // One request even if the app starts twice at once (development double start).
+          entering ??= api<Session>("/api/v1/auth/select-tenant", { body: { tenantId: wanted } });
+          s = await entering;
+          picked = true;
+        } catch { /* stays on the branches page */ }
+      } else if (s.tenantId === wanted) picked = true;
+    }
     applySession(s);
     setSession(s);
     setAtBranches(!!s && !picked && s.memberships.length > 1);

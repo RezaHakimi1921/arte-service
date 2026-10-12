@@ -8,16 +8,25 @@ import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./
 
 type Plan = { id: string; name: string; months: number; priceRials: number; isActive: boolean; sortOrder: number };
 type BusinessRow = {
-  id: string; name: string; phone: string | null; createdAt: string; isActive: boolean; brand?: string | null;
+  id: string; name: string; phone: string | null; createdAt: string; isActive: boolean; brand?: string | null; mine?: boolean;
   owner: { displayName: string | null; mobile: string } | null; staff: number; cases: number; lastCaseAt: string | null;
   license: LicenseStatus;
 };
 type BusinessDetail = {
   id: string; name: string; phone: string | null; address: string | null; createdAt: string; isActive: boolean;
-  deactivatedReason: string | null; status: LicenseStatus; surveyEnabled: boolean; brandId: string | null; brand: string | null;
+  deactivatedReason: string | null; status: LicenseStatus; surveyEnabled: boolean; brandId: string | null; brand: string | null; mine: boolean;
   licenses: { id: string; kind: string; startsAt: string; endsAt: string; priceRials: number; note: string | null; createdAt: string; revoked: boolean; plan: string | null }[];
   members: { role: string; isActive: boolean; displayName: string | null; mobile: string; lastLoginAt: string | null }[];
 };
+
+/**
+ * Into a branch's app (the admin is a member there): the main site opens straight in that branch
+ * (sign-in first if needed). From adminservice.* that is the service.* site; in development, the same origin.
+ */
+function enterBranch(id: string) {
+  const main = location.hostname.startsWith("adminservice.") ? location.origin.replace("//adminservice.", "//service.") : location.origin;
+  location.href = `${main}/?branch=${id}`;
+}
 
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
 const errorText = (e: unknown) => (e instanceof ApiError ? e.message : "خطا در ارتباط با سرور");
@@ -110,7 +119,8 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onBrands }: {
       {rows && shown.length === 0 && <p className="muted">کسب‌وکاری با این شرایط نیست.</p>}
       <div className="settings-list">
         {shown.map((b) => (
-          <button type="button" key={b.id} className="settings-row admin-row" onClick={() => onOpen(b.id)}>
+          <div key={b.id} className="admin-row-wrap">
+          <button type="button" className="settings-row admin-row" onClick={() => onOpen(b.id)}>
             <span className="settings-row-text admin-cells">
               <span className="admin-row-top"><strong>{b.name}</strong>{b.brand && <span className="badge">{b.brand}</span>}<StatusChip b={b} /></span>
               <span className="muted small admin-cell-owner">
@@ -124,6 +134,8 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onBrands }: {
             </span>
             <span className="muted" aria-hidden="true">‹</span>
           </button>
+          {b.mine && b.isActive && <button type="button" className="admin-enter" onClick={() => enterBranch(b.id)}>ورود به شعبه</button>}
+          </div>
         ))}
       </div>
     </AdminPage>
@@ -179,6 +191,7 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
         )}
         {!b.isActive && b.deactivatedReason && <p className="muted small">دلیل: {b.deactivatedReason}</p>}
         <button className="primary block" onClick={() => setSheet("grant")}>ثبت اشتراک یا هدیه</button>
+        {b.mine && b.isActive && <button className="block secondary" onClick={() => enterBranch(id)}>ورود به این شعبه</button>}
       </div>
 
       <div className="card admin-facts">
@@ -816,10 +829,13 @@ function AdminBrands({ onBack, onOpen }: { onBack: () => void; onOpen: (id: stri
           <h3>{b.name}{!b.isActive && <span className="muted small"> · غیرفعال</span>}</h3>
           <div className="settings-list">
             {b.branches.map((x) => (
-              <button type="button" key={x.id} className={`settings-row${x.isActive ? "" : " inactive"}`} onClick={() => onOpen(x.id)}>
-                <span className="settings-row-text"><span>{x.name}</span>{!x.isActive && <span className="muted small">غیرفعال</span>}</span>
-                <span className="muted" aria-hidden="true">‹</span>
-              </button>
+              <div key={x.id} className="admin-row-wrap">
+                <button type="button" className={`settings-row${x.isActive ? "" : " inactive"}`} onClick={() => onOpen(x.id)}>
+                  <span className="settings-row-text"><span>{x.name}</span>{!x.isActive && <span className="muted small">غیرفعال</span>}</span>
+                  <span className="muted" aria-hidden="true">‹</span>
+                </button>
+                {x.isActive && all.find((r) => r.id === x.id)?.mine && <button type="button" className="admin-enter" onClick={() => enterBranch(x.id)}>ورود به شعبه</button>}
+              </div>
             ))}
           </div>
           <button className="link" onClick={() => newBranch(b.id)}>+ شعبه‌ی جدید در {b.name}</button>

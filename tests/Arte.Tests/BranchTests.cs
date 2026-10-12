@@ -80,6 +80,21 @@ public sealed class BranchTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Switching_branch_twice_at_the_same_moment_does_not_fail()
+    {
+        var ownerMobile = ArteApiFactory.NewMobile();
+        var (owner, first) = await api.NewBusinessAsync(ownerMobile);
+        var admin = await AdminAsync();
+        var second = (await Json(await admin.PostAsJsonAsync("/api/v1/admin/branches", new { name = "شعبه‌ی هم‌زمان", ownerMobile }))).GetProperty("id").GetGuid();
+
+        // Two tabs (or a double start) revoke the same session family at once: both get a session, neither a 500.
+        var results = await Task.WhenAll(
+            owner.PostAsJsonAsync("/api/v1/auth/select-tenant", new { tenantId = second }),
+            owner.PostAsJsonAsync("/api/v1/auth/select-tenant", new { tenantId = first }));
+        Assert.All(results, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+    }
+
+    [Fact]
     public async Task The_dashboard_lists_my_branches_with_each_ones_numbers_and_my_own_view()
     {
         var ownerMobile = ArteApiFactory.NewMobile();

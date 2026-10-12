@@ -114,15 +114,15 @@ public sealed class TokenService(ArteDbContext db, IOptions<JwtOptions> options,
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, clock.UtcNow)
                                       .SetProperty(t => t.RevokedReason, "open_mode_closed"), ct);
 
-    private async Task RevokeFamilyAsync(Guid familyId, string reason, CancellationToken ct)
+    /// <summary>
+    /// One UPDATE for the whole family, applied at once: two requests revoking the same family at the same moment
+    /// (switching branch from two tabs) both succeed instead of one failing on the row version.
+    /// </summary>
+    private Task RevokeFamilyAsync(Guid familyId, string reason, CancellationToken ct)
     {
         var now = clock.UtcNow;
-        var live = await db.RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAt == null).ToListAsync(ct);
-        foreach (var t in live)
-        {
-            t.RevokedAt = now;
-            t.RevokedReason = reason;
-        }
+        return db.RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAt == null)
+            .ExecuteUpdateAsync(u => u.SetProperty(t => t.RevokedAt, now).SetProperty(t => t.RevokedReason, reason), ct);
     }
 
     private async Task<IssuedTokens> IssueInFamilyAsync(Guid userId, Membership? membership, Guid familyId, bool openMode, CancellationToken ct)

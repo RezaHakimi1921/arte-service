@@ -36,7 +36,7 @@ public static class LicenseEndpoints
         // ───────── platform admin panel ─────────
         var admin = app.MapGroup("/api/v1/admin").RequirePlatformAdmin();
 
-        admin.MapGet("/businesses", async (string? q, ArteDbContext db, IClock clock, CancellationToken ct) =>
+        admin.MapGet("/businesses", async (string? q, ArteDbContext db, IClock clock, RequestUser me, CancellationToken ct) =>
         {
             var now = clock.UtcNow;
             // Across businesses: only the tenant filter is bypassed (by name); soft delete stays on.
@@ -56,6 +56,8 @@ public static class LicenseEndpoints
             {
                 t.Id, t.Name, t.Phone, t.CreatedAt, t.IsActive,
                 Brand = db.Organizations.Where(o => o.Id == t.OrganizationId).Select(o => o.Name).FirstOrDefault(),
+                // The admin is a member here (owner or staff): the panel offers «ورود به شعبه».
+                Mine = allMembers.Any(m => m.TenantId == t.Id && m.UserId == me.UserId && m.IsActive),
                 Owner = allMembers
                     .Where(m => m.TenantId == t.Id && m.Role == Roles.Owner).OrderBy(m => m.CreatedAt)
                     .Select(m => new { m.User!.DisplayName, m.User.Mobile }).FirstOrDefault(),
@@ -72,13 +74,13 @@ public static class LicenseEndpoints
                 var (state, days) = LicensePolicy.StateOf(r.License?.EndsAt, now);
                 return new
                 {
-                    r.Id, r.Name, r.Phone, r.CreatedAt, r.IsActive, r.Brand, r.Owner, r.Staff, r.Cases, r.LastCaseAt,
+                    r.Id, r.Name, r.Phone, r.CreatedAt, r.IsActive, r.Brand, r.Mine, r.Owner, r.Staff, r.Cases, r.LastCaseAt,
                     License = new LicenseStatus(state, days, r.License?.EndsAt, r.License?.Kind),
                 };
             }));
         });
 
-        admin.MapGet("/businesses/{id:guid}", async (Guid id, ArteDbContext db, IClock clock, CancellationToken ct) =>
+        admin.MapGet("/businesses/{id:guid}", async (Guid id, ArteDbContext db, IClock clock, RequestUser me, CancellationToken ct) =>
         {
             var t = await db.Tenants.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
             if (t is null) return Results.NotFound();
@@ -97,6 +99,8 @@ public static class LicenseEndpoints
             {
                 t.Id, t.Name, t.Phone, t.Address, t.CreatedAt, t.IsActive, t.DeactivatedReason, t.SurveyEnabled,
                 BrandId = t.OrganizationId,
+                Mine = await db.Memberships.IgnoreQueryFilters([ArteDbContext.TenantFilter])
+                    .AnyAsync(m => m.TenantId == id && m.UserId == me.UserId && m.IsActive, ct),
                 Brand = await db.Organizations.Where(o => o.Id == t.OrganizationId).Select(o => o.Name).FirstOrDefaultAsync(ct),
                 Status = await LicenseService.StatusAsync(db, id, clock.UtcNow, ct),
                 Licenses = licenses, Members = members,
