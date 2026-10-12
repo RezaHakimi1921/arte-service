@@ -16,6 +16,18 @@ public static class BusinessTypes
     };
 }
 
+/// <summary>
+/// A brand: the branches (businesses) that belong together, e.g. «آرمان روغن» with two shops. Created and changed only by
+/// the platform admin. Each branch keeps its own data, licence and staff; the brand only groups them.
+/// </summary>
+public sealed class Organization
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public required string Name { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
 public sealed class Tenant
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -34,6 +46,8 @@ public sealed class Tenant
     /// <summary>Platform admin switch: an inactive branch cannot be used at all (data is kept).</summary>
     public bool IsActive { get; set; } = true;
     public string? DeactivatedReason { get; set; }
+    /// <summary>The brand this branch belongs to (null: a single shop).</summary>
+    public Guid? OrganizationId { get; set; }
 
     public string BusinessType { get; set; } = BusinessTypes.MotorcycleRepair;
     /// <summary>Vehicle kinds this shop takes in (asset kinds); intake offers only these.</summary>

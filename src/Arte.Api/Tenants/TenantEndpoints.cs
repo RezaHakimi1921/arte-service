@@ -33,6 +33,8 @@ public static class TenantEndpoints
                 user.Mobile,
                 user.DisplayName,
                 user.IsPlatformAdmin,
+                // More than one branch: the app opens on the branches dashboard.
+                BranchCount = await db.Memberships.IgnoreQueryFilters([ArteDbContext.TenantFilter]).CountAsync(x => x.UserId == user.Id && x.IsActive, ct),
                 OpenMode = config.GetValue("Auth:OpenMode", false),
                 Business = m is null ? null : new
                 {
@@ -141,10 +143,9 @@ public static class TenantEndpoints
             }
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
-            var owned = await db.Memberships.IgnoreQueryFilters()
-                .CountAsync(m => m.UserId == me.RequiredUserId && m.Role == Roles.Owner, ct);
-            if (owned >= signup.Value.MaxBusinessesPerUser)
-                return Results.Problem(statusCode: 403, title: "به سقف تعداد کسب‌وکار رسیده‌اید.");
+            // Sign-up makes the first business only; further branches are created by Arte (admin panel).
+            if (await db.Memberships.IgnoreQueryFilters().AnyAsync(m => m.UserId == me.RequiredUserId && m.IsActive, ct))
+                return Results.Problem(statusCode: 403, title: "ساخت شعبه‌ی جدید با پشتیبانی آرته است.");
 
             var businessType = req.BusinessType ?? BusinessTypes.MotorcycleRepair;
             if (!BusinessTypes.All.Contains(businessType))
@@ -157,7 +158,7 @@ public static class TenantEndpoints
 
     /// <summary>Creates a business with the motorcycle workflow and makes the user its owner.</summary>
     public static async Task<Tenant> ProvisionAsync(IServiceScopeFactory scopes, Guid ownerUserId, string name,
-        string? phone, string? ownerName, CancellationToken ct, string businessType = BusinessTypes.MotorcycleRepair)
+        string? phone, string? ownerName, CancellationToken ct, string businessType = BusinessTypes.MotorcycleRepair, Guid? organizationId = null)
     {
         // A fresh scope so the new tenant becomes the tenant of this unit of work only.
         await using var scope = scopes.CreateAsyncScope();
@@ -168,6 +169,7 @@ public static class TenantEndpoints
         {
             Name = name, Phone = phone, Vertical = WorkflowTemplates.MotorcycleRepair, CreatedAt = clock.UtcNow,
             BusinessType = businessType, VehicleKinds = BusinessTypes.DefaultVehicleKinds(businessType),
+            OrganizationId = organizationId,
         };
         sp.GetRequiredService<TenantContext>().Set(tenant.Id);
 

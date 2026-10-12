@@ -5,6 +5,7 @@ import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
+import { BranchesHome } from "./branches";
 import { Intro } from "./mechanic";
 import { NotificationBell } from "./survey";
 import { Tour, type TourStep } from "./tour";
@@ -22,6 +23,7 @@ type Me = {
   mobile: string;
   displayName: string | null;
   openMode: boolean;
+  branchCount: number;
   isPlatformAdmin: boolean;
   business: {
     tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean;
@@ -112,9 +114,12 @@ function ShopApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [me, setMe] = useState<Me | null>(null);
 
-  const signIn = useCallback(async (s: Session | null) => {
+  // Anyone in more than one branch starts on «شعب شما»; picking a branch (or the top bar) leaves it.
+  const [atBranches, setAtBranches] = useState(false);
+  const signIn = useCallback(async (s: Session | null, picked = false) => {
     applySession(s);
     setSession(s);
+    setAtBranches(!!s && !picked && s.memberships.length > 1);
     setMe(s ? await api<Me>("/api/v1/me") : null);
   }, []);
 
@@ -148,11 +153,17 @@ function ShopApp() {
       </main>
     );
   if (!session || !me) return <Login onDone={signIn} />;
+  if (atBranches || (!me.business && session.memberships.length > 1))
+    return (
+      <BranchesHome name={me.displayName ?? me.mobile} currentId={atBranches ? me.business?.tenantId : null}
+        onPick={(s) => signIn(s, true)} onSignOut={() => signIn(null)}
+        onClose={me.business && atBranches ? () => setAtBranches(false) : undefined} />
+    );
   if (!me.business) return <ChooseBusiness session={session} onDone={signIn} />;
   if (!me.business.isActive) return <BranchBlocked name={me.business.name} onSignOut={() => signIn(null)} />;
   return (
     <FeedbackProvider>
-      <Shell me={me} onSignOut={() => signIn(null)} onSettingsChanged={() => { api<Me>("/api/v1/me").then(setMe).catch(() => {}); }} />
+      <Shell me={me} onSignOut={() => signIn(null)} onBranches={() => setAtBranches(true)} onSettingsChanged={() => { api<Me>("/api/v1/me").then(setMe).catch(() => {}); }} />
     </FeedbackProvider>
   );
 }
@@ -174,7 +185,7 @@ async function openModeSession(): Promise<Session | null> {
  */
 function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Session) => void }) {
   const [welcome, setWelcome] = useState<{ session: Session; days: number } | null>(null);
-  const [adding, setAdding] = useState(session.memberships.length === 0);
+  const adding = session.memberships.length === 0;
 
   const select = (tenantId: string) => api<Session>("/api/v1/auth/select-tenant", { body: { tenantId } });
 
@@ -200,14 +211,13 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
           </button>
         ))}
       </div>
-      <div className="lg-support"><button type="button" className="lg-text" onClick={() => setAdding(true)}>ثبت تعمیرگاه جدید</button></div>
     </AuthLayout>
   );
 }
 
 /* ───────── Shell ───────── */
 
-function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => void; onSettingsChanged: () => void }) {
+function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSignOut: () => void; onSettingsChanged: () => void; onBranches: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
   const [caseId, setCaseId] = useState<string | null>(null);
   // Opened from a notification: the case page scrolls to the customer's feedback.
@@ -366,10 +376,17 @@ function Shell({ me, onSignOut, onSettingsChanged }: { me: Me; onSignOut: () => 
         </div>
       )}
       <header className="topbar">
-        <div className="topbar-text">
-          <strong>{me.business!.name}</strong>
-          <span className="muted small">{me.displayName ?? me.mobile}</span>
-        </div>
+        {me.branchCount > 1 ? (
+          <button type="button" className="topbar-text topbar-branch" onClick={onBranches} aria-label={`شعبه: ${me.business!.name}؛ عوض کردن شعبه`}>
+            <strong>{me.business!.name} <span aria-hidden="true">▾</span></strong>
+            <span className="muted small">{me.displayName ?? me.mobile} · شعب</span>
+          </button>
+        ) : (
+          <div className="topbar-text">
+            <strong>{me.business!.name}</strong>
+            <span className="muted small">{me.displayName ?? me.mobile}</span>
+          </div>
+        )}
         {me.business!.surveyEnabled && (
           <NotificationBell onOpenCase={(id) => { setTab("cases"); setNewCase(false); setMorePage(null); setCaseId(id); setSurveyCase(id); }} />
         )}

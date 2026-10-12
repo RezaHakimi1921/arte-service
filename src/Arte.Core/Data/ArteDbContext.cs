@@ -20,6 +20,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public Guid? CurrentTenantId => tenant.TenantId;
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
@@ -105,6 +106,13 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasOne<Arte.Core.Licensing.Plan>().WithMany().HasForeignKey(x => x.PlanId);
         });
         b.Entity<Tenant>().Property(x => x.IsActive).HasDefaultValue(true);
+        b.Entity<Organization>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(120);
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+        });
+        b.Entity<Tenant>().HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Tenant>().HasIndex(x => x.OrganizationId);
         b.Entity<Tenant>().Property(x => x.BusinessType).HasMaxLength(32).HasDefaultValue(BusinessTypes.MotorcycleRepair);
         b.Entity<Tenant>().Property(x => x.VehicleKinds).HasDefaultValueSql("'{car,suv,van,pickup,motorcycle}'::text[]");
         foreach (var flag in new[] { nameof(Tenant.SmsOnOpened), nameof(Tenant.SmsOnReady), nameof(Tenant.SmsOnDelivered),

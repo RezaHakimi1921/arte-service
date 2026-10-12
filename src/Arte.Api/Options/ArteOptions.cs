@@ -33,7 +33,6 @@ public sealed class SignupOptions
     public string InviteCode { get; set; } = "";
     /// <summary>Off: anyone who verified their mobile can register a business (self sign-up with a trial).</summary>
     public bool RequireInviteCode { get; set; }
-    public int MaxBusinessesPerUser { get; set; } = 3;
 }
 
 public sealed class SmsOptions

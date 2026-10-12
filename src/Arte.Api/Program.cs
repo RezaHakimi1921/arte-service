@@ -186,6 +186,7 @@ app.MapAuth();
 app.MapOpenMode();
 app.MapAccount();
 app.MapTenants();
+Arte.Api.Tenants.BranchEndpoints.MapBranches(app);
 app.MapStaff();
 app.MapCustomers();
 app.MapWorkflows();

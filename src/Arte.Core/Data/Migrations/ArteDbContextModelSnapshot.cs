@@ -2625,6 +2625,30 @@ namespace Arte.Core.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Arte.Core.Tenancy.Organization", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Organizations");
+                });
+
             modelBuilder.Entity("Arte.Core.Tenancy.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2664,6 +2688,9 @@ namespace Arte.Core.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
+
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
@@ -2746,6 +2773,8 @@ namespace Arte.Core.Data.Migrations
                         .HasColumnType("character varying(40)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
 
                     b.ToTable("Tenants");
                 });
@@ -3100,6 +3129,14 @@ namespace Arte.Core.Data.Migrations
                     b.HasOne("Arte.Core.Tenancy.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId");
+                });
+
+            modelBuilder.Entity("Arte.Core.Tenancy.Tenant", b =>
+                {
+                    b.HasOne("Arte.Core.Tenancy.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Arte.Core.Workflows.Stage", b =>

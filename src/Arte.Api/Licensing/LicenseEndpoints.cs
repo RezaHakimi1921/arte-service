@@ -55,6 +55,7 @@ public static class LicenseEndpoints
             var rows = await tenants.OrderByDescending(t => t.CreatedAt).Take(300).Select(t => new
             {
                 t.Id, t.Name, t.Phone, t.CreatedAt, t.IsActive,
+                Brand = db.Organizations.Where(o => o.Id == t.OrganizationId).Select(o => o.Name).FirstOrDefault(),
                 Owner = allMembers
                     .Where(m => m.TenantId == t.Id && m.Role == Roles.Owner).OrderBy(m => m.CreatedAt)
                     .Select(m => new { m.User!.DisplayName, m.User.Mobile }).FirstOrDefault(),
@@ -71,7 +72,7 @@ public static class LicenseEndpoints
                 var (state, days) = LicensePolicy.StateOf(r.License?.EndsAt, now);
                 return new
                 {
-                    r.Id, r.Name, r.Phone, r.CreatedAt, r.IsActive, r.Owner, r.Staff, r.Cases, r.LastCaseAt,
+                    r.Id, r.Name, r.Phone, r.CreatedAt, r.IsActive, r.Brand, r.Owner, r.Staff, r.Cases, r.LastCaseAt,
                     License = new LicenseStatus(state, days, r.License?.EndsAt, r.License?.Kind),
                 };
             }));
@@ -95,6 +96,8 @@ public static class LicenseEndpoints
             return Results.Ok(new
             {
                 t.Id, t.Name, t.Phone, t.Address, t.CreatedAt, t.IsActive, t.DeactivatedReason, t.SurveyEnabled,
+                BrandId = t.OrganizationId,
+                Brand = await db.Organizations.Where(o => o.Id == t.OrganizationId).Select(o => o.Name).FirstOrDefaultAsync(ct),
                 Status = await LicenseService.StatusAsync(db, id, clock.UtcNow, ct),
                 Licenses = licenses, Members = members,
             });

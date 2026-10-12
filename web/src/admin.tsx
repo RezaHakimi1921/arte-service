@@ -4,17 +4,17 @@ import { useFeedback } from "./feedback";
 import { KIND_NAMES, jalaliDate, licenseHeadline, type LicenseStatus } from "./license";
 import { ROLE_NAMES } from "./labels";
 import { BottomSheet, SelectField, SelectSheet, SheetOption } from "./sheet";
-import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
+import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 
 type Plan = { id: string; name: string; months: number; priceRials: number; isActive: boolean; sortOrder: number };
 type BusinessRow = {
-  id: string; name: string; phone: string | null; createdAt: string; isActive: boolean;
+  id: string; name: string; phone: string | null; createdAt: string; isActive: boolean; brand?: string | null;
   owner: { displayName: string | null; mobile: string } | null; staff: number; cases: number; lastCaseAt: string | null;
   license: LicenseStatus;
 };
 type BusinessDetail = {
   id: string; name: string; phone: string | null; address: string | null; createdAt: string; isActive: boolean;
-  deactivatedReason: string | null; status: LicenseStatus; surveyEnabled: boolean;
+  deactivatedReason: string | null; status: LicenseStatus; surveyEnabled: boolean; brandId: string | null; brand: string | null;
   licenses: { id: string; kind: string; startsAt: string; endsAt: string; priceRials: number; note: string | null; createdAt: string; revoked: boolean; plan: string | null }[];
   members: { role: string; isActive: boolean; displayName: string | null; mobile: string; lastLoginAt: string | null }[];
 };
@@ -50,10 +50,11 @@ function AdminPage({ title, back, onBack, children }: { title: string; back: str
 
 /** Platform admin panel: every business (branch), its subscription and switch, and the price list. */
 export function AdminPanel({ onBack }: { onBack?: () => void }) {
-  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" } | { page: "survey" } | { page: "catalog" }>({ page: "list" });
+  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" } | { page: "survey" } | { page: "catalog" } | { page: "brands" }>({ page: "list" });
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
   if (view.page === "business") return <AdminBusiness id={view.id} onBack={() => setView({ page: "list" })} />;
   if (view.page === "plans") return <AdminPlans onBack={() => setView({ page: "list" })} />;
+  if (view.page === "brands") return <AdminBrands onBack={() => setView({ page: "list" })} onOpen={(id) => setView({ page: "business", id })} />;
   if (view.page === "catalog") return <AdminStandardCatalog onBack={() => setView({ page: "list" })} />;
   if (view.page === "survey")
     return (
@@ -62,11 +63,11 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
         <SurveyQuestions />
       </AdminPage>
     );
-  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} onSurvey={() => setView({ page: "survey" })} onCatalog={() => setView({ page: "catalog" })} />;
+  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} onSurvey={() => setView({ page: "survey" })} onCatalog={() => setView({ page: "catalog" })} onBrands={() => setView({ page: "brands" })} />;
 }
 
-function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog }: {
-  onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void; onSurvey: () => void; onCatalog: () => void;
+function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onBrands }: {
+  onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void; onSurvey: () => void; onCatalog: () => void; onBrands: () => void;
 }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -92,6 +93,7 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog }: {
       )}
       <div className="admin-tools">
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام تعمیرگاه، نام یا موبایل مالک" aria-label="جستجوی کسب‌وکار" />
+        <button onClick={onBrands}>برندها و شعب</button>
         <button onClick={onPlans}>پلن‌ها و قیمت‌ها</button>
         <button onClick={onSurvey}>سؤال‌های نظرسنجی</button>
         <button onClick={onCatalog}>کالا و خدمات پرمصرف</button>
@@ -110,7 +112,7 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog }: {
         {shown.map((b) => (
           <button type="button" key={b.id} className="settings-row admin-row" onClick={() => onOpen(b.id)}>
             <span className="settings-row-text admin-cells">
-              <span className="admin-row-top"><strong>{b.name}</strong><StatusChip b={b} /></span>
+              <span className="admin-row-top"><strong>{b.name}</strong>{b.brand && <span className="badge">{b.brand}</span>}<StatusChip b={b} /></span>
               <span className="muted small admin-cell-owner">
                 {b.owner?.displayName ?? "بی‌نام"} · <span dir="ltr" className="font-num">{b.owner?.mobile}</span>
               </span>
@@ -191,6 +193,9 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
               : (setReason(""), setSheet("deactivate"))} />
         </label>
       </div>
+
+      <h3>برند</h3>
+      <BrandPicker businessId={id} brandId={b.brandId} brandName={b.brand} onChanged={load} />
 
       <h3>نظرسنجی مشتری (امکان جدا)</h3>
       <div className="card admin-facts">
@@ -710,6 +715,168 @@ function AdminStandardCatalog({ onBack }: { onBack: () => void }) {
       <SelectSheet open={picking} title="افزودن ردیف به بسته" value={null} onClose={() => setPicking(false)}
         items={items.filter((i) => i.isActive && !pkgForm.lines.some((l) => l.id === i.id)).map((i) => ({ value: i.id, label: i.title, group: i.category }))}
         onSelect={(v) => { if (v) setPkgForm({ ...pkgForm, lines: [...pkgForm.lines, { id: v, qty: "1", optional: false }] }); setPicking(false); }} />
+    </AdminPage>
+  );
+}
+
+type Brand = { id: string; name: string; isActive: boolean; branches: { id: string; name: string; isActive: boolean }[] };
+
+/** Which brand a business belongs to (or none); the admin changes it here. */
+function BrandPicker({ businessId, brandId, brandName, onChanged }: { businessId: string; brandId: string | null; brandName: string | null; onChanged: () => void }) {
+  const { notify } = useFeedback();
+  const [open, setOpen] = useState(false);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  useEffect(() => { if (open) api<Brand[]>("/api/v1/admin/brands").then(setBrands).catch(() => {}); }, [open]);
+  async function choose(v: string | null) {
+    try {
+      await api(`/api/v1/admin/businesses/${businessId}/brand`, { method: "PATCH", body: { brandId: v } });
+      notify("ذخیره شد");
+      setOpen(false);
+      onChanged();
+    } catch (err) {
+      notify(errorText(err), "error");
+    }
+  }
+  return (
+    <>
+      <SelectField label={brandName ?? undefined} placeholder="بدون برند (تک‌شعبه)" onOpen={() => setOpen(true)} />
+      <SelectSheet open={open} title="برند این کسب‌وکار" value={brandId} noneLabel="بدون برند" onClose={() => setOpen(false)}
+        items={brands.filter((x) => x.isActive).map((x) => ({ value: x.id, label: x.name, hint: `${formatNumber(x.branches.length)} شعبه` }))}
+        onSelect={choose} />
+    </>
+  );
+}
+
+/**
+ * Brands and branches. Only Arte creates branches: a new branch gets its owner (found or created by mobile), the free
+ * trial, and optionally the settings, price list and staff of another branch. Cases, customers and money never copy.
+ */
+function AdminBrands({ onBack, onOpen }: { onBack: () => void; onOpen: (id: string) => void }) {
+  const { notify } = useFeedback();
+  const [brands, setBrands] = useState<Brand[] | null>(null);
+  const [all, setAll] = useState<BusinessRow[]>([]);
+  const [sheet, setSheet] = useState<null | "brand" | "branch">(null);
+  const [brandName, setBrandName] = useState("");
+  const [f, setF] = useState({ name: "", brandId: "", newBrand: "", type: "motorcycle_repair", mobile: "", owner: "", phone: "",
+    copyFrom: "", copySettings: true, copyCatalog: true, copyStaff: false });
+  const [picking, setPicking] = useState<null | "brand" | "copy">(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    api<Brand[]>("/api/v1/admin/brands").then(setBrands).catch(() => setBrands([]));
+    api<BusinessRow[]>("/api/v1/admin/businesses").then(setAll).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  function newBranch(brandId = "") {
+    setErrors({});
+    setF({ name: "", brandId, newBrand: "", type: "motorcycle_repair", mobile: "", owner: "", phone: "",
+      copyFrom: brandId ? brands?.find((b) => b.id === brandId)?.branches[0]?.id ?? "" : "", copySettings: true, copyCatalog: true, copyStaff: false });
+    setSheet("branch");
+  }
+
+  async function run(work: () => Promise<unknown>, done: string) {
+    setBusy(true);
+    try {
+      await work();
+      notify(done);
+      setSheet(null);
+      load();
+    } catch (err) {
+      const fields = err instanceof ApiError ? err.fields : {};
+      setErrors(Object.keys(fields).length ? Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v[0]])) : { form: errorText(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function saveBranch(e: FormEvent) {
+    e.preventDefault();
+    void run(() => api("/api/v1/admin/branches", { body: {
+      name: f.name.trim(), brandId: f.brandId || undefined, newBrandName: !f.brandId && f.newBrand.trim() ? f.newBrand.trim() : undefined,
+      businessType: f.type, ownerMobile: f.mobile, ownerName: f.owner.trim() || undefined, phone: f.phone.trim() || undefined,
+      copyFromId: f.copyFrom || undefined, copySettings: f.copySettings, copyCatalog: f.copyCatalog, copyStaff: f.copyStaff,
+    } }), "شعبه ساخته شد؛ ۱۴ روز رایگان");
+  }
+
+  const nameOf = (id: string) => all.find((b) => b.id === id)?.name;
+  const inBrand = new Set(brands?.flatMap((b) => b.branches.map((x) => x.id)) ?? []);
+  return (
+    <AdminPage title="برندها و شعب" back="فهرست" onBack={onBack}>
+      <p className="muted small">هر شعبه داده، همکاران و اشتراک جدا دارد؛ برند فقط شعب را کنار هم می‌گذارد. شعبه‌ی جدید ۱۴ روز رایگان دارد.</p>
+      <div className="admin-tools">
+        <button className="primary" onClick={() => newBranch()}>+ شعبه‌ی جدید</button>
+        <button onClick={() => { setBrandName(""); setErrors({}); setSheet("brand"); }}>+ برند</button>
+      </div>
+      {!brands ? <div className="splash" aria-busy="true" /> : brands.length === 0 ? (
+        <p className="muted">هنوز برندی نیست. برای کسب‌وکاری که بیش از یک شعبه دارد، یک برند بسازید.</p>
+      ) : brands.map((b) => (
+        <section key={b.id}>
+          <h3>{b.name}{!b.isActive && <span className="muted small"> · غیرفعال</span>}</h3>
+          <div className="settings-list">
+            {b.branches.map((x) => (
+              <button type="button" key={x.id} className={`settings-row${x.isActive ? "" : " inactive"}`} onClick={() => onOpen(x.id)}>
+                <span className="settings-row-text"><span>{x.name}</span>{!x.isActive && <span className="muted small">غیرفعال</span>}</span>
+                <span className="muted" aria-hidden="true">‹</span>
+              </button>
+            ))}
+          </div>
+          <button className="link" onClick={() => newBranch(b.id)}>+ شعبه‌ی جدید در {b.name}</button>
+        </section>
+      ))}
+      {all.length > 0 && <p className="muted small">{formatNumber(all.filter((x) => !inBrand.has(x.id)).length)} کسب‌وکار بدون برند (تک‌شعبه) هستند؛ از صفحه‌ی هر کسب‌وکار می‌شود برندش را تعیین کرد.</p>}
+
+      <BottomSheet open={sheet === "brand"} title="برند جدید" onClose={() => setSheet(null)}>
+        <form onSubmit={(e) => { e.preventDefault(); void run(() => api("/api/v1/admin/brands", { body: { name: brandName.trim() } }), "برند ساخته شد"); }} noValidate>
+          <Field label="نام برند" error={errors.name ?? errors.form}><input value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={120} /></Field>
+          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ساخت…" : "ساخت برند"}</button>
+        </form>
+      </BottomSheet>
+
+      <BottomSheet open={sheet === "branch"} title="شعبه‌ی جدید" onClose={() => setSheet(null)}>
+        <form onSubmit={saveBranch} noValidate>
+          <Field label="نام شعبه" error={errors.name}><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={120} placeholder="مثلاً آرمان روغن - شعبه‌ی ونک" /></Field>
+          <div className="field">
+            <span className="label">برند</span>
+            <SelectField label={f.brandId ? brands?.find((b) => b.id === f.brandId)?.name : undefined} placeholder="بدون برند یا برند تازه" onOpen={() => setPicking("brand")} />
+          </div>
+          {!f.brandId && (
+            <Field label="یا نام برند تازه (اختیاری)" error={errors.newBrandName}>
+              <input value={f.newBrand} onChange={(e) => setF({ ...f, newBrand: e.target.value })} maxLength={120} />
+            </Field>
+          )}
+          <div className="segmented wide" role="radiogroup" aria-label="نوع کسب‌وکار">
+            {[["motorcycle_repair", "موتورسازی"], ["car_repair", "تعمیرات خودرو"], ["quick_service", "آپاراتی"]].map(([k, l]) => (
+              <button type="button" key={k} role="radio" aria-checked={f.type === k} className={f.type === k ? "on" : ""} onClick={() => setF({ ...f, type: k })}>{l}</button>
+            ))}
+          </div>
+          <Field label="موبایل مدیر شعبه" error={errors.ownerMobile}><MobileInput value={f.mobile} onChange={(v) => setF({ ...f, mobile: v })} /></Field>
+          <Field label="نام مدیر شعبه (اگر عضو جدید است)" error={errors.ownerName}><input value={f.owner} onChange={(e) => setF({ ...f, owner: e.target.value })} maxLength={80} /></Field>
+          <Field label="تلفن شعبه (اختیاری)" error={errors.phone}><input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} maxLength={20} inputMode="tel" dir="ltr" /></Field>
+          <div className="field">
+            <span className="label">کپی از شعبه‌ی دیگر (اختیاری)</span>
+            <SelectField label={f.copyFrom ? nameOf(f.copyFrom) : undefined} placeholder="بدون کپی" onOpen={() => setPicking("copy")} />
+          </div>
+          {f.copyFrom && (
+            <>
+              <label className="check"><input type="checkbox" checked={f.copySettings} onChange={(e) => setF({ ...f, copySettings: e.target.checked })} /><span>تنظیمات (روند کار، پیامک، صفحه‌ی مشتری)</span></label>
+              <label className="check"><input type="checkbox" checked={f.copyCatalog} onChange={(e) => setF({ ...f, copyCatalog: e.target.checked })} /><span>فهرست قیمت</span></label>
+              <label className="check"><input type="checkbox" checked={f.copyStaff} onChange={(e) => setF({ ...f, copyStaff: e.target.checked })} /><span>همکاران (با همان نقش و دسترسی)</span></label>
+              <p className="hint">پرونده‌ها، مشتری‌ها و پرداخت‌ها هیچ‌وقت کپی نمی‌شوند.</p>
+            </>
+          )}
+          {errors.form && <span className="error" role="alert">{errors.form}</span>}
+          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ساخت شعبه…" : "ساخت شعبه (۱۴ روز رایگان)"}</button>
+        </form>
+      </BottomSheet>
+
+      <SelectSheet open={picking === "brand"} title="برند" value={f.brandId || null} noneLabel="بدون برند" onClose={() => setPicking(null)}
+        items={(brands ?? []).filter((b) => b.isActive).map((b) => ({ value: b.id, label: b.name }))}
+        onSelect={(v) => { setF({ ...f, brandId: v ?? "" }); setPicking(null); }} />
+      <SelectSheet open={picking === "copy"} title="کپی از شعبه" value={f.copyFrom || null} noneLabel="بدون کپی" onClose={() => setPicking(null)}
+        items={all.map((b) => ({ value: b.id, label: b.name, hint: b.brand ?? undefined }))}
+        onSelect={(v) => { setF({ ...f, copyFrom: v ?? "" }); setPicking(null); }} />
     </AdminPage>
   );
 }
