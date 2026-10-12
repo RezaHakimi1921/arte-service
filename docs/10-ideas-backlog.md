@@ -108,3 +108,13 @@ Options to evaluate:
 - **Done:** sample case + 9-step tour; replay from Settings.
 - Later: a short tour per new feature («چه چیزی تازه است»); a checklist on the home screen for the first week
   (add a staff member, set prices, first real intake).
+
+## 9. Admin: SMS report (future work, asked ۱۴۰۵/۰۷/۲۱)
+The platform admin should see all outgoing SMS in one place (admin panel → گزارش پیامک‌ها), overall and per branch:
+- Counts per kind (OTP, opened, ready, delivered, link, survey), per day and per branch; sent / failed / not configured.
+- Failure reasons (provider error, template not configured) and the last failures with the case and branch.
+- Cost estimate per branch (needed for the planned SMS credit per business, §SMS credit).
+- Today the numbers exist only as timeline events on each case («پیامک … برای مشتری») and in the API log; there is no
+  central SMS log table. The report needs one (`SmsLog`: branch, kind, masked mobile, result, error, time) written by the
+  notifier, the survey sender and the OTP service; keep it append-only and never store message text or codes.
+Priority: after the current design and draft work; plan it with the `arte-planning` skill before building.

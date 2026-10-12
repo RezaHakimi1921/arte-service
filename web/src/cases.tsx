@@ -113,7 +113,7 @@ function Progress({ stage }: { stage: StageRef }) {
  * One look: what is this, where is it now, whose is it, and what happened last.
  * Everything else lives in the case page.
  */
-export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) => void }) {
+export function CaseCard({ c, onOpen, compact = false }: { c: CaseCardData; onOpen: (id: string) => void; compact?: boolean }) {
   // The status line already says "منتظر تصمیم استاد"; do not repeat it as a warning.
   const alerts = (c.reasons ?? (c.alert ? [c.alert] : [])).filter((a) => a.code !== "owner_decision");
   const status = statusText(c.stage, c.waitReason, null);
@@ -122,7 +122,7 @@ export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) 
   const total = c.totalRials ?? 0;
   const balance = c.balanceRials ?? 0;
   return (
-    <button className="case-card" onClick={() => onOpen(c.id)}>
+    <button className={`case-card${compact ? " compact" : ""}`} onClick={() => onOpen(c.id)}>
       <span className="case-row-top">
         <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
         <span className="case-badges">
@@ -135,9 +135,10 @@ export function CaseCard({ c, onOpen }: { c: CaseCardData; onOpen: (id: string) 
         {c.assetIdentifier && <PlateView identifier={c.assetIdentifier} />}
       </span>
       <span className="muted">{c.customerName ?? <span dir="ltr" className="font-num">{maskMobile(c.customerMobile)}</span>}</span>
-      <Progress stage={c.stage} />
+      {!compact && <Progress stage={c.stage} />}
 
       {/* Three short panels: the vehicle, the work, the money. */}
+      {compact && <span className="muted small">{c.assigneeName ?? "بدون مسئول"} · {ago(c.lastEvent?.occurredAt ?? c.stageEnteredAt)} پیش</span>}
       <span className="case-panels">
         <span className="case-panel">
           <span className="panel-label">وسیله (کیلومتر)</span>
@@ -195,8 +196,10 @@ const FILTERS: { label: string; filter: CaseFilter }[] = [
 
 const sameFilter = (a: CaseFilter, b: CaseFilter) => a.category === b.category && !!a.mine === !!b.mine && !!a.all === !!b.all;
 
-export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
+export function CasesView({ initialFilter, onOpen, onNewCase, canCreate, draft, onDraft }: {
   initialFilter: CaseFilter; onOpen: (id: string) => void; onNewCase: () => void; canCreate: boolean;
+  /** An unfinished intake exists (kept while moving around the app). */
+  draft?: boolean; onDraft?: () => void;
 }) {
   const [filter, setFilter] = useState<CaseFilter>(initialFilter);
   const [q, setQ] = useState("");
@@ -215,25 +218,56 @@ export function CasesView({ initialFilter, onOpen, onNewCase, canCreate }: {
   const filtered = q.trim() || !sameFilter(filter, {});
 
   return (
-    <section>
-      <div className="toolbar">
-        <input type="search" placeholder="CASE-12، نام، موبایل، پلاک یا مدل" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جستجوی پرونده" />
-        {canCreate && <button className="primary" onClick={onNewCase}>+ پذیرش</button>}
-      </div>
-      <div className="chips" role="tablist">
-        {FILTERS.map((f) => (
-          <button key={f.label} role="tab" aria-selected={sameFilter(f.filter, filter)}
-            className={`chip-button${sameFilter(f.filter, filter) ? " active" : ""}`} onClick={() => setFilter(f.filter)}>
-            {f.label}
+    <section className="cases2">
+      <div className="page-intro cases-intro">
+        <div>
+          <span>مدیریت تعمیرات</span>
+          <h1>پرونده‌ها</h1>
+          <p>{rows ? `${formatNumber(rows.length)} پرونده${filtered ? " با این شرایط" : " فعال در تعمیرگاه"}` : "در حال بارگذاری…"}</p>
+        </div>
+        {canCreate && (
+          <button type="button" className="primary-action" onClick={onNewCase}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            {draft ? "ادامه‌ی پذیرش" : "پذیرش جدید"}
           </button>
-        ))}
+        )}
+      </div>
+      {draft && onDraft && (
+        <button type="button" className="draft-banner" onClick={onDraft}>
+          <strong>یک پذیرش نیمه‌کاره دارید</strong>
+          <span>اطلاعاتی که وارد کرده‌اید نگه داشته شده؛ برای ادامه بزنید.</span>
+        </button>
+      )}
+      <div className="case-tools">
+        <label className="search-box">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+          <input type="search" placeholder="جست‌وجوی نام، موبایل، پلاک یا کد پرونده" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جستجوی پرونده" />
+          {q && <button type="button" onClick={() => setQ("")}>پاک کردن</button>}
+        </label>
+        <div className="filters" role="tablist">
+          {FILTERS.map((f) => (
+            <button key={f.label} role="tab" type="button" aria-selected={sameFilter(f.filter, filter)}
+              className={sameFilter(f.filter, filter) ? "active" : ""} onClick={() => setFilter(f.filter)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
       {rows && rows.length === 0 ? (
-        filtered ? <p className="empty muted">پرونده‌ای با این شرایط پیدا نشد.</p> : <EmptyCases canCreate={canCreate} />
+        filtered ? (
+          <div className="empty-state">
+            <h3>پرونده‌ای پیدا نشد</h3>
+            <p className="muted">عبارت جست‌وجو یا فیلتر انتخاب‌شده را تغییر دهید.</p>
+            <button type="button" className="link" onClick={() => { setQ(""); setFilter({}); }}>نمایش همه‌ی پرونده‌های باز</button>
+          </div>
+        ) : <EmptyCases canCreate={canCreate} />
       ) : (
-        <ul className="list">
-          {rows?.map((c) => <li key={c.id}><CaseCard c={c} onOpen={onOpen} /></li>)}
-        </ul>
+        <>
+          {rows && <div className="list-heading"><span>مرتب‌سازی: جدیدترین پذیرش</span><strong>{formatNumber(rows.length)} پرونده</strong></div>}
+          <ul className="case-list">
+            {rows?.map((c) => <li key={c.id}><CaseCard c={c} onOpen={onOpen} /></li>)}
+          </ul>
+        </>
       )}
     </section>
   );

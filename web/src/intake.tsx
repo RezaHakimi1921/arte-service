@@ -1,3 +1,4 @@
+import { clearDraft, isBlank, loadDraft, saveDraft } from "./draft";
 import { FuelGauge } from "./fuel";
 import { SelectField, SelectSheet } from "./sheet";
 import { ROLE_NAMES } from "./labels";
@@ -45,7 +46,17 @@ function Section({ icon, title, badge, children, tone }: { icon: keyof typeof IC
   );
 }
 
-export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreated, onCancel, onOpenStaff }: {
+type Draft = {
+  mobile: string; customerName: string; assetId: string; kind: VehicleKind | null; brand: string; model: string;
+  calendar: "jalali" | "gregorian"; year: string; yearText: string; plate: PlateParts; motoPlate: MotoPlateParts;
+  color: string; vin: string; fuelType: string; gearbox: string; odometer: string; fuel: number | null;
+  body: "ok" | "damaged" | null; bodyNotes: string; items: string[]; problems: string[]; notes: string; services: string[];
+  assigneeId: string; full: boolean;
+};
+
+export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKinds, onCreated, onCancel, onOpenStaff }: {
+  /** Person + branch: the unfinished form is kept under this key while moving around the app. */
+  draftScope: string;
   canAssign: boolean; requireAssignee: boolean; vehicleKinds: string[]; onCreated: (id: string) => void; onCancel: () => void; onOpenStaff: () => void;
 }) {
   // Only the vehicle kinds this business takes in (Settings → نوع کسب‌وکار و وسایل نقلیه).
@@ -103,6 +114,38 @@ export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreate
   }, [jumpToCondition]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+
+  // ── draft: restore once, then keep saving ──
+  const [restored, setRestored] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const d = loadDraft<Draft>(draftScope);
+    if (d) {
+      setMobile(d.mobile); setCustomerName(d.customerName); setKind(d.kind); setBrand(d.brand); setModel(d.model);
+      setCalendar(d.calendar); setYear(d.year); setYearText(d.yearText); setPlate(d.plate); setMotoPlate(d.motoPlate);
+      setColor(d.color); setVin(d.vin); setFuelType(d.fuelType); setGearbox(d.gearbox); setOdometer(d.odometer); setFuel(d.fuel);
+      setBody(d.body); setBodyNotes(d.bodyNotes); setItems(d.items); setProblems(d.problems); setNotes(d.notes); setServices(d.services);
+      setAssigneeId(d.assigneeId); setFull(d.full);
+      // An existing vehicle is picked again once the customer is looked up.
+      if (d.assetId !== "new") setWantAssetId(d.assetId);
+      setRestored(true);
+    }
+    setReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    const data: Draft = { mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
+      odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, full };
+    const t = setTimeout(() => (isBlank({ ...data, assetId: "", calendar: "", full: false }) ? clearDraft(draftScope) : saveDraft(draftScope, data)), 400);
+    return () => clearTimeout(t);
+  }, [ready, draftScope, mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
+    odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, full]);
+
+  function discardDraft() {
+    clearDraft(draftScope);
+    onCancel();
+  }
 
   useEffect(() => {
     if (canAssign) api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => setStaff([]));
@@ -233,6 +276,7 @@ export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreate
           parentCaseId: parent && linkParent ? parent.id : undefined,
         },
       });
+      clearDraft(draftScope);
       onCreated(created.id);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -280,8 +324,14 @@ export function NewCaseView({ canAssign, requireAssignee, vehicleKinds, onCreate
     <form className="intake" onSubmit={submit} noValidate>
       <div className="intake-title">
         <h2>پذیرش جدید</h2>
-        <button type="button" className="icon-button" onClick={onCancel} aria-label="بستن">✕</button>
+        <button type="button" className="icon-button" onClick={onCancel} aria-label="بستن (پیش‌نویس می‌ماند)">✕</button>
       </div>
+      {restored && (
+        <div className="notice good draft-restored" role="status">
+          <span>اطلاعاتی که قبلاً وارد کرده بودید برگشت.</span>
+          <button type="button" className="link danger" onClick={discardDraft}>پاک کردن و بستن</button>
+        </div>
+      )}
 
       <Section icon="phone" title={byPlate ? "جستجو با پلاک" : "شماره همراه مشتری"}>
         {byPlate ? (

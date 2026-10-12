@@ -5,13 +5,14 @@ import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
+import { hasDraft } from "./draft";
 import { BranchesHome } from "./branches";
 import { Intro } from "./mechanic";
 import { NotificationBell } from "./survey";
 import { Tour, type TourStep } from "./tour";
 import { AuthLayout, Login, SignupView, TrialWelcome } from "./login";
 import { TrackPage } from "./track";
-import { BranchBlocked, LicenseBanner, LicensePage, LicenseStrip, type LicenseStatus } from "./license";
+import { BranchBlocked, LicenseBanner, LicensePage, type LicenseStatus } from "./license";
 import { AdminPanel } from "./admin";
 import { useFeedback } from "./feedback";
 import { AccountPage, AppearancePage, BusinessPage, CustomerPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, VehiclesPage, type SettingsPage } from "./settings";
@@ -359,14 +360,26 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
     setUndoCase(null);
   }
 
+  const navItems: { id: Tab; label: string; icon: string; go: () => void }[] = [
+    { id: "home", label: "خانه", icon: "M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z", go: () => go("home") },
+    { id: "cases", label: "پرونده‌ها", icon: "M9 3h6l1 2h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3zM8 11h8M8 15h5", go: () => { setCaseFilter({}); go("cases"); } },
+    ...((can("cases.create") || can("cases.view_all"))
+      ? [{ id: "customers" as Tab, label: "مشتریان", icon: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 9v-1a4 4 0 0 0-3-3.9M16 2.1a4 4 0 0 1 0 7.8", go: () => go("customers") }]
+      : []),
+    { id: "settings", label: "تنظیمات", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z", go: () => go("settings") },
+  ];
+  // Home and the case list use the full width on a desktop; forms and the case page stay narrow and readable.
+  const wide = (tab === "home" && !caseId && !newCase) || (tab === "cases" && !caseId && !newCase);
+
   let page;
   if (tab === "cases" && newCase)
-    page = <NewCaseView canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} vehicleKinds={me.business!.vehicleKinds} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
+    page = <NewCaseView draftScope={`${me.id}:${me.business!.tenantId}`} canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} vehicleKinds={me.business!.vehicleKinds} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
       onOpenStaff={() => { go("settings"); if (can("staff.manage")) setMorePage("staff"); }} />;
   else if (tab === "cases" && caseId)
     page = <CaseDetail key={caseId} id={caseId} focusSurvey={surveyCase === caseId} onBack={() => { setCaseId(null); setSurveyCase(null); }} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
   else if (tab === "cases")
-    page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={canIntake} />;
+    page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={canIntake}
+      draft={hasDraft(`${me.id}:${me.business!.tenantId}`)} onDraft={startNewCase} />;
   else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
   else if (tab === "settings") {
     const back = () => setMorePage(null);
@@ -388,66 +401,111 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
       onTour={startTour} onRemoveSample={sampleId && can("cases.create") ? removeSample : undefined}
       isPlatformAdmin={me.isPlatformAdmin} licenseText={licenseLine(me.business!.license)} />;
   }
-  else page = <HomeView key={`${caseId}-${homeKey}`} onOpen={(id) => { setTab("cases"); setCaseId(id); }}
+  else page = <HomeView key={`${caseId}-${homeKey}`} name={me.displayName ?? null}
+    license={!me.openMode && can("settings.manage") ? { status: me.business!.license, open: () => { go("settings"); setMorePage("license"); } } : null}
+    canReports={can("reports.view")} onOpen={(id) => { setTab("cases"); setCaseId(id); }}
     onOpenSurvey={(id) => { setTab("cases"); setCaseId(id); setSurveyCase(id); }} surveyEnabled={me.business!.surveyEnabled}
     brand={me.branchCount > 1 ? { name: me.business!.brand, count: me.branchCount, open: onBranches } : null} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake} />;
 
   return (
-    <div className="shell">
-      {me.openMode && (
-        <div className="open-banner" role="status">
-          این نسخه‌ی نمایشی آرته سرویس است و هر بازدیدکننده‌ای آن را می‌بیند؛ اطلاعات واقعی وارد نکنید.
-        </div>
-      )}
-      <header className="topbar">
-        {me.branchCount > 1 ? (
-          <button type="button" className="topbar-text topbar-branch" onClick={onBranches} aria-label={`شعبه: ${me.business!.name}؛ عوض کردن شعبه`}>
-            <strong>{me.business!.name} <span aria-hidden="true">▾</span></strong>
-            <span className="muted small">{me.displayName ?? me.mobile} · شعب</span>
-          </button>
-        ) : (
-          <div className="topbar-text">
-            <strong>{me.business!.name}</strong>
-            <span className="muted small">{me.displayName ?? me.mobile}</span>
+    <div className={`shell app2${wide ? " wide-page" : ""}`}>
+      {/* Desktop: the menu stays on the side; phones keep the bottom bar. */}
+      <aside className="sidebar" aria-label="بخش‌ها">
+        <button type="button" className="sidebar-brand" onClick={me.branchCount > 1 ? onBranches : undefined} disabled={me.branchCount <= 1}>
+          <ArteMark />
+          <span><strong>آرته سرویس</strong><span>{me.business!.name}{me.branchCount > 1 ? " ▾" : ""}</span></span>
+        </button>
+        <nav>
+          {navItems.map((n) => (
+            <button key={n.id} type="button" className={tab === n.id ? "active" : ""} aria-current={tab === n.id ? "page" : undefined} onClick={n.go}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d={n.icon} /></svg>
+              <span>{n.label}</span>
+            </button>
+          ))}
+        </nav>
+        <button type="button" className="sidebar-user" onClick={() => { go("settings"); setMorePage("account"); }}>
+          <span className="avatar" aria-hidden="true">{initials(me.displayName ?? me.mobile)}</span>
+          <span><strong>{me.displayName ?? me.mobile}</strong><span>{ROLE_NAMES[me.business!.role] ?? me.business!.role}</span></span>
+          <span aria-hidden="true">‹</span>
+        </button>
+      </aside>
+
+      <div className="main-area">
+        {me.openMode && (
+          <div className="open-banner" role="status">
+            این نسخه‌ی نمایشی آرته سرویس است و هر بازدیدکننده‌ای آن را می‌بیند؛ اطلاعات واقعی وارد نکنید.
           </div>
         )}
-        {me.business!.surveyEnabled && (
-          <NotificationBell onOpenCase={(id) => { setTab("cases"); setNewCase(false); setMorePage(null); setCaseId(id); setSurveyCase(id); }} />
-        )}
-      </header>
-      {me.business!.support && (
-        <div className="support-banner" role="status">
-          حالت پشتیبانی آرته: با دسترسی کامل وارد این شعبه شده‌اید و هر تغییر به نام شما ثبت می‌شود.
-        </div>
-      )}
-      {!me.openMode && (
-        <LicenseBanner status={me.business!.license}
-          onOpen={can("settings.manage") ? () => { go("settings"); setMorePage("license"); } : undefined} />
-      )}
-      <main className="content">
-        {undoCase && tab === "cases" && !caseId && (
-          <div className="toast" role="status">
-            <span>پرونده <span dir="ltr">CASE-{undoCase.number}</span> حذف شد.</span>
-            <button className="link" onClick={restoreCase}>بازگردانی</button>
+        <header className="topbar">
+          {me.branchCount > 1 ? (
+            <button type="button" className="mobile-brand topbar-branch" onClick={onBranches} aria-label={`شعبه: ${me.business!.name}؛ عوض کردن شعبه`}>
+              <ArteMark />
+              <span><strong>{me.business!.name} <span aria-hidden="true">▾</span></strong><span>{me.displayName ?? me.mobile} · شعب</span></span>
+            </button>
+          ) : (
+            <div className="mobile-brand">
+              <ArteMark />
+              <span><strong>{me.business!.name}</strong><span>{me.displayName ?? me.mobile}</span></span>
+            </div>
+          )}
+          <div className="topbar-actions">
+            <ThemeToggle />
+            {me.business!.surveyEnabled && (
+              <NotificationBell onOpenCase={(id) => { setTab("cases"); setNewCase(false); setMorePage(null); setCaseId(id); setSurveyCase(id); }} />
+            )}
+          </div>
+        </header>
+        {me.business!.support && (
+          <div className="support-banner" role="status">
+            حالت پشتیبانی آرته: با دسترسی کامل وارد این شعبه شده‌اید و هر تغییر به نام شما ثبت می‌شود.
           </div>
         )}
-        {tab === "home" && !caseId && !newCase && !me.openMode && can("settings.manage") && (
-          <LicenseStrip status={me.business!.license} onOpen={() => { go("settings"); setMorePage("license"); }} />
+        {!me.openMode && (
+          <LicenseBanner status={me.business!.license}
+            onOpen={can("settings.manage") ? () => { go("settings"); setMorePage("license"); } : undefined} />
         )}
-        {page}
-      </main>
+        <main className="content">
+          {undoCase && tab === "cases" && !caseId && (
+            <div className="toast" role="status">
+              <span>پرونده <span dir="ltr">CASE-{undoCase.number}</span> حذف شد.</span>
+              <button className="link" onClick={restoreCase}>بازگردانی</button>
+            </div>
+          )}
+          {page}
+        </main>
+      </div>
       {touring && <Tour steps={tourSteps} canRemoveSample={!!sampleId && can("cases.create")} onFinish={finishTour} />}
       <nav className="bottom-nav" aria-label="بخش‌ها" data-tour="nav">
-        <NavButton active={tab === "home"} onClick={() => go("home")} label="خانه" icon="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
-        <NavButton active={tab === "cases"} onClick={() => { setCaseFilter({}); go("cases"); }} label="پرونده‌ها" icon="M9 3h6l1 2h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3zM8 11h8M8 15h5" />
-        {(can("cases.create") || can("cases.view_all")) && (
-          <NavButton active={tab === "customers"} onClick={() => go("customers")} label="مشتریان" icon="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm13 9v-1a4 4 0 0 0-3-3.9M16 2.1a4 4 0 0 1 0 7.8" />
-        )}
-        <NavButton active={tab === "settings"} onClick={() => go("settings")} label="تنظیمات" icon="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+        {navItems.map((n) => <NavButton key={n.id} active={tab === n.id} onClick={n.go} label={n.label} icon={n.icon} />)}
       </nav>
     </div>
   );
 }
+
+/** The Arte «A» with the orange swoosh, as in the app icon. */
+function ArteMark() {
+  return (
+    <span className="arte-mark" aria-hidden="true">
+      <svg viewBox="102 121 26 30"><path d="M115 124 106 147h4.6l2-5.2h5.6l2 5.2h4.6L115 124Zm-1.3 13.5 1.3-3.6 1.3 3.6Z" fill="currentColor" /><path d="M104.5 148.5c4-3.5 10-5.5 21-6.5" fill="none" stroke="#e07b2c" strokeWidth="1.9" strokeLinecap="round" /></svg>
+    </span>
+  );
+}
+
+/** Light / dark, saved as the person's choice (same as Settings → ظاهر). */
+function ThemeToggle() {
+  const [theme, setTheme] = useState(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
+  const next = theme === "light" ? "dark" : "light";
+  return (
+    <button type="button" className="icon-button tb-button" aria-label={next === "dark" ? "حالت تاریک" : "حالت روشن"} onClick={() => { applyTheme(next); setTheme(next); }}>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        {theme === "light" ? <path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5a8.5 8.5 0 1 0 12 12Z" />
+          : <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>}
+      </svg>
+    </button>
+  );
+}
+
+const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("‌");
 
 function NavButton({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon: string }) {
   return (
