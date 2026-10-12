@@ -90,8 +90,9 @@ build → test → commit → push → deploy → health check → summary
 
 ## Library docs
 
-- Context7 (MCP server in `.mcp.json`) gives current docs for .NET, EF Core, Npgsql, React, Vite and other libraries.
-  Use it before writing code against an API whose details may have changed, instead of relying on memory.
+- Context7 (user-level MCP server and the `context7-mcp` skill, set up with `npx ctx7 setup --claude`) gives current docs
+  for .NET, EF Core, Npgsql, React, Vite and other libraries. Use it before writing code against an API whose details
+  may have changed, instead of relying on memory. Each developer runs the setup once; the key stays in their own config.
 
 ## Server notes
 
