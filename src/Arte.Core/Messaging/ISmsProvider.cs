@@ -14,6 +14,15 @@ public interface ISmsProvider
 
 public sealed record SmsSendResult(bool Accepted, string? ProviderMessageId, string? Error);
 
+/// <summary>
+/// Longest value of each pattern variable, as set on the provider's patterns (Faraz). Longer values are cut, so the
+/// provider never refuses a message for length.
+/// </summary>
+public static class SmsLimits
+{
+    public const int Shop = 40, Name = 40, Vehicle = 40, Code = 12;
+}
+
 public static class MessageKeys
 {
     public const string AuthOtp = "auth.otp";

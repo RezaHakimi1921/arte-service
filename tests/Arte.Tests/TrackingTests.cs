@@ -105,6 +105,21 @@ public sealed class TrackingTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Sms_variables_never_exceed_the_pattern_lengths()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = true, name = new string('ت', 70) }));
+        var mobile = ArteApiFactory.NewMobile();
+        await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile, customerName = new string('س', 75), reportedProblems = new[] { "روشن نمی‌شود" },
+            newAsset = new { title = new string('م', 90), kind = "car" },
+        }));
+        var tokens = api.Sms.Sent[mobile];
+        Assert.True(tokens["shop"].Length <= 40 && tokens["name"].Length <= 40 && tokens["vehicle"].Length <= 40 && tokens["code"].Length <= 12);
+    }
+
+    [Fact]
     public async Task Business_type_at_sign_up_picks_the_vehicle_kinds()
     {
         var (client, _) = await api.LoginAsync(ArteApiFactory.NewMobile());
