@@ -177,7 +177,7 @@ public static class BranchEndpoints
             await db.SaveChangesAsync(ct);
 
             // Same provisioning as sign-up: owner membership, workflow and the free trial licence.
-            var tenant = await TenantEndpoints.ProvisionAsync(scopes, owner.Id, name!, phone,
+            var tenant = await TenantEndpoints.ProvisionAsync(scopes, owner.Id, name!, phone ?? ownerMobile,
                 string.IsNullOrEmpty(ownerName) ? null : ownerName, ct, businessType, brandId);
             if (source is not null) await CopyAsync(scopes, source, tenant.Id, req, now, ct);
             audit.Record("admin.branch_created", tenant.Id, me.RequiredUserId, $"{tenant.Name} owner={Mobile.Mask(ownerMobile)} from={source?.Id}");

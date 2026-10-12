@@ -1,30 +1,30 @@
 /**
  * The customer SMS patterns exactly as registered with the SMS provider (Faraz / Iran Payamak). The provider wants
- * a label before every variable, so each one stands after its own word. Keep this file and the provider in step:
- * the settings page shows the customer these texts, filled with sample values.
+ * the brand or site in every pattern, a label before every variable («نام: %name%»), and no advertising. Keep this
+ * file and the provider in step: the settings page shows the customer these texts, filled with sample values.
  */
 export type SmsKey = "case.opened" | "case.ready" | "case.delivered" | "case.link" | "survey.request";
 
 export const SMS_PATTERNS: { key: SmsKey; title: string; text: string }[] = [
   {
     key: "case.opened", title: "هنگام پذیرش",
-    text: "مشتری گرامی: %name%\nوسیله: %vehicle%\nپذیرش شد و در نوبت کار قرار گرفت.\nپیگیری: service.artepersia.com/t/%code%\nفرستنده: %shop%",
+    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nوضعیت: پذیرش شد و در نوبت کار قرار گرفت.\nلینک پیگیری: service.artepersia.com/t/%code%",
   },
   {
     key: "case.ready", title: "آماده‌ی تحویل",
-    text: "مشتری گرامی: %name%\nوسیله: %vehicle%\nآماده‌ی تحویل است.\nجزئیات و هزینه: service.artepersia.com/t/%code%\nفرستنده: %shop%",
+    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nوضعیت: آماده‌ی تحویل است.\nلینک جزئیات و هزینه: service.artepersia.com/t/%code%",
   },
   {
     key: "case.delivered", title: "هنگام تحویل",
-    text: "مشتری گرامی: %name%\nوسیله: %vehicle%\nتحویل شد. از اعتمادتان سپاسگزاریم.\nسابقه و ضمانت: service.artepersia.com/t/%code%\nفرستنده: %shop%",
+    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nوضعیت: تحویل شد.\nلینک سابقه و ضمانت: service.artepersia.com/t/%code%",
   },
   {
     key: "case.link", title: "ارسال دوباره‌ی لینک (از پرونده)",
-    text: "مشتری گرامی: %name%\nوسیله: %vehicle%\nلینک پیگیری: service.artepersia.com/t/%code%\nفرستنده: %shop%",
+    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nلینک پیگیری: service.artepersia.com/t/%code%",
   },
   {
     key: "survey.request", title: "نظرسنجی بعد از تحویل",
-    text: "مشتری گرامی: %name%\nاز اینکه ما را انتخاب کردید سپاسگزاریم.\nلطفاً در چند ثانیه نظرتان را بگویید.\nنظرسنجی: service.artepersia.com/s/%code%\nفرستنده: %shop%",
+    text: "آرته سرویس\nنام: %name%\nتعمیرگاه: %shop%\nلطفاً نظر خود را درباره‌ی این تعمیر ثبت کنید.\nلینک نظرسنجی: service.artepersia.com/s/%code%",
   },
 ];
 

@@ -2023,3 +2023,10 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
   .lg-hero ~ .lg-content { padding-bottom: 0; }
   .lg-hero-copy { padding-bottom: 12px; }
 }
+
+/* Desktop sign-in: the story (headline + workflow card) sits in the middle, level with the form on the left. */
+@media (min-width: 961px) {
+  .lg-story-copy { margin: auto 0 36px; }
+  .lg-workflow { margin-bottom: auto; }
+  .lg-story-foot { margin-top: 32px; }
+}

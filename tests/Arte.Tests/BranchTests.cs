@@ -115,6 +115,14 @@ public sealed class BranchTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Sign_up_saves_the_owners_mobile_as_the_business_phone()
+    {
+        var mobile = ArteApiFactory.NewMobile();
+        var (owner, _) = await api.NewBusinessAsync(mobile);
+        Assert.Equal(mobile, (await Json(await owner.GetAsync("/api/v1/settings/business"))).GetProperty("phone").GetString());
+    }
+
+    [Fact]
     public async Task Switching_branch_twice_at_the_same_moment_does_not_fail()
     {
         var ownerMobile = ArteApiFactory.NewMobile();

@@ -147,6 +147,8 @@ public static class TenantEndpoints
                     errors["phone"] = ["شماره تلفن معتبر نیست."];
             }
             if (errors.Count > 0) return Results.ValidationProblem(errors);
+            // No phone given: the owner's mobile is the business phone (shown to customers; editable in Settings).
+            phone ??= user.Mobile;
 
             // Sign-up makes the first business only; further branches are created by Arte (admin panel).
             if (await db.Memberships.IgnoreQueryFilters().AnyAsync(m => m.UserId == me.RequiredUserId && m.IsActive && !m.IsSupport, ct))

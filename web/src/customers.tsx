@@ -1,10 +1,11 @@
+import { VehicleForm } from "./vehicleForm";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError } from "./api";
 import { PlateView } from "./plate";
 import { Field, MobileInput, toLatinDigits } from "./ui";
 
 type CustomerRow = { id: string; mobile: string; fullName: string | null; assetCount: number };
-type AssetView = { id: string; title: string; identifier: string | null };
+type AssetView = { id: string; title: string; identifier: string | null; kind: string | null; attributes: Record<string, string> | null };
 type CustomerView = { id: string; mobile: string; fullName: string | null; notes: string | null; assets: AssetView[] };
 type TrashRow = { id: string; mobile: string; fullName: string | null; deletedAt: string };
 
@@ -231,36 +232,23 @@ function CustomerForm({ customer, onDone }: { customer: CustomerView; onDone: (u
 }
 
 function AssetForm({ customerId, asset, onDone }: { customerId: string; asset?: AssetView; onDone: () => void }) {
-  const [title, setTitle] = useState(asset?.title ?? "");
-  const [identifier, setIdentifier] = useState(asset?.identifier ?? "");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function save(body: { kind: string; title: string; identifier: string | null; attributes: Record<string, string> }) {
+    setBusy(true);
+    setError(null);
     try {
-      const body = { title, identifier: identifier || null };
-      if (asset) await api(`/api/v1/assets/${asset.id}`, { method: "PATCH", body });
+      if (asset) await api(`/api/v1/assets/${asset.id}`, { method: "PATCH", body: { ...body, identifier: body.identifier ?? "" } });
       else await api(`/api/v1/customers/${customerId}/assets`, { body });
       onDone();
     } catch (err) {
-      setErrors(fieldErrors(err));
+      const f = fieldErrors(err);
+      setError(Object.values(f)[0] ?? "ذخیره نشد.");
+    } finally {
+      setBusy(false);
     }
   }
-
-  return (
-    <form className="card" onSubmit={submit} noValidate>
-      <Field label="برند و مدل" error={errors.title ?? errors.form}>
-        <input placeholder="مثلاً پژو ۲۰۶" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required autoFocus />
-      </Field>
-      <Field label="پلاک یا شناسه" error={errors.identifier}>
-        <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} maxLength={60} />
-      </Field>
-      <div className="actions">
-        <button className="primary">{asset ? "ذخیره" : "افزودن"}</button>
-        <button type="button" onClick={onDone}>انصراف</button>
-      </div>
-    </form>
-  );
+  return <VehicleForm value={asset} busy={busy} error={error} onSave={save} onCancel={onDone} />;
 }
 
 function Trash({ onBack }: { onBack: () => void }) {
