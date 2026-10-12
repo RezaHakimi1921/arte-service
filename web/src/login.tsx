@@ -32,10 +32,14 @@ function Icon({ name }: { name: IconName }) {
   );
 }
 
+/** Phones open the keyboard on focus: a page that has just loaded must not pop it up under the user. */
+const TOUCH = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+
 function Logo() {
   return (
     <div className="lg-logo" aria-hidden="true">
-      <svg viewBox="0 0 48 48"><path d="M24 8 11.6 38h6.2l2.7-7h7l2.7 7h6.2L24 8Zm-1.7 17.7L24 21l1.7 4.7h-3.4Z" fill="currentColor" /></svg>
+      {/* The Arte «A» with the orange swoosh, as on the mechanic's notebook. */}
+      <svg viewBox="102 121 26 30"><path d="M115 124 106 147h4.6l2-5.2h5.6l2 5.2h4.6L115 124Zm-1.3 13.5 1.3-3.6 1.3 3.6Z" fill="currentColor" /><path d="M104.5 148.5c4-3.5 10-5.5 21-6.5" fill="none" stroke="#e07b2c" strokeWidth="1.9" strokeLinecap="round" /></svg>
     </div>
   );
 }
@@ -316,7 +320,7 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
               <input id="lg-phone" type="tel" inputMode="numeric" pattern="[0-9]*" autoComplete={mode === "password" ? "username" : "tel"}
                 dir="ltr" maxLength={11} value={phone}
                 onChange={(e) => { setPhone(toLatinDigits(e.target.value).replace(/\D/g, "").slice(0, 11)); setError(null); }}
-                placeholder="0912 000 0000" aria-describedby={error ? "lg-error" : undefined} autoFocus />
+                placeholder="0912 000 0000" aria-describedby={error ? "lg-error" : undefined} autoFocus={!TOUCH} />
               {isMobile(phone) && <span className="lg-valid"><Icon name="check" /></span>}
             </div>
           </>
