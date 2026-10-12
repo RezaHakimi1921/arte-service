@@ -5,6 +5,7 @@ import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
 import { NewCaseView } from "./intake";
 import { ReportsPage } from "./reports";
+import { Intro } from "./mechanic";
 import { NotificationBell } from "./survey";
 import { Tour, type TourStep } from "./tour";
 import { AuthLayout, Login, SignupView, TrialWelcome } from "./login";
@@ -42,7 +43,7 @@ const TRACK_SURVEY = TRACK_MATCH?.[1] === "s";
 
 export default function App() {
   if (TRACK_CODE) return <TrackPage code={TRACK_CODE} survey={TRACK_SURVEY} />;
-  return ADMIN_HOST ? <AdminRoot /> : <ShopApp />;
+  return ADMIN_HOST ? <AdminRoot /> : <><Intro /><ShopApp /></>;
 }
 
 /**

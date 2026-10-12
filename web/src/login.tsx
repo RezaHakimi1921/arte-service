@@ -1,3 +1,4 @@
+import { Mechanic } from "./mechanic";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, api, type Session } from "./api";
 import { applyTheme } from "./App";
@@ -83,9 +84,19 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       </section>
 
       <section className="lg-auth">
-        <header className="lg-mobile-header">
-          <div className="lg-mobile-brand"><Logo /><span>آرته سرویس</span></div>
-          <ThemeButton />
+        {/* Phone: a navy header with the Arte mechanic standing, the form below. */}
+        <header className="lg-hero">
+          <div className="lg-mobile-header">
+            <div className="lg-mobile-brand"><Logo /><span>آرته سرویس</span></div>
+            <ThemeButton />
+          </div>
+          <div className="lg-hero-row">
+            <div className="lg-hero-copy">
+              <strong>تعمیرگاه منظم،<br /><span>ذهن آرام‌تر.</span></strong>
+              <p>از پذیرش تا تحویل، همه‌چیز در یک برنامه.</p>
+            </div>
+            <div className="lg-hero-figure"><Mechanic mode="stand" /></div>
+          </div>
         </header>
         <div className="lg-desktop-theme"><ThemeButton wide /></div>
         <div className="lg-content">{children}</div>
