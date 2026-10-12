@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { api, ApiError } from "./api";
 import { BillingSection, CreditSheet, MoneyBar, toman as tomanFmt, type Billing } from "./billing";
 import { useFeedback } from "./feedback";
-import { ALERT_ICON, MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, caseCode, eventText, statusText, type Alert } from "./labels";
+import { MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, caseCode, eventText, statusText, type Alert } from "./labels";
 import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
@@ -75,13 +75,7 @@ function StageChip({ stage }: { stage: { name: string; color: string } }) {
   return <span className={`chip stage-${stage.color}`}>{stage.name}</span>;
 }
 
-function AlertLine({ alert }: { alert: Alert }) {
-  return <span className={`alert-line ${alert.severity}`}><span aria-hidden="true">{ALERT_ICON[alert.severity]}</span> {alert.text}</span>;
-}
-
 /* ───────── card ───────── */
-
-const maskMobile = (m: string) => (m.length === 11 ? `${m.slice(0, 4)}•••${m.slice(7)}` : m);
 
 /** "۲ ساعت مانده" / "۳ ساعت گذشته" until the promised delivery. */
 function slaText(promisedAt: string): { text: string; late: boolean } {
@@ -109,68 +103,96 @@ function Progress({ stage }: { stage: StageRef }) {
   );
 }
 
+/** «امروز» within a day, otherwise «۲ روز پیش». */
+const sinceText = (iso: string) => {
+  const hours = (Date.now() - new Date(iso).getTime()) / 36e5;
+  return hours < 24 ? "امروز" : `${ago(iso)} پیش`;
+};
+
 /**
- * One look: what is this, where is it now, whose is it, and what happened last.
- * Everything else lives in the case page.
+ * One look: what is this, where is it now, whose is it, what is owed, what happened last. The same structure on every
+ * card, so cards in a row are the same size; the full page lives behind the card. `compact` (home lists) is the head only.
  */
 export function CaseCard({ c, onOpen, compact = false }: { c: CaseCardData; onOpen: (id: string) => void; compact?: boolean }) {
+  const wf = useWorkflow();
   // The status line already says "منتظر تصمیم استاد"; do not repeat it as a warning.
-  const alerts = (c.reasons ?? (c.alert ? [c.alert] : [])).filter((a) => a.code !== "owner_decision");
+  const alerts = (c.reasons ?? (c.alert ? [c.alert] : [])).filter((a) => a.code !== "owner_decision" && !a.code.startsWith("due") && a.code !== "overdue");
   const status = statusText(c.stage, c.waitReason, null);
   const color = c.waitReason ? "orange" : c.stage.color;
   const sla = c.promisedAt && !c.stage.isTerminal ? slaText(c.promisedAt) : null;
   const total = c.totalRials ?? 0;
   const balance = c.balanceRials ?? 0;
+  const prog = wf && c.stage.category !== "cancelled" ? progressOf(wf.stages, c.stage) : null;
+  const ready = c.stage.category === "done" && !c.stage.isTerminal;
+  const problem = c.reportedProblems?.[0] ?? c.requestedServices?.[0] ?? (c.request ? c.request : null);
+  const foot: { text: string; tone: "success" | "warn" | "danger" } | null =
+    ready ? { text: "آماده تماس با مشتری", tone: "success" }
+    : sla ? { text: sla.text, tone: sla.late ? "danger" : "warn" }
+    : c.isCredit && c.creditDueAt ? { text: `موعد نسیه: ${faShort.format(new Date(c.creditDueAt))}`, tone: "warn" }
+    : alerts[0] ? { text: alerts[0].text, tone: alerts[0].severity === "danger" ? "danger" : "warn" }
+    : null;
+  const open = () => onOpen(c.id);
   return (
-    <button className={`case-card${compact ? " compact" : ""}`} onClick={() => onOpen(c.id)}>
-      <span className="case-row-top">
-        <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
-        <span className="case-badges">
-          {c.isCredit && <span className="badge credit">نسیه</span>}
-          <span className={`status-badge stage-${color}`}><span className="dot" aria-hidden="true" />{status}</span>
-        </span>
-      </span>
-      <span className="case-title">
-        <strong>{c.assetTitle ?? "بدون وسیله"}</strong>
-        {c.assetIdentifier && <PlateView identifier={c.assetIdentifier} />}
-      </span>
-      <span className="muted">{c.customerName ?? <span dir="ltr" className="font-num">{maskMobile(c.customerMobile)}</span>}</span>
-      {!compact && <Progress stage={c.stage} />}
+    <article className={`case-card cc${compact ? " compact" : ""}`} role="button" tabIndex={0} onClick={open}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}>
+      <div className="cc-head">
+        <div className="cc-main">
+          <div className="cc-meta">
+            <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
+            <span className={`status-pill stage-${color}`}>{status}</span>
+            {c.isCredit && <span className="status-pill credit">نسیه</span>}
+          </div>
+          <h3>{c.assetTitle ?? "بدون وسیله"}</h3>
+          {c.assetIdentifier && !compact && <PlateView identifier={c.assetIdentifier} />}
+          <p>
+            {c.customerName ?? "بدون نام"}
+            <span className="cc-dot" aria-hidden="true"> · </span>
+            <span className="font-num" dir="ltr">{c.customerMobile}</span>
+          </p>
+        </div>
+        <span className="cc-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg></span>
+      </div>
 
-      {/* Three short panels: the vehicle, the work, the money. */}
-      {compact && <span className="muted small">{c.assigneeName ?? "بدون مسئول"} · {ago(c.lastEvent?.occurredAt ?? c.stageEnteredAt)} پیش</span>}
-      <span className="case-panels">
-        <span className="case-panel">
-          <span className="panel-label">وسیله (کیلومتر)</span>
-          <span className="panel-value">{c.odometerKm != null ? <span className="font-num">{formatNumber(c.odometerKm)}</span> : "—"}</span>
-          {c.fuelLevel == null && <span className="panel-sub">{c.odometerKm != null ? "سوخت ثبت نشده" : "ثبت نشده"}</span>}
-          {c.fuelLevel != null && <FuelMini level={c.fuelLevel} />}
-        </span>
-        <span className="case-panel">
-          <span className="panel-label">تعمیر</span>
-          <span className="panel-value">{c.assigneeName ?? "بدون مسئول"}</span>
-          <span className="panel-sub">{c.lastEvent ? `${ago(c.lastEvent.occurredAt)} پیش` : `${ago(c.stageEnteredAt)} پیش`}</span>
-        </span>
-        <span className={`case-panel${balance > 0 && c.stage.category === "done" ? " owe" : ""}`}>
-          <span className="panel-label">مالی (تومان)</span>
-          {total > 0 ? (
-            <>
-              <span className="panel-value font-num">{formatNumber(Math.round(total / 10))}</span>
-              <span className="panel-sub">
-                {balance > 0 ? <>مانده <span className="font-num">{formatNumber(Math.round(balance / 10))}</span></> : balance === 0 ? "تسویه" : "بستانکار"}
-              </span>
-            </>
-          ) : <><span className="panel-value">—</span><span className="panel-sub">بدون ردیف</span></>}
-        </span>
-      </span>
+      {!compact && (
+        <>
+          <div className="cc-stage">
+            <div className="cc-stage-label">
+              <span>{prog && prog.index >= 0 ? `مرحله ${formatNumber(prog.index + 1)} از ${formatNumber(prog.path.length)}` : "مرحله"}</span>
+              <strong>{c.stage.name}</strong>
+            </div>
+            {prog && prog.index >= 0 && (
+              <div className="cc-track" style={{ gridTemplateColumns: `repeat(${prog.path.length}, 1fr)` }} aria-hidden="true">
+                {prog.path.map((st, k) => <span key={st.id} className={k <= prog.index ? "filled" : ""} />)}
+              </div>
+            )}
+          </div>
 
-      {c.isCredit && c.creditDueAt && (
-        <span className="alert-line warn">موعد پرداخت نسیه: {faShort.format(new Date(c.creditDueAt))}</span>
+          <div className="cc-details">
+            <div><span>تعمیرکار</span><strong>{c.assigneeName ?? "بدون مسئول"}</strong></div>
+            <div><span>زمان پذیرش</span><strong>{c.openedAt ? sinceText(c.openedAt) : "—"}</strong></div>
+            <div><span>شرح ایراد</span><strong>{problem ?? "—"}</strong></div>
+          </div>
+
+          <div className="cc-facts">
+            <span>
+              کارکرد <strong className="font-num">{c.odometerKm != null ? formatNumber(c.odometerKm) : "—"}</strong>
+              {c.fuelLevel != null && <FuelMini level={c.fuelLevel} />}
+            </span>
+            <span>
+              جمع <strong className="font-num">{total > 0 ? toman(total) : "—"}</strong>
+            </span>
+            <span className={balance > 0 && total > 0 ? "owe" : ""}>
+              {total === 0 ? "بدون ردیف" : balance > 0 ? <>مانده <strong className="font-num">{toman(balance)}</strong></> : balance === 0 ? "تسویه" : "بستانکار"}
+            </span>
+          </div>
+
+          <div className="cc-foot">
+            <p>{c.lastEvent ? eventText(c.lastEvent.type, c.lastEvent.data) : "—"}</p>
+            {foot && <span className={foot.tone}>{foot.tone === "success" ? "✓" : "⚠"} {foot.text}</span>}
+          </div>
+        </>
       )}
-      {sla && <span className={`alert-line ${sla.late ? "danger" : "warn"}`}>⏱ {sla.text}</span>}
-      {c.lastEvent && <span className="last-activity muted small">آخرین فعالیت: {eventText(c.lastEvent.type, c.lastEvent.data)}</span>}
-      {alerts.filter((a) => !a.code.startsWith("due") && a.code !== "overdue").slice(0, 1).map((a) => <AlertLine key={a.code} alert={a} />)}
-    </button>
+    </article>
   );
 }
 

@@ -123,7 +123,7 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
       )}
 
       <div className="stats-grid" data-tour="queue">
-        <Stat icon="case" tone="primary" value={st.open} label={manager ? "پرونده‌های باز" : "کارهای من"}
+        <Stat icon="case" tone="main" value={st.open} label={manager ? "پرونده‌های باز" : "کارهای من"}
           sub={`${formatNumber(st.openedToday)} پذیرش امروز`} onClick={() => onOpenCases({})} />
         <Stat icon="tool" tone="blue" value={st.active} label="در حال کار"
           sub={manager && st.unassigned > 0 ? `${formatNumber(st.unassigned)} بدون مسئول` : "در دست تعمیرکاران"} onClick={() => onOpenCases({ category: "active" })} />
@@ -191,6 +191,16 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
               </div>
             </section>
           )}
+          {manager && csat && csat.responses > 0 && csat.average != null && (
+            <section className="feedback-card">
+              <span className="feedback-score font-num">{new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(csat.average)}</span>
+              <span>
+                <span>رضایت مشتریان در ۳۰ روز اخیر</span>
+                <strong>{(csat.satisfiedPercent ?? 0) >= 80 ? "عملکرد تعمیرگاه خوب است" : (csat.satisfiedPercent ?? 0) >= 60 ? "جای بهتر شدن دارد" : "نیاز به توجه دارد"}</strong>
+                <span>از مجموع {formatNumber(csat.responses)} نظر ثبت‌شده، {formatNumber(csat.satisfiedPercent ?? 0)}٪ راضی</span>
+              </span>
+            </section>
+          )}
         </div>
 
         <div className="dash-col">
@@ -231,16 +241,6 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
             </section>
           )}
 
-          {manager && csat && csat.responses > 0 && csat.average != null && (
-            <section className="feedback-card">
-              <span className="feedback-score font-num">{new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(csat.average)}</span>
-              <span>
-                <span>رضایت مشتریان در ۳۰ روز اخیر</span>
-                <strong>{(csat.satisfiedPercent ?? 0) >= 80 ? "عملکرد تعمیرگاه خوب است" : (csat.satisfiedPercent ?? 0) >= 60 ? "جای بهتر شدن دارد" : "نیاز به توجه دارد"}</strong>
-                <span>از مجموع {formatNumber(csat.responses)} نظر ثبت‌شده، {formatNumber(csat.satisfiedPercent ?? 0)}٪ راضی</span>
-              </span>
-            </section>
-          )}
         </div>
       </div>
     </section>
@@ -248,7 +248,7 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
 }
 
 function Stat({ icon, tone, value, label, sub, onClick }: {
-  icon: IconName; tone: "primary" | "blue" | "green" | "orange"; value: number; label: string; sub: string; onClick: () => void;
+  icon: IconName; tone: "main" | "blue" | "green" | "orange"; value: number; label: string; sub: string; onClick: () => void;
 }) {
   return (
     <button type="button" className={`stat-card ${tone}`} onClick={onClick}>

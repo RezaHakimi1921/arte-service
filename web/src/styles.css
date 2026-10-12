@@ -2079,7 +2079,7 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
   display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-width: 0; padding: 1rem; text-align: start;
   border: 1px solid var(--border); border-radius: 1.15rem; color: var(--text); background: var(--surface);
 }
-.stat-card.primary { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); box-shadow: inset 0 3px var(--accent); }
+.stat-card.main { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); box-shadow: inset 0 3px var(--accent); }
 .stat-icon { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; margin-bottom: 0.7rem; color: var(--accent); border-radius: 0.75rem; background: var(--accent-soft); }
 .stat-card.green .stat-icon { color: var(--stage-green); background: var(--good-bg); }
 .stat-card.orange .stat-icon { color: var(--stage-orange); background: var(--warn-bg); }
@@ -2186,3 +2186,69 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
   .primary-action svg { display: none; }
 }
 .draft-restored { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+
+/* ═══ Case card (Figma structure): every card has the same parts, so cards in a row are the same size ═══ */
+.case-card.cc {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0; width: 100%; height: 100%; padding: 1rem; overflow: hidden; cursor: pointer;
+  text-align: start; border: 1px solid var(--border); border-radius: 1.15rem; background: var(--surface); box-shadow: 0 0.2rem 1rem rgb(16 24 40 / 0.025);
+}
+.case-card.cc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.case-card.cc.compact { padding: 0.9rem 1rem; }
+.cc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.cc-main { min-width: 0; flex: 1; }
+.cc-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.7rem; font-weight: 700; }
+.cc-meta .case-code { font-size: 0.72rem; }
+.status-pill { display: inline-flex; align-items: center; min-height: 1.45rem; padding: 0 0.6rem; border-radius: 2rem; color: var(--accent); background: var(--accent-soft); font-size: 0.7rem; font-weight: 800; }
+.status-pill.stage-green, .status-pill.stage-teal { color: var(--stage-green); background: var(--good-bg); }
+.status-pill.stage-orange { color: var(--stage-orange); background: var(--warn-bg); }
+.status-pill.stage-red { color: var(--danger); background: var(--bad-bg); }
+.status-pill.stage-gray { color: var(--muted); background: var(--surface-2); }
+.status-pill.credit { color: var(--stage-orange); background: var(--warn-bg); }
+.case-card.cc h3 { margin: 0.55rem 0 0; overflow: hidden; font-size: 1rem; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.case-card.cc .plate, .case-card.cc .small-plate { margin-top: 0.4rem; }
+.cc-main p { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.7; }
+.cc-go { display: grid; flex: none; width: 2.25rem; height: 2.25rem; place-items: center; border: 1px solid var(--border); border-radius: 0.75rem; color: var(--muted); background: var(--surface-2); }
+.cc-go svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.cc-stage { margin-top: 0.9rem; padding-top: 0.85rem; border-top: 1px solid var(--border); }
+.cc-stage-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.55rem; font-size: 0.72rem; }
+.cc-stage-label span { color: var(--muted); }
+.cc-stage-label strong { color: var(--accent); }
+.cc-track { display: grid; gap: 0.25rem; }
+.cc-track span { height: 0.3rem; border-radius: 1rem; background: var(--surface-2); }
+.cc-track span.filled { background: var(--accent); }
+
+.cc-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin-top: 0.8rem; }
+.cc-details > div { min-width: 0; padding: 0.6rem 0.65rem; border-radius: 0.75rem; background: var(--surface-2); }
+.cc-details span, .cc-details strong { display: block; }
+.cc-details span { margin-bottom: 0.2rem; color: var(--muted); font-size: 0.65rem; }
+.cc-details strong { overflow: hidden; font-size: 0.78rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.cc-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.9rem; min-height: 1.6rem; margin-top: 0.7rem; color: var(--muted); font-size: 0.72rem; }
+.cc-facts strong { color: var(--text); font-weight: 800; }
+.cc-facts .fuel-mini { display: inline-flex; width: 2.4rem; margin: 0 0.35rem; vertical-align: middle; }
+.cc-facts .owe, .cc-facts .owe strong { color: var(--stage-orange); font-weight: 800; }
+
+.cc-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.6rem; margin-top: auto; padding-top: 0.7rem; }
+.cc-foot p { flex: 1; min-width: 0; max-width: 60%; margin: 0; overflow: hidden; color: var(--muted); font-size: 0.7rem; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cc-foot > span { flex: none; font-size: 0.7rem; font-weight: 900; }
+.cc-foot .success { color: var(--stage-green); }
+.cc-foot .warn { color: var(--stage-orange); }
+.cc-foot .danger { color: var(--danger); }
+
+/* lists: every row stretches to the tallest card, so they line up */
+.case-list { align-items: stretch !important; }
+.case-list > li { display: flex; }
+.case-list > li > .case-card { flex: 1; }
+
+@media (max-width: 30rem) {
+  .cc-details { grid-template-columns: 1fr 1fr; }
+  .cc-details > div:last-child { grid-column: 1 / -1; }
+  .cc-foot p { max-width: 55%; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .case-card.cc { transition: transform 160ms ease, border-color 160ms ease; }
+}
+.case-list { grid-auto-rows: 1fr; }
+.card-stack > .card { margin: 0; }
+.stat-card.main { background: var(--surface); color: var(--text); }
