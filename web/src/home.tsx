@@ -27,9 +27,11 @@ type Inbox = {
  * Dashboard: the state of the shop at a glance (tiles, always visible), then what needs attention and why.
  * Technicians see their own numbers and jobs.
  */
-export function HomeView({ canCreate, onOpen, onOpenSurvey, onNewCase, onOpenCases, surveyEnabled }: {
+export function HomeView({ canCreate, onOpen, onOpenSurvey, onNewCase, onOpenCases, surveyEnabled, brand }: {
   canCreate: boolean; onOpen: (id: string) => void; onOpenSurvey: (id: string) => void; onNewCase: () => void;
   onOpenCases: (f: CaseFilter) => void; surveyEnabled: boolean;
+  /** In more than one branch: the way to the brand dashboard. */
+  brand: { name: string | null; count: number; open: () => void } | null;
 }) {
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [score, setScore] = useState<MyScore | null>(null);
@@ -42,6 +44,19 @@ export function HomeView({ canCreate, onOpen, onOpenSurvey, onNewCase, onOpenCas
 
   return (
     <section>
+      {brand && (
+        <button type="button" className="card brand-entry" onClick={brand.open}>
+          <span className="brand-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6M9 11h.01M15 11h.01" /></svg>
+          </span>
+          <span className="brand-entry-text">
+            <strong>داشبورد برند{brand.name ? ` ${brand.name}` : ""}</strong>
+            <span className="muted small">{formatNumber(brand.count)} شعبه · وضعیت همه‌ی شعب و رفتن به هر کدام</span>
+          </span>
+          <span className="muted" aria-hidden="true">‹</span>
+        </button>
+      )}
+
       {canCreate && <button className="primary block big" onClick={onNewCase} data-tour="new-case">+ پذیرش جدید</button>}
 
       <div className="tiles" data-tour="queue">

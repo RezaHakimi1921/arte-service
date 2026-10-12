@@ -40,6 +40,9 @@ public static class TenantEndpoints
                 {
                     m.TenantId,
                     Name = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.Name).SingleAsync(ct),
+                    Brand = await (from t in db.Tenants where t.Id == m.TenantId
+                                   join o in db.Organizations on t.OrganizationId equals o.Id
+                                   select o.Name).FirstOrDefaultAsync(ct),
                     RequireAssigneeOnIntake = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.RequireAssigneeOnIntake).SingleAsync(ct),
                     BusinessType = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.BusinessType).SingleAsync(ct),
                     VehicleKinds = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.VehicleKinds).SingleAsync(ct),

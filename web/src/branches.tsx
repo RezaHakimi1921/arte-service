@@ -45,7 +45,7 @@ export function BranchesHome({ name, currentId, onPick, onSignOut, onClose }: {
       <header className="branches-head">
         <div>
           <span className="muted small">{name}</span>
-          <h1>شعب شما</h1>
+          <h1>{rows && rows.some((r) => r.brand) ? "داشبورد برند" : "شعب شما"}</h1>
         </div>
         {onClose ? <button type="button" className="link" onClick={onClose}>بازگشت ‹</button>
           : <button type="button" className="link" onClick={onSignOut}>خروج</button>}
@@ -55,6 +55,7 @@ export function BranchesHome({ name, currentId, onPick, onSignOut, onClose }: {
       {groups.map((g) => (
         <section key={g} className="branch-group">
           {g && <h2 className="branch-brand">{g}</h2>}
+          <BrandTotals rows={rows!.filter((r) => (r.brand ?? "") === g)} />
           {rows!.filter((r) => (r.brand ?? "") === g).map((b) => {
             const expired = b.license.state === "expired";
             return (
@@ -100,5 +101,28 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "wa
       <strong className="font-num">{formatNumber(value)}</strong>
       <span>{label}</span>
     </span>
+  );
+}
+
+/** The brand at a glance: all its branches added up (money only from branches where this person sees money). */
+function BrandTotals({ rows }: { rows: Branch[] }) {
+  if (rows.length < 2) return null;
+  const sum = (f: (b: Branch) => number) => rows.reduce((n, b) => n + f(b), 0);
+  const money = rows.filter((b) => b.receivedTodayRials != null);
+  return (
+    <div className="card brand-totals">
+      <span className="muted small">جمع {formatNumber(rows.length)} شعبه</span>
+      <span className="branch-stats">
+        <Stat label="باز" value={sum((b) => b.open)} />
+        <Stat label="در حال کار" value={sum((b) => b.active)} />
+        <Stat label="منتظر" value={sum((b) => b.waiting)} tone={sum((b) => b.waiting) > 0 ? "warn" : undefined} />
+        <Stat label="آماده تحویل" value={sum((b) => b.ready)} tone={sum((b) => b.ready) > 0 ? "good" : undefined} />
+      </span>
+      <span className="branch-foot small">
+        <span>امروز: {formatNumber(sum((b) => b.openedToday))} پذیرش، {formatNumber(sum((b) => b.deliveredToday))} تحویل</span>
+        {money.length > 0 && <span>دریافتی امروز: <span className="font-num">{toman(money.reduce((n, b) => n + (b.receivedTodayRials ?? 0), 0))}</span></span>}
+        {money.some((b) => (b.creditRials ?? 0) > 0) && <span className="warn-text">نسیه: <span className="font-num">{toman(money.reduce((n, b) => n + (b.creditRials ?? 0), 0))}</span></span>}
+      </span>
+    </div>
   );
 }

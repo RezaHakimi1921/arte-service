@@ -27,7 +27,7 @@ type Me = {
   isPlatformAdmin: boolean;
   business: {
     tenantId: string; name: string; role: string; permissions: string[]; requireAssigneeOnIntake: boolean;
-    tourDone: boolean; sampleCaseId: string | null; isActive: boolean; license: LicenseStatus; surveyEnabled: boolean;
+    tourDone: boolean; sampleCaseId: string | null; isActive: boolean; license: LicenseStatus; surveyEnabled: boolean; brand: string | null;
     businessType: string; vehicleKinds: string[];
   } | null;
 };
@@ -366,7 +366,8 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
       isPlatformAdmin={me.isPlatformAdmin} licenseText={licenseLine(me.business!.license)} />;
   }
   else page = <HomeView key={`${caseId}-${homeKey}`} onOpen={(id) => { setTab("cases"); setCaseId(id); }}
-    onOpenSurvey={(id) => { setTab("cases"); setCaseId(id); setSurveyCase(id); }} surveyEnabled={me.business!.surveyEnabled} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake} />;
+    onOpenSurvey={(id) => { setTab("cases"); setCaseId(id); setSurveyCase(id); }} surveyEnabled={me.business!.surveyEnabled}
+    brand={me.branchCount > 1 ? { name: me.business!.brand, count: me.branchCount, open: onBranches } : null} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake} />;
 
   return (
     <div className="shell">
