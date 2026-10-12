@@ -2004,3 +2004,22 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .admin-enter { align-self: flex-start; min-height: 36px; margin: 0 1rem 0.6rem; padding: 0.25rem 0.9rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 0; font-size: 0.85rem; font-weight: 700; }
 
 .support-banner { padding: 0.5rem 16px; background: var(--warning-bg); color: var(--warning-text); font-size: 0.85rem; font-weight: 700; line-height: 1.8; }
+
+/* Phone login: the header already greets, so the form starts at its title and the page fits one screen. */
+@media (max-width: 960px) {
+  .lg-hero { gap: 6px; }
+  .lg-hero-copy { padding-bottom: 16px; }
+  .lg-hero-copy strong { font-size: 1.15rem; line-height: 1.7; }
+  .lg-hero-copy p { font-size: 0.82rem; line-height: 1.7; }
+  .lg-hero-figure { width: 100px; }
+  .lg-hero-figure::before { width: 108px; height: 108px; right: -4px; bottom: 4px; }
+  .lg-hero .mech { width: 100px; }
+  .lg-hero ~ .lg-content { padding-top: 16px; padding-bottom: 8px; }
+  .lg-hero ~ .lg-content .lg-welcome-icon, .lg-hero ~ .lg-content .lg-overline { display: none; }
+  .lg-hero ~ .lg-content .lg-heading h2 { margin-top: 0; }
+}
+@media (max-width: 960px) {
+  .lg-auth:has(.lg-hero) { padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); }
+  .lg-hero ~ .lg-content { padding-bottom: 0; }
+  .lg-hero-copy { padding-bottom: 12px; }
+}
