@@ -119,6 +119,22 @@ services:
     cap_add: [NET_BIND_SERVICE]
     security_opt: ["no-new-privileges:true"]
 
+  # Marketing page for artepersia.com (static files from landing/dist); the edge Caddy forwards to arte-landing:80.
+  landing:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile.landing:/etc/caddy/Caddyfile:ro
+      - ../landing/dist:/srv:ro
+    networks:
+      edge:
+        aliases: [arte-landing]
+    read_only: true
+    tmpfs: ["/tmp", "/data", "/config"]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+
 networks:
   internal:
     internal: true

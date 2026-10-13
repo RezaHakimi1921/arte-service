@@ -1,0 +1,34 @@
+{
+	# TLS for artepersia.com is terminated by the server's edge Caddy; this container only serves the static landing page.
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), geolocation=(), microphone=(), payment=()"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'"
+		-Server
+	}
+
+	handle {
+		root * /srv
+		@immutable path /assets/* /fonts/* /shots/*
+		header @immutable Cache-Control "public, max-age=2592000"
+		@fresh not path /assets/* /fonts/* /shots/*
+		header @fresh Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
