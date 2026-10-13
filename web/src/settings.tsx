@@ -361,11 +361,9 @@ export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved:
 export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
   const { s, save } = useBusinessSettings(onSaved);
   const [confirmSms, setConfirmSms] = useState(false);
-  const [support, setSupport] = useState<string | null>(null);
   const [preview, setPreview] = useState<SmsKey | null>(null);
   const [delay, setDelay] = useState("");
   const [customDelay, setCustomDelay] = useState(false);
-  useEffect(() => { api<{ supportPhone: string | null }>("/api/v1/public/info").then((i) => setSupport(i.supportPhone)).catch(() => {}); }, []);
   return (
     <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
@@ -383,8 +381,13 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
               checked={s.smsOnOpened} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnOpened: v })} />
             <Switch title="آماده‌ی تحویل" link={{ label: "دیدن متن پیامک", onClick: () => setPreview("case.ready") }} sub="«… شما آماده‌ی تحویل است.»"
               checked={s.smsOnReady} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnReady: v })} />
-            <Switch title="هنگام تحویل" link={{ label: "دیدن متن پیامک", onClick: () => setPreview("case.delivered") }} sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
-              checked={s.smsOnDelivered} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
+            {s.surveyEnabled && s.surveySendOn ? (
+              <Switch title="هنگام تحویل" sub="به‌جای آن، پیامک نظرسنجی فرستاده می‌شود (پایین‌تر)."
+                checked={false} disabled onChange={() => {}} />
+            ) : (
+              <Switch title="هنگام تحویل" link={{ label: "دیدن متن پیامک", onClick: () => setPreview("case.delivered") }} sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
+                checked={s.smsOnDelivered} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
+            )}
           </div>
           <h3>صفحه‌ی پیگیری مشتری</h3>
           <p className="hint">وضعیت فعلی، قول تحویل و نام و تلفن تعمیرگاه همیشه نشان داده می‌شود.</p>
@@ -399,9 +402,9 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
               checked={s.photosVisibleByDefault} disabled={false} onChange={(v) => save({ photosVisibleByDefault: v })} />
           </div>
 
-          <h3>نظرسنجی رضایت مشتری</h3>
-          {s.surveyEnabled ? (
+          {s.surveyEnabled && (
             <>
+          <h3>نظرسنجی رضایت مشتری</h3>
               <p className="hint">
                 بعد از تحویل، یک پیامک کوتاه با لینک نظرسنجی برای مشتری فرستاده می‌شود (فقط بین ساعت ۹ تا ۲۳). نظر مشتری در پرونده،
                 زنگوله‌ی اعلان و گزارش‌ها می‌آید و رضایت پایین در خانه نشان داده می‌شود.
@@ -450,11 +453,6 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
                 </div>
               </div>
             </>
-          ) : (
-            <p className="hint">
-              نظرسنجی رضایت مشتری یک امکان جداست؛ برای فعال‌سازی با پشتیبانی آرته تماس بگیرید
-              {support && <> (<a href={`tel:${support}`} dir="ltr" className="font-num">{support}</a>)</>}.
-            </p>
           )}
         </>
       )}

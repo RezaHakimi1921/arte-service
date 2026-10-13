@@ -164,6 +164,34 @@ public sealed class SurveyTests(ArteApiFactory api)
     private const string MessageKeysSurvey = Arte.Core.Messaging.MessageKeys.SurveyRequest;
 
     [Fact]
+    public async Task Where_the_survey_is_sent_it_replaces_the_delivered_sms_and_elsewhere_the_delivered_sms_goes()
+    {
+        // With the add-on: delivery sends only the survey (when due), never «delivered».
+        var (owner, _, _) = await BusinessWithSurveyAsync();
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = true, smsOnDelivered = true }));
+        var (id, _, mobile) = await OpenCase(owner);
+        var survey = (await Deliver(owner, id)).GetProperty("survey");
+        await RunSender(AfterDue(survey));
+        Assert.DoesNotContain("case.delivered", api.Sms.Keys[mobile]);
+        Assert.Contains(MessageKeysSurvey, api.Sms.Keys[mobile]);
+
+        // Add-on present but the survey switched off: the delivered SMS goes again.
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { surveySendOn = false }));
+        var (id2, _, mobile2) = await OpenCase(owner);
+        await Deliver(owner, id2);
+        Assert.Contains("case.delivered", api.Sms.Keys[mobile2]);
+        Assert.DoesNotContain(MessageKeysSurvey, api.Sms.Keys[mobile2]);
+
+        // No add-on: the delivered SMS, no survey.
+        var (plain, _) = await api.NewBusinessAsync();
+        await Json(await plain.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = true, smsOnDelivered = true }));
+        var (id3, _, mobile3) = await OpenCase(plain);
+        Assert.Equal(JsonValueKind.Null, (await Deliver(plain, id3)).GetProperty("survey").ValueKind);
+        Assert.Contains("case.delivered", api.Sms.Keys[mobile3]);
+        Assert.False((await Json(await plain.GetAsync("/api/v1/settings/business"))).GetProperty("surveyEnabled").GetBoolean());
+    }
+
+    [Fact]
     public async Task Without_the_add_on_there_is_no_survey()
     {
         var (owner, _) = await api.NewBusinessAsync();

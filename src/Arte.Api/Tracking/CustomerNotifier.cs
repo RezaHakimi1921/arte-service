@@ -65,6 +65,8 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
                 _ => false,
             };
             if (!t.CustomerSmsEnabled || !wanted) return;
+            // Where the survey add-on sends its SMS after delivery, that one replaces the «delivered» SMS.
+            if (messageKey == MessageKeys.CaseDelivered && t.SurveyEnabled && t.SurveySendOn) return;
             await SendAsync(c, t, messageKey, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
