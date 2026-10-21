@@ -3,6 +3,7 @@ import { ApiError, api } from "./api";
 import { applyTheme } from "./App";
 import { WAIT_REASONS } from "./labels";
 import { formatNumber } from "./ui";
+import { VehicleProgress, type VehicleTone } from "./vehicleProgress";
 
 type Survey = { state: "open" | "answered" | "expired"; questions: { id: string; text: string }[] | null; score: number | null };
 
@@ -20,14 +21,12 @@ type Track = {
   money: { totalRials: number; paidRials: number; balanceRials: number } | null;
 };
 
-type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet";
+type IconName = "calendar" | "camera" | "check" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
     calendar: <><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M8 3v4M16 3v4M3 10h18" /></>,
     camera: <><path d="M4 7h3l1.4-2h7.2L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></>,
-    car: <><path d="m5 11 1.5-4h11l1.5 4M3 11h18v7H3z" /><path d="M5 18v2M19 18v2M6.5 15h.01M17.5 15h.01" /></>,
-    moto: <path d="M5 17a3 3 0 1 0 0-.01M19 17a3 3 0 1 0 0-.01M5 17l4-7h5l5 7M12 10l-2-4H7M15 6h3" />,
     check: <path d="m5 12 4 4L19 6" />,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     close: <path d="M6 6l12 12M18 6 6 18" />,
@@ -87,6 +86,22 @@ function now(t: Track): { title: string; note: string } {
   if (s.key === "repairing") return { title: "وسیله‌ی شما در حال تعمیر است", note: "قطعات و کارهای انجام‌شده را پایین‌تر می‌بینید." };
   if (s.key === "review") return { title: "کار انجام شده و استاد در حال بازبینی است", note: "پس از تأیید، آماده‌ی تحویل اعلام می‌شود." };
   return { title: "وسیله‌ی شما پذیرش شد و در نوبت کار است", note: "با شروع کار، مراحل در همین صفحه به‌روز می‌شود." };
+}
+
+/**
+ * Where the vehicle is on its way, for the picture on this page. «Step n of m» counts the stages the shop lets the
+ * customer see (the waiting stage is only in that list while the case is in it); with stages hidden only the end
+ * states are known.
+ */
+function journey(t: Track): { progress: number; tone: VehicleTone; step: { at: number; of: number } | null } {
+  const s = t.status;
+  if (s.category === "cancelled") return { progress: 0, tone: "cancelled", step: null };
+  if (s.key === "delivered") return { progress: 1, tone: "done", step: null };
+  const at = t.stages ? t.stages.findIndex((x) => x.state === "current") + 1 : 0;
+  const of = t.stages?.length ?? 0;
+  const progress = at > 0 && of > 0 ? at / of : s.key === "ready" ? 1 : 0;
+  const tone: VehicleTone = s.key === "ready" ? "done" : s.category === "waiting" || s.waitReason ? "waiting" : "going";
+  return { progress, tone, step: at > 0 && of > 0 ? { at, of } : null };
 }
 
 const RATING_WORDS = ["", "خیلی بد", "بد", "معمولی", "خوب", "عالی"];
@@ -275,7 +290,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
   if (!t) return <div className="splash" aria-busy="true" />;
 
   const n = now(t);
-  const vehicleIcon: IconName = t.case.vehicle?.kind === "motorcycle" ? "moto" : "car";
+  const j = journey(t);
   const photoUrl = (id: string) => `/api/v1/track/${code}/photos/${id}`;
   const problems = t.case.reportedProblems;
   const services = t.case.requestedServices;
@@ -305,7 +320,6 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
       <div className="tk-content" hidden={!!t.survey && view === "survey"}>
         <section className="tk-hero">
           <div className="tk-hero-main">
-            <div className="tk-vehicle-icon"><Icon name={vehicleIcon} /></div>
             <div className="tk-hero-copy">
               <div className="tk-greeting">
                 <span>{t.case.customer ? `${t.case.customer} عزیز` : "مشتری گرامی"}</span>
@@ -359,27 +373,12 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         )}
 
         <Section icon="wrench" eyebrow="وضعیت لحظه‌ای" title="مسیر کار">
+          <VehicleProgress kind={t.case.vehicle?.kind} progress={j.progress} tone={j.tone} label={`${t.case.vehicle?.title ?? "وسیله"}: ${n.title}`} />
+          {j.step && <p className="tk-step-line">مرحله‌ی <strong>{formatNumber(j.step.at)}</strong> از <strong>{formatNumber(j.step.of)}</strong></p>}
           <div className="tk-note">
             <span className="tk-dot" aria-hidden="true" />
             <div><strong>{n.title}</strong><p>{n.note}</p></div>
           </div>
-          {t.stages && (
-            <ol className="tk-timeline">
-              {t.stages.map((s, i) => (
-                <li className={`${s.state}${s.key === "delivered" && s.state === "current" ? " final" : ""}`} key={s.key}>
-                  <div className="tk-rail">
-                    <span className="tk-node">{(s.state === "done" || (s.key === "delivered" && s.state === "current")) && <Icon name="check" />}</span>
-                    {i < t.stages!.length - 1 && <span className="tk-line" />}
-                  </div>
-                  <div className="tk-step">
-                    <strong>{s.name}</strong>
-                    {s.state === "current" && s.key !== "delivered" && <span className="tk-badge">مرحله‌ی فعلی</span>}
-                  </div>
-                  <time>{s.at && s.state !== "todo" ? when(s.at) : "—"}</time>
-                </li>
-              ))}
-            </ol>
-          )}
         </Section>
 
         {t.photos.length > 0 && (
