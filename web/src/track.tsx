@@ -374,7 +374,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
 
         <Section icon="wrench" eyebrow="وضعیت لحظه‌ای" title="مسیر کار">
           <VehicleProgress kind={t.case.vehicle?.kind} progress={j.progress} tone={j.tone} label={`${t.case.vehicle?.title ?? "وسیله"}: ${n.title}`} />
-          {j.step && <p className="tk-step-line">مرحله‌ی <strong>{formatNumber(j.step.at)}</strong> از <strong>{formatNumber(j.step.of)}</strong></p>}
+          {j.step && <div className="tk-step-stat"><strong>{formatNumber(j.step.at)} <span>از {formatNumber(j.step.of)}</span></strong><span>مرحله‌ی فعلی</span></div>}
           <div className="tk-note">
             <span className="tk-dot" aria-hidden="true" />
             <div><strong>{n.title}</strong><p>{n.note}</p></div>
