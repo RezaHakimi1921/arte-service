@@ -320,10 +320,14 @@ function App() {
             <div className="faq-intro reveal"><span className="mini-label">سؤال‌های پرتکرار</span><h2>اگر هنوز سؤالی دارید، احتمالاً جوابش اینجاست.</h2><p>پاسختان را پیدا نکردید؟ با ما تماس بگیرید؛ آدم واقعی جواب می‌دهد.</p><a href="tel:09362660550">۰۹۳۶۲۶۶۰۵۵۰ <Icon name="arrow" /></a></div>
             <div className="faq-list">
               {faqs.map(([question, answer], index) => (
-                <article className={`faq-item reveal ${openFaq === index ? "open" : ""}`} key={question}>
-                  <button onClick={() => setOpenFaq(openFaq === index ? null : index)} aria-expanded={openFaq === index}><span>{question}</span><Icon name="chevron" /></button>
-                  <div className="faq-answer"><p>{answer}</p></div>
-                </article>
+                // The reveal class sits on a wrapper whose className never changes: React rewrites className when the
+                // item opens, which would wipe the "is-visible" class the observer added and hide the whole question.
+                <div className="reveal" key={question}>
+                  <article className={`faq-item ${openFaq === index ? "open" : ""}`}>
+                    <button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)} aria-expanded={openFaq === index}><span>{question}</span><Icon name="chevron" /></button>
+                    <div className="faq-answer"><p>{answer}</p></div>
+                  </article>
+                </div>
               ))}
             </div>
           </div>
