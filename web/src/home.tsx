@@ -28,11 +28,6 @@ const today = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "long", d
 const shortDate = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", year: "numeric" });
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
 
-function greeting() {
-  const h = new Date().getHours();
-  return h < 11 ? "صبح بخیر" : h < 16 ? "روز بخیر" : "عصر بخیر";
-}
-
 type IconName = "case" | "tool" | "check" | "clock" | "plus" | "calendar" | "chevron" | "alert" | "phone" | "star" | "building";
 function Icon({ name }: { name: IconName }) {
   const d: Record<IconName, ReactNode> = {
@@ -88,7 +83,7 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
       <div className="page-intro">
         <div>
           <span>{today.format(new Date())}</span>
-          <h1>{first ? `سلام ${first}، ${greeting()}` : greeting()}</h1>
+          <h1>{first ? `سلام ${first}` : "سلام"}</h1>
           <p>
             {attention > 0
               ? manager ? `امروز ${formatNumber(attention)} پرونده نیاز به توجه شما دارد.` : `${formatNumber(attention)} کار به شما سپرده شده است.`

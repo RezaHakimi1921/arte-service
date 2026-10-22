@@ -255,7 +255,7 @@ function App() {
           <div className="container">
             <SectionHeading eyebrow="یک روز واقعی، بدون آشفتگی" title="یک روز با آرته" text="تعمیرکار آرته کنار شماست؛ از لحظه‌ای که کرکره بالا می‌رود تا وقتی آخرین مشتری نظرش را ثبت می‌کند." />
             <div className="journey-layout">
-              <div className="journey-phone reveal"><PhoneShot compact src="/shots/track.webp" alt="لینک پیگیری مشتری: وسیله‌ی شما رنگ می‌گیرد و مرحله‌ی کار را نشان می‌دهد" /><Mechanic className="journey-mechanic" /></div>
+              <div className="journey-phone reveal"><PhoneShot compact src="/shots/track.webp" alt="لینک پیگیری مشتری: وضعیت وسیله و مسیر کار" /><Mechanic className="journey-mechanic" /></div>
               <div className="journey-list">
                 {journey.map((item, index) => (
                   <article className="journey-item reveal" key={item.time}>

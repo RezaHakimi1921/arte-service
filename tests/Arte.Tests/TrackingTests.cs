@@ -48,6 +48,29 @@ public sealed class TrackingTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task The_masters_final_review_is_not_shown_to_the_customer()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (id, code, _) = await OpenCase(owner);
+
+        async Task MoveTo(string stageName)
+        {
+            var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+            var transition = detail.GetProperty("transitions").EnumerateArray()
+                .First(x => x.GetProperty("toStage").GetProperty("name").GetString() == stageName).GetProperty("id").GetGuid();
+            await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/transitions/{transition}", new { }));
+        }
+        await MoveTo("در حال تعمیر");
+        await MoveTo("بررسی نهایی استاد");
+
+        var t = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        Assert.Equal("repairing", t.GetProperty("status").GetProperty("key").GetString());
+        var stages = t.GetProperty("stages").EnumerateArray().ToList();
+        Assert.DoesNotContain(stages, x => x.GetProperty("key").GetString() == "review");
+        Assert.Equal("repairing", stages.Single(x => x.GetProperty("state").GetString() == "current").GetProperty("key").GetString());
+    }
+
+    [Fact]
     public async Task Business_settings_decide_what_the_customer_sees()
     {
         var (owner, _) = await api.NewBusinessAsync();

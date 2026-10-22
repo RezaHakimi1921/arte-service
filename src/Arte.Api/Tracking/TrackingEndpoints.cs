@@ -15,6 +15,9 @@ namespace Arte.Api.Tracking;
 /// </summary>
 public static class TrackingEndpoints
 {
+    /// <summary>The master's final review: an inside step the customer never sees.</summary>
+    private const string InternalStageKey = "review";
+
     /// <summary>Tracking codes are 6–16 lower-case letters and digits; anything else is not looked up.</summary>
     public static bool ValidCode(string code) =>
         code.Length is >= 6 and <= 16 && code.All(ch => char.IsAsciiLetterLower(ch) || char.IsAsciiDigit(ch));
@@ -43,6 +46,11 @@ public static class TrackingEndpoints
             var stages = await db.Stages.AsNoTracking().Where(s => s.WorkflowId == c.WorkflowId && s.IsActive)
                 .OrderBy(s => s.Order).ToListAsync(ct);
             var current = stages.Single(s => s.Id == c.StageId);
+            // The master's final review is an inside step, not the customer's business: while it runs the customer
+            // sees the stage before it (the work is still being finished), and the step is never listed.
+            var shown = current.Key == InternalStageKey
+                ? stages.Where(s => s.Order < current.Order && s.Key != InternalStageKey).OrderByDescending(s => s.Order).FirstOrDefault() ?? current
+                : current;
 
             object? timeline = null;
             if (t.TrackShowStages)
@@ -54,12 +62,12 @@ public static class TrackingEndpoints
                 foreach (var e in events)
                     if (e.Data?.RootElement.TryGetProperty("to", out var to) == true && to.GetString() is { } name)
                         reached.TryAdd(name, e.OccurredAt);
-                var path = stages.Where(s => s.Category != StageCategories.Cancelled
-                                             && (s.Category != StageCategories.Waiting || s.Id == current.Id)).ToList();
+                var path = stages.Where(s => s.Key != InternalStageKey && s.Category != StageCategories.Cancelled
+                                             && (s.Category != StageCategories.Waiting || s.Id == shown.Id)).ToList();
                 timeline = path.Select(s => new
                 {
                     s.Name, s.Key,
-                    State = s.Id == current.Id ? "current" : s.Order < current.Order ? "done" : "todo",
+                    State = s.Id == shown.Id ? "current" : s.Order < shown.Order ? "done" : "todo",
                     At = s.Order == stages[0].Order ? c.OpenedAt : reached.TryGetValue(s.Name, out var at) ? at : (DateTimeOffset?)null,
                 }).ToList();
             }
@@ -114,7 +122,7 @@ public static class TrackingEndpoints
                     Vehicle = asset is null ? null : new { asset.Title, asset.Kind, asset.Identifier },
                     c.ReportedProblems, c.RequestedServices,
                 },
-                Status = new { current.Name, current.Key, current.Category, c.WaitReason, c.StageEnteredAt },
+                Status = new { shown.Name, shown.Key, shown.Category, c.WaitReason, c.StageEnteredAt },
                 Stages = timeline,
                 Items = items,
                 Money = money,
