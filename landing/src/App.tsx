@@ -69,8 +69,6 @@ function Mechanic({ className = "" }: { className?: string }) {
       <g className="mechanic-body">
         <path d="M107 82c-27 0-42 18-42 43v92h91v-91c0-27-18-44-49-44Z" fill="#1E3A8A" />
         <path d="M88 82c4 13 13 21 24 21s20-8 24-21" fill="#fff" opacity=".18" />
-        <path d="M65 124c-18 12-25 35-32 58l18 6 29-51-15-13Z" fill="#1E3A8A" />
-        <circle cx="43" cy="188" r="11" fill="#D99B73" />
         <path d="m157 123 31 46-16 11-36-40 21-17Z" fill="#1E3A8A" />
         <circle cx="181" cy="177" r="11" fill="#D99B73" />
         <rect x="146" y="149" width="48" height="60" rx="6" fill="#fff" transform="rotate(-8 146 149)" />
@@ -257,7 +255,7 @@ function App() {
           <div className="container">
             <SectionHeading eyebrow="یک روز واقعی، بدون آشفتگی" title="یک روز با آرته" text="تعمیرکار آرته کنار شماست؛ از لحظه‌ای که کرکره بالا می‌رود تا وقتی آخرین مشتری نظرش را ثبت می‌کند." />
             <div className="journey-layout">
-              <div className="journey-phone reveal"><PhoneShot compact src="/shots/track.webp" alt="لینک پیگیری مشتری: وضعیت وسیله و مسیر کار" /><Mechanic className="journey-mechanic" /></div>
+              <div className="journey-phone reveal"><PhoneShot compact src="/shots/track.webp" alt="لینک پیگیری مشتری: وسیله‌ی شما رنگ می‌گیرد و مرحله‌ی کار را نشان می‌دهد" /><Mechanic className="journey-mechanic" /></div>
               <div className="journey-list">
                 {journey.map((item, index) => (
                   <article className="journey-item reveal" key={item.time}>
