@@ -99,7 +99,8 @@ function journey(t: Track): { progress: number; tone: VehicleTone; step: { at: n
   if (s.key === "delivered") return { progress: 1, tone: "done", step: null };
   const at = t.stages ? t.stages.findIndex((x) => x.state === "current") + 1 : 0;
   const of = t.stages?.length ?? 0;
-  const progress = at > 0 && of > 0 ? at / of : s.key === "ready" ? 1 : 0;
+  // Ready for delivery: the work is finished, so the vehicle is fully coloured even though delivery is one step away.
+  const progress = s.key === "ready" ? 1 : at > 0 && of > 0 ? at / of : 0;
   const tone: VehicleTone = s.key === "ready" ? "done" : s.category === "waiting" || s.waitReason ? "waiting" : "going";
   return { progress, tone, step: at > 0 && of > 0 ? { at, of } : null };
 }

@@ -1573,26 +1573,14 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .tk-note strong { color: var(--accent); font-size: 0.95rem; line-height: 1.7; }
 .tk-note p { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.9; }
 
-.vp { --vp: var(--accent); display: flex; justify-content: center; padding: 6px 0 2px; }
-.vp.waiting { --vp: var(--fuel-1); }
-.vp.done { --vp: var(--success); }
-.vp.cancelled { --vp: var(--stage-gray); }
-.vp svg { width: 100%; max-width: 340px; height: auto; overflow: visible; filter: drop-shadow(0 10px 12px rgba(30, 58, 138, 0.25)); filter: drop-shadow(0 10px 12px color-mix(in srgb, var(--vp) 28%, transparent)); }
-.vp-b1 { stop-color: #ffffff; stop-color: color-mix(in srgb, var(--surface-2), #ffffff 60%); }
-.vp-b2 { stop-color: var(--surface-2); }
-.vp-body { stroke: var(--border-strong); stroke-width: 1.4; }
-.vp-roof { fill: #f4f7fc; fill: color-mix(in srgb, var(--surface-2), #ffffff 55%); fill-opacity: 0.9; }
-.vp-bed { fill: #e3e8f0; fill: color-mix(in srgb, var(--surface-2), #000000 10%); stroke: var(--border-strong); stroke-width: 1.5; }
-.vp-fill { fill-opacity: 0.88; transform-origin: 100% 50%; transform-box: view-box; transition: transform 1100ms cubic-bezier(0.23, 1, 0.32, 1); }
-.vp-f1 { stop-color: var(--vp); }
-.vp-f2 { stop-color: var(--vp); stop-color: color-mix(in srgb, var(--vp), #000000 32%); }
-.vp-sheen { fill: none; stroke: #ffffff; stroke-opacity: 0.55; stroke-width: 1.6; stroke-linecap: round; }
-.vp-lamp { fill: #ffe7a3; }
-.vp-tail { fill: #e5484d; }
-.vp-tyre { fill: #1b2230; stroke: var(--border-strong); stroke-width: 1; }
-.vp-rim { fill: none; stroke: #aeb8c9; stroke-width: 3; }
-.vp-hub { fill: #aeb8c9; }
-.vp-pipe { fill: #b6bfce; }
+.vp { --p1: #5476C9; --p2: #263F80; display: flex; justify-content: center; padding: 4px 0 0; }
+.vp.waiting { --p1: #F5A25D; --p2: #C2570C; }
+.vp.done { --p1: #4CC17A; --p2: #1F7A3D; }
+.vp.cancelled { --p1: #A3ACBA; --p2: #5B6472; }
+.vp svg { width: 100%; max-width: 440px; height: auto; overflow: visible; }
+.vp-p1 { stop-color: var(--p1); }
+.vp-p2 { stop-color: var(--p2); }
+.vp-fill { transform-box: view-box; transition: transform 1200ms cubic-bezier(0.23, 1, 0.32, 1); }
 @media (prefers-reduced-motion: reduce) { .vp-fill { transition: none; } }
 .tk-step-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 4px 0 18px; }
 .tk-step-stat strong { color: var(--text); font-size: 1.7rem; font-weight: 800; line-height: 1.3; }

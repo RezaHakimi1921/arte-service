@@ -1,69 +1,182 @@
 /**
- * Vehicle silhouettes for the customer tracking picture (see vehicleProgress.tsx). Cars, SUVs, vans and pickups are
- * drawn from above facing left; the motorcycle from the side. viewBox 340×150. Generated once, edited by hand after.
+ * Vehicle pictures for the customer tracking page (see vehicleProgress.tsx). Every vehicle is seen from above,
+ * facing left, in a 520×260 box and symmetrical about y = 130 (the motorcycle's exhaust excepted). The colour fill
+ * sweeps in from the rear (the right edge of `span`) and is clipped to `body`.
+ *
+ * Paint tokens: "@body" (white metal), "@glass" (dark glass), "@paint" (the progress colour).
  */
+export type Layer = { d: string; fill?: string; stroke?: string; sw?: number; op?: number; fillOp?: number; cap?: boolean };
+
 export type VehicleShape = {
-  /** Body outline: the colour fill is clipped to it. */
+  /** Left and right edge of the body, for the colour sweep. */
+  span: [number, number];
+  /** Scale about the picture's centre (a motorcycle is narrow and would look small next to a car). */
+  zoom?: number;
+  /** Outline: the base metal and the clip for the colour. */
   body: string;
-  /** Tyres, drawn under the body. */
-  tyres: string[];
-  glass?: string;
-  roof?: string;
-  /** Pickup load bed. */
-  bed?: string;
-  /** Thin highlight strokes. */
-  lines?: string;
-  lamps: string[];
-  tails: string[];
-  /** Motorcycle: round wheels drawn over the body, and the exhaust under it. */
-  wheels?: [number, number, number][];
-  pipe?: string;
+  /** Drawn first: tyres, forks, exhaust. */
+  under: Layer[];
+  /** Highlights painted inside the colour (clipped to the body, above the fill). */
+  paint: Layer[];
+  /** Drawn last: glass, mirrors, lamps, details. */
+  over: Layer[];
 };
 
-export const VEHICLE_SHAPES: Record<string, VehicleShape> = {
-  car: {
-    body: "M18 75 C18 56 24 42 46 37 C74 31 98 27 124 25 L246 25 C286 26 310 38 319 54 C322 62 323 70 323 75 C323 80 322 88 319 96 C310 112 286 124 246 125 L124 125 C98 123 74 119 46 113 C24 108 18 94 18 75 Z M114 28 L122 20 L130 23 L122 30 Z M114 122 L122 130 L130 127 L122 120 Z",
-    tyres: ["M71 15 H103 A7 7 0 0 1 110 22 V29 A7 7 0 0 1 103 36 H71 A7 7 0 0 1 64 29 V22 A7 7 0 0 1 71 15 Z", "M71 114 H103 A7 7 0 0 1 110 121 V128 A7 7 0 0 1 103 135 H71 A7 7 0 0 1 64 128 V121 A7 7 0 0 1 71 114 Z", "M243 15 H275 A7 7 0 0 1 282 22 V29 A7 7 0 0 1 275 36 H243 A7 7 0 0 1 236 29 V22 A7 7 0 0 1 243 15 Z", "M243 114 H275 A7 7 0 0 1 282 121 V128 A7 7 0 0 1 275 135 H243 A7 7 0 0 1 236 128 V121 A7 7 0 0 1 243 114 Z"],
-    glass: "M124 38 C106 44 100 58 98 75 C100 92 106 106 124 112 L236 113 C250 106 254 92 254 75 C254 58 250 44 236 37 Z",
-    roof: "M156 46 H192 A18 18 0 0 1 210 64 V86 A18 18 0 0 1 192 104 H156 A18 18 0 0 1 138 86 V64 A18 18 0 0 1 156 46 Z",
-    lines: "M98 37 C80 40 62 46 44 55 M98 113 C80 110 62 104 44 95 M28 66 L28 84",
-    lamps: ["M22 52 L42 47 L42 53 L25 60 Z", "M22 98 L42 103 L42 97 L25 90 Z"],
-    tails: ["M318 58 L322 63 L322 69 L316 65 Z", "M318 92 L322 87 L322 81 L316 85 Z"],
-  },
-  suv: {
-    body: "M16 75 C16 54 22 40 44 34 C72 28 98 22 122 20 L264 20 C302 21 320 32 323 48 C325 58 325 68 325 75 C325 82 325 92 323 102 C320 118 302 129 264 130 L122 130 C98 128 72 122 44 116 C22 110 16 96 16 75 Z M134 24 L142 16 L150 19 L142 26 Z M134 126 L142 134 L150 131 L142 124 Z",
-    tyres: ["M66 9 H102 A8 8 0 0 1 110 17 V25 A8 8 0 0 1 102 33 H66 A8 8 0 0 1 58 25 V17 A8 8 0 0 1 66 9 Z", "M66 117 H102 A8 8 0 0 1 110 125 V133 A8 8 0 0 1 102 141 H66 A8 8 0 0 1 58 133 V125 A8 8 0 0 1 66 117 Z", "M252 9 H288 A8 8 0 0 1 296 17 V25 A8 8 0 0 1 288 33 H252 A8 8 0 0 1 244 25 V17 A8 8 0 0 1 252 9 Z", "M252 117 H288 A8 8 0 0 1 296 125 V133 A8 8 0 0 1 288 141 H252 A8 8 0 0 1 244 133 V125 A8 8 0 0 1 252 117 Z"],
-    glass: "M146 34 C128 41 122 57 120 75 C122 93 128 109 146 116 L270 116 C282 108 286 92 286 75 C286 58 282 42 270 34 Z",
-    roof: "M170 42 H256 A14 14 0 0 1 270 56 V94 A14 14 0 0 1 256 108 H170 A14 14 0 0 1 156 94 V56 A14 14 0 0 1 170 42 Z",
-    lines: "M120 32 C92 36 66 42 42 51 M120 118 C92 114 66 108 42 99 M168 40 H262 M168 110 H262",
-    lamps: ["M20 50 L40 45 L40 51 L23 58 Z", "M20 100 L40 105 L40 99 L23 92 Z"],
-    tails: ["M320 52 L324 57 L324 63 L318 59 Z", "M320 98 L324 93 L324 87 L318 91 Z"],
-  },
-  van: {
-    body: "M18 75 C18 54 24 40 44 35 C60 31 72 27 86 26 L302 26 C317 26 323 33 323 46 L323 75 L323 104 C323 117 317 124 302 124 L86 124 C72 123 60 119 44 115 C24 110 18 96 18 75 Z M96 29 L104 21 L112 24 L104 31 Z M96 121 L104 129 L112 126 L104 119 Z",
-    tyres: ["M60 11 H92 A8 8 0 0 1 100 19 V26 A8 8 0 0 1 92 34 H60 A8 8 0 0 1 52 26 V19 A8 8 0 0 1 60 11 Z", "M60 116 H92 A8 8 0 0 1 100 124 V131 A8 8 0 0 1 92 139 H60 A8 8 0 0 1 52 131 V124 A8 8 0 0 1 60 116 Z", "M256 11 H288 A8 8 0 0 1 296 19 V26 A8 8 0 0 1 288 34 H256 A8 8 0 0 1 248 26 V19 A8 8 0 0 1 256 11 Z", "M256 116 H288 A8 8 0 0 1 296 124 V131 A8 8 0 0 1 288 139 H256 A8 8 0 0 1 248 131 V124 A8 8 0 0 1 256 116 Z"],
-    glass: "M86 38 C72 45 68 58 66 75 C68 92 72 105 86 112 L114 112 L114 38 Z",
-    roof: "M134 33 H304 A10 10 0 0 1 314 43 V107 A10 10 0 0 1 304 117 H134 A10 10 0 0 1 124 107 V43 A10 10 0 0 1 134 33 Z",
-    lines: "M134 45 H304 M134 105 H304 M134 75 H304 M42 62 L42 88",
-    lamps: ["M22 52 L42 47 L42 53 L25 60 Z", "M22 98 L42 103 L42 97 L25 90 Z"],
-    tails: ["M318 40 L322 45 L322 51 L316 47 Z", "M318 110 L322 105 L322 99 L316 103 Z"],
-  },
-  pickup: {
-    body: "M18 75 C18 56 24 42 44 37 C66 32 90 28 112 26 L312 26 C320 26 324 32 324 44 L324 75 L324 106 C324 118 320 124 312 124 L112 124 C90 122 66 118 44 113 C24 108 18 94 18 75 Z M124 29 L132 21 L140 24 L132 31 Z M124 121 L132 129 L140 126 L132 119 Z",
-    tyres: ["M66 13 H96 A8 8 0 0 1 104 21 V27 A8 8 0 0 1 96 35 H66 A8 8 0 0 1 58 27 V21 A8 8 0 0 1 66 13 Z", "M66 115 H96 A8 8 0 0 1 104 123 V129 A8 8 0 0 1 96 137 H66 A8 8 0 0 1 58 129 V123 A8 8 0 0 1 66 115 Z", "M250 13 H280 A8 8 0 0 1 288 21 V27 A8 8 0 0 1 280 35 H250 A8 8 0 0 1 242 27 V21 A8 8 0 0 1 250 13 Z", "M250 115 H280 A8 8 0 0 1 288 123 V129 A8 8 0 0 1 280 137 H250 A8 8 0 0 1 242 129 V123 A8 8 0 0 1 250 115 Z"],
-    glass: "M134 38 C120 44 116 58 114 75 C116 92 120 106 134 112 L178 112 L178 38 Z",
-    roof: "M194 44 H222 A10 10 0 0 1 232 54 V96 A10 10 0 0 1 222 106 H194 A10 10 0 0 1 184 96 V54 A10 10 0 0 1 194 44 Z",
-    bed: "M236 36 H306 A6 6 0 0 1 312 42 V108 A6 6 0 0 1 306 114 H236 A6 6 0 0 1 230 108 V42 A6 6 0 0 1 236 36 Z",
-    lines: "M112 36 C86 39 64 45 42 53 M112 114 C86 111 64 105 42 97",
-    lamps: ["M22 52 L42 47 L42 53 L25 60 Z", "M22 98 L42 103 L42 97 L25 90 Z"],
-    tails: ["M318 40 L322 45 L322 51 L316 47 Z", "M318 110 L322 105 L322 99 L316 103 Z"],
-  },
-  motorcycle: {
-    body: "M70 102 L98 46 L114 52 L86 106 Z M42 82 C46 62 70 52 98 62 L92 72 C72 66 56 72 54 86 Z M98 36 L126 30 L128 38 L104 46 Z M118 54 C136 40 176 38 198 48 L206 58 C186 64 150 68 126 68 C118 66 114 60 118 54 Z M200 50 C226 42 250 46 262 52 L270 58 C258 64 226 66 206 62 Z M262 52 L290 46 C297 46 300 52 298 56 L270 60 Z M138 72 L206 68 L216 92 L198 112 L150 112 L136 94 Z M206 96 L270 104 L270 114 L204 106 Z M96 46 A11 11 0 1 0 96.1 46 Z",
-    tyres: [],
-    lamps: [],
-    tails: [],
-    wheels: [[70, 108, 30], [272, 108, 30]],
-    pipe: "M150 112 L272 118 L284 124 L284 128 L150 120 Z",
-  },
+const H = 260;
+
+/** Mirror a path made of M/L/C/Q/Z commands top-to-bottom (y → 260 − y). */
+function flip(d: string): string {
+  let n = 0;
+  return d.replace(/[MLCQZ]|-?\d+(?:\.\d+)?/g, (t) => {
+    if (/[A-Z]/.test(t)) { n = 0; return t; }
+    return n++ % 2 === 1 ? String(H - Number(t)) : t;
+  });
+}
+const both = (d: string) => `${d} ${flip(d)}`;
+
+function rr(x: number, y: number, w: number, h: number, r: number) {
+  return `M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
+}
+/** A rounded rectangle and its mirror image. */
+const rrBoth = (x: number, y: number, w: number, h: number, r: number) => `${rr(x, y, w, h, r)} ${rr(x, H - y - h, w, h, r)}`;
+
+const TYRE = "#202938";
+const RIM = "#394354";
+const GLASS_EDGE = "#DCE3ED";
+const MIRROR: Pick<Layer, "fill" | "stroke" | "sw"> = { fill: "#DCE3EC", stroke: "#BFC9D8", sw: 1 };
+const LAMP = "#FDE68A";
+const TAIL = "#F05260";
+
+function wheels(xs: number[], y: number, w: number, h: number, r: number): Layer[] {
+  return [
+    { d: xs.map((x) => rrBoth(x, y, w, h, r)).join(" "), fill: TYRE },
+    { d: xs.map((x) => rrBoth(x + 6, y + 5, w - 12, h - 10, r - 3)).join(" "), fill: RIM },
+  ];
+}
+
+const glint = (d: string, op = 0.38): Layer => ({ d, stroke: "#FFFFFF", sw: 2, op, cap: true });
+
+/* ───────── car (sedan) ───────── */
+const CAR_BODY = "M105 130C108 98 137 78 182 67L246 55Q267 51 289 53L380 56C422 59 448 80 456 108L460 130L456 152C448 180 422 201 380 204L289 207Q267 209 246 205L182 193C137 182 108 162 105 130Z";
+const car: VehicleShape = {
+  span: [105, 460],
+  body: CAR_BODY,
+  under: wheels([143, 383], 39, 56, 46, 11),
+  paint: [
+    { d: "M250 58L380 61Q432 65 448 104", stroke: "#FFFFFF", sw: 3, op: 0.22 },
+    { d: "M393 78Q427 89 437 112L440 130L437 148Q427 171 393 182L383 173L383 87Z", fill: "#FFFFFF", fillOp: 0.055, stroke: "#FFFFFF", sw: 1, op: 0.12 },
+  ],
+  over: [
+    { d: "M221 78Q203 85 197 106L193 130L197 154Q203 175 221 182L270 182L270 78Z", fill: "@glass", stroke: "#F1F5F9", sw: 2 },
+    { d: "M244 76Q265 69 286 71L356 75Q374 77 381 96L385 130L381 164Q374 183 356 185L286 189Q265 191 244 184L226 165L222 130L226 95Z", fill: "@glass", stroke: GLASS_EDGE, sw: 2 },
+    glint("M251 83L356 84"), glint("M251 177L356 176", 0.25),
+    { d: both("M243 56L256 46L268 52L258 61Z"), ...MIRROR },
+    { d: both("M111 101L133 92L137 99L115 108Z"), fill: LAMP },
+    { d: both("M451 106L459 111L459 120L452 116Z"), fill: TAIL },
+    { d: both("M113 123L121 123"), stroke: "#9CA9B9", sw: 2, cap: true },
+    { d: "M127 94Q152 78 199 72", stroke: "#FFFFFF", sw: 2, op: 0.9, cap: true },
+    { d: "M127 166Q152 182 199 188", stroke: "#FFFFFF", sw: 2, op: 0.65, cap: true },
+  ],
 };
+
+/* ───────── SUV: taller, longer cabin, roof rails ───────── */
+const suv: VehicleShape = {
+  span: [100, 466],
+  body: "M100 130C103 96 134 74 180 63L240 51Q262 47 286 49L392 52C436 55 458 78 463 108L466 130L463 152C458 182 436 205 392 208L286 211Q262 213 240 209L180 197C134 186 103 164 100 130Z",
+  under: wheels([138, 386], 33, 62, 50, 12),
+  paint: [
+    { d: "M246 54L392 57Q440 61 456 102", stroke: "#FFFFFF", sw: 3, op: 0.22 },
+  ],
+  over: [
+    { d: "M238 72Q262 65 288 67L384 71Q408 73 415 96L419 130L415 164Q408 187 384 189L288 193Q262 195 238 188L220 168L216 130L220 94Z", fill: "#FFFFFF", fillOp: 0.12, stroke: "#FFFFFF", sw: 1.6, op: 0.55 },
+    { d: "M214 74Q196 82 190 104L186 130L190 156Q196 178 214 186L262 186L262 74Z", fill: "@glass", stroke: "#F1F5F9", sw: 2 },
+    { d: "M278 88L368 90Q386 92 388 108L390 130L388 152Q386 168 368 170L278 172Q264 170 262 154L260 130L262 106Q264 90 278 88Z", fill: "@glass", stroke: GLASS_EDGE, sw: 2 },
+    glint("M272 96L364 98"), glint("M272 164L364 162", 0.25),
+    { d: "M398 86Q410 92 412 108L414 130L412 152Q410 168 398 174Z", fill: "@glass", stroke: GLASS_EDGE, sw: 1.6 },
+    { d: both("M242 60L396 62"), stroke: "#8995A8", sw: 3, cap: true },
+    { d: both("M234 52L248 41L261 48L251 58Z"), ...MIRROR },
+    { d: both("M106 100L130 90L134 98L110 108Z"), fill: LAMP },
+    { d: both("M456 104L464 109L464 119L457 114Z"), fill: TAIL },
+    { d: both("M108 122L117 122"), stroke: "#9CA9B9", sw: 2, cap: true },
+    { d: "M124 92Q150 76 196 70", stroke: "#FFFFFF", sw: 2, op: 0.9, cap: true },
+    { d: "M124 168Q150 184 196 190", stroke: "#FFFFFF", sw: 2, op: 0.65, cap: true },
+  ],
+};
+
+/* ───────── van: short nose, long box, ribbed roof ───────── */
+const van: VehicleShape = {
+  span: [108, 472],
+  body: "M108 130C110 100 132 80 170 72L216 63Q232 60 248 60L440 60C458 60 468 72 470 92L472 130L470 168C468 188 458 200 440 200L248 200Q232 200 216 197L170 188C132 180 110 160 108 130Z",
+  under: wheels([148, 392], 43, 58, 46, 11),
+  paint: [
+    { d: "M250 64L438 64Q460 66 464 94", stroke: "#FFFFFF", sw: 3, op: 0.2 },
+  ],
+  over: [
+    { d: "M196 78Q180 86 176 106L173 130L176 154Q180 174 196 182L232 182L232 78Z", fill: "@glass", stroke: "#F1F5F9", sw: 2 },
+    { d: "M244 76L440 76Q456 76 458 92L460 130L458 168Q456 184 440 184L244 184Z", fill: "#FFFFFF", fillOp: 0.1, stroke: "#FFFFFF", sw: 1.6, op: 0.55 },
+    { d: "M258 100L446 100M258 130L446 130M258 160L446 160", stroke: "#FFFFFF", sw: 2, op: 0.4, cap: true },
+    glint("M184 88L226 88"),
+    { d: both("M188 62L200 50L211 56L203 66Z"), ...MIRROR },
+    { d: both("M114 102L136 94L140 101L118 109Z"), fill: LAMP },
+    { d: both("M464 80L470 84L470 94L465 90Z"), fill: TAIL },
+    { d: both("M116 124L124 124"), stroke: "#9CA9B9", sw: 2, cap: true },
+    { d: "M132 96Q154 82 192 76", stroke: "#FFFFFF", sw: 2, op: 0.9, cap: true },
+    { d: "M132 164Q154 178 192 184", stroke: "#FFFFFF", sw: 2, op: 0.65, cap: true },
+  ],
+};
+
+/* ───────── pickup: cab and an open load bed ───────── */
+const pickup: VehicleShape = {
+  span: [104, 468],
+  body: "M104 130C107 98 134 78 176 68L236 56Q256 52 276 54L440 56C456 56 464 66 466 84L468 130L466 176C464 194 456 204 440 204L276 206Q256 208 236 204L176 192C134 182 107 162 104 130Z",
+  under: wheels([140, 386], 39, 58, 46, 11),
+  paint: [
+    { d: "M240 58L330 59", stroke: "#FFFFFF", sw: 3, op: 0.22 },
+  ],
+  over: [
+    { d: "M214 78Q198 86 192 106L189 130L192 154Q198 174 214 182L250 182L250 78Z", fill: "@glass", stroke: "#F1F5F9", sw: 2 },
+    { d: "M260 78L300 78Q314 80 316 96L318 130L316 164Q314 180 300 182L260 182Z", fill: "@glass", stroke: GLASS_EDGE, sw: 2 },
+    glint("M266 85L304 85"),
+    // load bed: dark liner with ribs
+    { d: "M332 72L436 72Q448 72 449 86L451 130L449 174Q448 188 436 188L332 188Z", fill: "#0F172A", fillOp: 0.42, stroke: "#FFFFFF", sw: 1.6, op: 0.5 },
+    { d: "M350 80L350 180M372 80L372 180M394 80L394 180M416 80L416 180", stroke: "#FFFFFF", sw: 2, op: 0.18 },
+    { d: both("M226 58L239 47L251 53L241 63Z"), ...MIRROR },
+    { d: both("M110 101L132 92L136 99L114 108Z"), fill: LAMP },
+    { d: both("M460 80L466 84L466 94L461 90Z"), fill: TAIL },
+    { d: both("M112 123L120 123"), stroke: "#9CA9B9", sw: 2, cap: true },
+    { d: "M128 94Q152 80 196 73", stroke: "#FFFFFF", sw: 2, op: 0.9, cap: true },
+    { d: "M128 166Q152 180 196 187", stroke: "#FFFFFF", sw: 2, op: 0.65, cap: true },
+  ],
+};
+
+/* ───────── motorcycle, from above: fender, tank, seat, tail, handlebar, exhaust ───────── */
+const MOTO_TANK = "M250 116C258 98 296 92 332 102C348 107 352 118 352 130C352 142 348 153 332 158C296 168 258 162 250 144Z";
+const motorcycle: VehicleShape = {
+  span: [112, 462],
+  zoom: 1.2,
+  body: `${rr(112, 119, 80, 22, 11)} ${MOTO_TANK} M414 117L458 120Q463 130 458 140L414 143Z`,
+  under: [
+    { d: `${rr(104, 114, 68, 32, 14)} ${rr(388, 113, 72, 34, 15)}`, fill: TYRE },
+    { d: `${rr(110, 119, 56, 22, 10)} ${rr(394, 118, 60, 24, 11)}`, fill: RIM },
+    { d: "M168 123L236 123M168 137L236 137", stroke: "#9AA6B8", sw: 5, cap: true },
+    { d: rr(190, 120, 66, 20, 7), fill: "#CBD5E1", stroke: "#B3BFD0", sw: 1 },
+    { d: "M300 170L440 167", stroke: "#AEB8C9", sw: 10, cap: true },
+    { d: "M436 166.5L448 166", stroke: "#475569", sw: 10, cap: true },
+  ],
+  paint: [
+    { d: "M262 112Q300 102 338 110", stroke: "#FFFFFF", sw: 3, op: 0.3 },
+  ],
+  over: [
+    { d: "M340 109C364 103 398 103 420 111Q428 130 420 149C398 157 364 157 340 151Q334 130 340 109Z", fill: "#263041", stroke: "#475569", sw: 1.4 },
+    { d: "M352 112Q384 107 414 114", stroke: "#FFFFFF", sw: 2, op: 0.22, cap: true },
+    { d: rr(228, 112, 22, 36, 9), fill: "#394354" },
+    { d: "M222 70Q244 80 244 130Q244 180 222 190", stroke: "#2B3444", sw: 7, cap: true },
+    { d: both("M222 70L208 64"), stroke: "#111827", sw: 10, cap: true },
+    { d: both("M232 78L226 54"), stroke: "#64748B", sw: 3, cap: true },
+    { d: both("M214 50Q216 42 230 42Q242 44 240 54Q234 60 220 58Q214 56 214 50Z"), ...MIRROR },
+    { d: "M105 125L112 124L112 136L105 135Z", fill: LAMP },
+    { d: "M456 123L462 125L462 135L456 137Z", fill: TAIL },
+  ],
+};
+
+export const VEHICLE_SHAPES: Record<string, VehicleShape> = { car, suv, van, pickup, motorcycle };
