@@ -13,6 +13,8 @@ type Track = {
   case: {
     customer: string | null; openedAt: string; promisedAt: string | null; closedAt: string | null; warrantyUntil: string | null;
     vehicle: { title: string; kind: string; identifier: string | null } | null; reportedProblems: string[]; requestedServices: string[];
+    /** Services at intake against now: kept, taken off ("removed") or put on after intake ("added"). */
+    serviceChanges?: { title: string; state: "kept" | "removed" | "added" }[];
   };
   status: { name: string; key: string; category: string; waitReason: string | null; stageEnteredAt: string };
   stages: { name: string; key: string; state: "done" | "current" | "todo"; at: string | null }[] | null;
@@ -20,7 +22,7 @@ type Track = {
   money: { totalRials: number; paidRials: number; balanceRials: number } | null;
 };
 
-type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet";
+type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "plus" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -29,6 +31,7 @@ function Icon({ name }: { name: IconName }) {
     car: <><path d="m5 11 1.5-4h11l1.5 4M3 11h18v7H3z" /><path d="M5 18v2M19 18v2M6.5 15h.01M17.5 15h.01" /></>,
     moto: <path d="M5 17a3 3 0 1 0 0-.01M19 17a3 3 0 1 0 0-.01M5 17l4-7h5l5 7M12 10l-2-4H7M15 6h3" />,
     check: <path d="m5 12 4 4L19 6" />,
+    plus: <path d="M12 5v14M5 12h14" />,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     close: <path d="M6 6l12 12M18 6 6 18" />,
     document: <><path d="M6 2h8l4 4v16H6z" /><path d="M14 2v5h5M9 12h6M9 16h6" /></>,
@@ -294,7 +297,8 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
   const vehicleIcon: IconName = t.case.vehicle?.kind === "motorcycle" ? "moto" : "car";
   const photoUrl = (id: string) => `/api/v1/track/${code}/photos/${id}`;
   const problems = t.case.reportedProblems;
-  const services = t.case.requestedServices;
+  const services = t.case.serviceChanges ?? t.case.requestedServices.map((title) => ({ title, state: "kept" as const }));
+  const hasChanges = services.some((x) => x.state !== "kept");
   const shownProblems = requestsOpen ? problems : problems.slice(0, 3);
   const hasMore = problems.length > 3;
 
@@ -362,7 +366,21 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
               {services.length > 0 && (
                 <div>
                   <span className="tk-list-label">خدمات درخواستی</span>
-                  <ul>{services.map((s) => <li key={s}>{s}</li>)}</ul>
+                  <ul>
+                    {services.map((x) => (
+                      <li key={x.title} className={x.state === "kept" ? undefined : `svc-${x.state}`}>
+                        {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del><span className="tk-sr">، حذف شد</span></>}
+                        {x.state === "added" && <><Icon name="plus" />{x.title}<span className="tk-sr">، اضافه شد</span></>}
+                        {x.state === "kept" && x.title}
+                      </li>
+                    ))}
+                  </ul>
+                  {hasChanges && (
+                    <p className="svc-legend">
+                      <span className="svc-removed"><Icon name="close" />حذف‌شده</span>
+                      <span className="svc-added"><Icon name="plus" />اضافه‌شده بعد از پذیرش</span>
+                    </p>
+                  )}
                 </div>
               )}
             </div>

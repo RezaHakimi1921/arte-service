@@ -71,6 +71,29 @@ public sealed class TrackingTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task The_customer_sees_which_services_were_removed_and_which_were_added_after_intake()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var id = (await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(), customerName = "سیما کریمی", requestedServices = new[] { "تعویض روغن", "ترمز" },
+            newAsset = new { title = "هوندا CG 125", kind = "motorcycle" },
+        }))).GetProperty("id").GetGuid();
+        var code = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("trackingCode").GetString()!;
+
+        var before = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        Assert.All(before.GetProperty("case").GetProperty("serviceChanges").EnumerateArray(), x => Assert.Equal("kept", x.GetProperty("state").GetString()));
+
+        // The shop drops one service and adds another.
+        await Json(await owner.PatchAsJsonAsync($"/api/v1/cases/{id}", new { requestedServices = new[] { "ترمز", "تنظیم زنجیر" } }));
+        var after = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        var changes = after.GetProperty("case").GetProperty("serviceChanges").EnumerateArray()
+            .Select(x => $"{x.GetProperty("title").GetString()}:{x.GetProperty("state").GetString()}").ToList();
+        Assert.Equal(new[] { "تعویض روغن:removed", "ترمز:kept", "تنظیم زنجیر:added" }, changes);
+        Assert.Equal(2, after.GetProperty("case").GetProperty("requestedServices").GetArrayLength());   // the current list is unchanged
+    }
+
+    [Fact]
     public async Task Business_settings_decide_what_the_customer_sees()
     {
         var (owner, _) = await api.NewBusinessAsync();

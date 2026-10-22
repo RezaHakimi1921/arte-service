@@ -1567,6 +1567,16 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .tk-list-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 0.8rem; font-weight: 600; }
 .tk-requests ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .tk-requests li { padding: 6px 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 0.85rem; line-height: 1.6; }
+.tk-requests li svg { width: 14px; height: 14px; margin-inline-end: 5px; vertical-align: -2px; stroke-width: 2.4; }
+.tk-requests li.svc-removed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--bad-bg); }
+.tk-requests li.svc-removed del { text-decoration-thickness: 1.5px; }
+.tk-requests li.svc-added { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); background: var(--good-bg); font-weight: 700; }
+.svc-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; color: var(--muted); font-size: 0.78rem; }
+.svc-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.svc-legend svg { width: 13px; height: 13px; stroke-width: 2.6; }
+.svc-legend .svc-removed { color: var(--danger); }
+.svc-legend .svc-added { color: var(--success); }
+.tk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tk-expand { width: 100%; min-height: 44px; margin-top: 14px; border: 0; color: var(--accent); border-radius: 12px; background: var(--accent-soft); font-size: 0.85rem; font-weight: 700; }
 
 .tk-note { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; padding: 14px; border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 14px; background: var(--accent-soft); }

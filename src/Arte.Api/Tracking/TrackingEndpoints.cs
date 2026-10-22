@@ -19,6 +19,29 @@ public static class TrackingEndpoints
     private const string InternalStageKey = "review";
 
     /// <summary>Tracking codes are 6–16 lower-case letters and digits; anything else is not looked up.</summary>
+    /// <summary>The services written on the case when it was opened (null when the opening event is missing).</summary>
+    private static string[]? IntakeServices(System.Text.Json.JsonDocument? opened) =>
+        opened?.RootElement.TryGetProperty("requestedServices", out var list) == true && list.ValueKind == System.Text.Json.JsonValueKind.Array
+            ? list.EnumerateArray().Select(x => x.GetString()).OfType<string>().ToArray()
+            : null;
+
+    /// <summary>
+    /// Services in intake order, then the ones added later. State: "kept", "removed" (asked for at intake, no longer on
+    /// the case) or "added" (put on the case after intake). Without an intake record every service counts as kept.
+    /// </summary>
+    internal static List<object> ServiceChanges(string[]? intake, string[] now)
+    {
+        var current = new HashSet<string>(now, StringComparer.Ordinal);
+        var result = new List<object>();
+        if (intake is null) return now.Select(t => (object)new { Title = t, State = "kept" }).ToList();
+        var asked = new HashSet<string>(intake, StringComparer.Ordinal);
+        foreach (var title in intake.Distinct(StringComparer.Ordinal))
+            result.Add(new { Title = title, State = current.Contains(title) ? "kept" : "removed" });
+        foreach (var title in now.Distinct(StringComparer.Ordinal).Where(t => !asked.Contains(t)))
+            result.Add(new { Title = title, State = "added" });
+        return result;
+    }
+
     public static bool ValidCode(string code) =>
         code.Length is >= 6 and <= 16 && code.All(ch => char.IsAsciiLetterLower(ch) || char.IsAsciiDigit(ch));
 
@@ -51,6 +74,13 @@ public static class TrackingEndpoints
             var shown = current.Key == InternalStageKey
                 ? stages.Where(s => s.Order < current.Order && s.Key != InternalStageKey).OrderByDescending(s => s.Order).FirstOrDefault() ?? current
                 : current;
+
+            // What the customer asked for at intake against what is on the case now, like a diff: a service taken off
+            // is shown struck through, one added after intake is shown as new. Read from the opening event, so there is
+            // no extra data to keep.
+            var openedData = await db.CaseEvents.AsNoTracking().Where(e => e.CaseId == c.Id && e.Type == CaseEventTypes.Opened)
+                .OrderBy(e => e.Id).Select(e => e.Data).FirstOrDefaultAsync(ct);
+            var serviceChanges = ServiceChanges(IntakeServices(openedData), c.RequestedServices);
 
             object? timeline = null;
             if (t.TrackShowStages)
@@ -120,7 +150,7 @@ public static class TrackingEndpoints
                 {
                     Customer = customer.FullName, c.OpenedAt, c.PromisedAt, c.ClosedAt, c.WarrantyUntil,
                     Vehicle = asset is null ? null : new { asset.Title, asset.Kind, asset.Identifier },
-                    c.ReportedProblems, c.RequestedServices,
+                    c.ReportedProblems, c.RequestedServices, ServiceChanges = serviceChanges,
                 },
                 Status = new { shown.Name, shown.Key, shown.Category, c.WaitReason, c.StageEnteredAt },
                 Stages = timeline,
