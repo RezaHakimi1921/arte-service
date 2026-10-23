@@ -1563,27 +1563,28 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .tk-section-title h2 { margin: 0; font-size: 1.05rem; font-weight: 800; }
 .tk-count { margin-inline-start: auto; padding: 4px 10px; color: var(--muted); border-radius: 999px; background: var(--surface-2); font-size: 0.8rem; }
 
-.tk-requests { display: flex; flex-direction: column; gap: 14px; }
-.tk-list-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 0.8rem; font-weight: 600; }
-.tk-requests ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.tk-requests li { padding: 6px 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 0.85rem; line-height: 1.6; }
-.tk-requests li svg { width: 14px; height: 14px; margin-inline-end: 5px; vertical-align: -2px; stroke-width: 2.4; }
-.tk-requests li.svc-removed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--bad-bg); }
-.tk-requests li.svc-removed del { text-decoration-thickness: 1.5px; }
-.tk-requests li.svc-added { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); background: var(--good-bg); font-weight: 700; }
-\.svc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.tk-requests { display: flex; flex-direction: column; gap: 18px; }
+.tk-requests > div + div { padding-top: 16px; border-top: 1px solid var(--border); }
+.tk-list-label { display: block; margin-bottom: 10px; color: var(--muted); font-size: 0.8rem; font-weight: 700; }
+.svc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .svc-head .tk-list-label { margin: 0; }
-.svc-pills { display: inline-flex; gap: 5px; flex-wrap: wrap; }
-.svc-pill { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
-.svc-pill svg { width: 11px; height: 11px; stroke-width: 2.8; }
-.svc-pill-added { color: var(--success); background: var(--good-bg); border-color: transparent; }
-.svc-pill-removed { color: var(--danger); background: var(--bad-bg); border-color: transparent; }
-.svc-more { display: block; margin-top: 6px; color: var(--muted); font-size: 0.78rem; }
-
-
-
-
-
+.svc-pills { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.svc-pill { padding: 3px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+.svc-pill-added { color: var(--success); background: var(--good-bg); }
+.svc-pill-removed { color: var(--danger); background: var(--bad-bg); }
+.tk-requests ul { display: flex; margin: 0; padding: 0; list-style: none; }
+.svc-tags { flex-wrap: wrap; gap: 8px; }
+.svc-rows { flex-direction: column; gap: 8px; }
+.tk-requests li { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: var(--surface-2); font-size: 0.85rem; font-weight: 500; line-height: 1.6; }
+.svc-tags li { padding: 7px 13px; border-radius: 24px; }
+.svc-rows li { padding: 11px 13px; border-radius: 12px; font-size: 0.9rem; }
+.svc-mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--muted) 25%, transparent); color: var(--muted); font-size: 0.8rem; font-weight: 800; line-height: 1; }
+.tk-requests li.svc-added { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, transparent); background: var(--good-bg); }
+.tk-requests li.svc-added .svc-mark { background: var(--success); color: #fff; }
+.tk-requests li.svc-removed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--bad-bg); }
+.tk-requests li.svc-removed .svc-mark { background: var(--danger); color: #fff; }
+.tk-requests li.svc-removed del { text-decoration-thickness: 1.5px; }
+.svc-more { display: block; margin-top: 8px; color: var(--muted); font-size: 0.78rem; }
 .tk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tk-expand { width: 100%; min-height: 44px; margin-top: 14px; border: 0; color: var(--accent); border-radius: 12px; background: var(--accent-soft); font-size: 0.85rem; font-weight: 700; }
 

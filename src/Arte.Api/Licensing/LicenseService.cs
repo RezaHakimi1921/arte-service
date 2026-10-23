@@ -24,7 +24,7 @@ public static class LicenseService
     public static License Trial(Guid tenantId, DateTimeOffset now) => new()
     {
         TenantId = tenantId, Kind = LicenseKinds.Trial, StartsAt = now, EndsAt = now.AddDays(LicensePolicy.TrialDays),
-        Note = "دوره‌ی رایگان ثبت‌نام", CreatedAt = now,
+        Note = "دوره‌ی رایگان ثبت‌نام (شامل نظرسنجی مشتریان)", CreatedAt = now,
     };
 
     /// <summary>

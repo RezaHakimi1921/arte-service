@@ -67,38 +67,40 @@ function Section({ icon, eyebrow, title, action, children }: { icon: IconName; e
   );
 }
 
-/** One request list: a header with count pills (current / added / removed) and one compact flow of chips, changed ones first. */
-function ChangeList({ label, items, open }: { label: string; items: Change[]; open: boolean }) {
+/** One request list: count badges, then pill tags (problems) or full-width rows (services), changed ones first. */
+function ChangeList({ label, items, open, rows }: { label: string; items: Change[]; open: boolean; rows?: boolean }) {
   const count = (state: Change["state"]) => items.filter((x) => x.state === state).length;
   const changed = items.some((x) => x.state !== "kept");
   const rank = { added: 0, removed: 1, kept: 2 } as const;
   const sorted = changed ? [...items].sort((a, b) => rank[a.state] - rank[b.state]) : items;
   let keptSeen = 0;
   const visible = open ? sorted : sorted.filter((x) => x.state !== "kept" || ++keptSeen <= 3);
-  const pills: { state: Change["state"]; text: string }[] = [
+  const badges: { state: Change["state"]; text: string }[] = [
     { state: "kept", text: "فعلی" }, { state: "added", text: "اضافه" }, { state: "removed", text: "حذف" },
   ];
+  const mark = (state: Change["state"]) => (
+    <span className="svc-mark" aria-hidden="true">{state === "added" ? "+" : state === "removed" ? "×" : "•"}</span>
+  );
   return (
-    <div>
+    <div className="svc-block">
       <div className="svc-head">
         <span className="tk-list-label">{label}</span>
         {changed && (
           <span className="svc-pills">
-            {pills.map(({ state, text }) => count(state) > 0 && (
+            {badges.map(({ state, text }) => count(state) > 0 && (
               <span key={state} className={`svc-pill svc-pill-${state}`}>
-                {state === "added" && <Icon name="plus" />}{state === "removed" && <Icon name="close" />}
-                {text} {formatNumber(count(state))}
+                {state === "added" ? "+ " : state === "removed" ? "× " : ""}{text} {formatNumber(count(state))}
               </span>
             ))}
           </span>
         )}
       </div>
-      <ul>
+      <ul className={rows ? "svc-rows" : "svc-tags"}>
         {visible.map((x) => (
-          <li key={x.title} className={x.state === "kept" ? undefined : `svc-${x.state}`}>
-            {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del><span className="tk-sr">، حذف شد</span></>}
-            {x.state === "added" && <><Icon name="plus" />{x.title}<span className="tk-sr">، اضافه شد</span></>}
-            {x.state === "kept" && x.title}
+          <li key={x.title} className={`svc-${x.state}`}>
+            {mark(x.state)}
+            {x.state === "removed" ? <del>{x.title}</del> : <span>{x.title}</span>}
+            {x.state !== "kept" && <span className="tk-sr">{x.state === "added" ? "، اضافه شد" : "، حذف شد"}</span>}
           </li>
         ))}
       </ul>
@@ -402,7 +404,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">
             <div className="tk-requests">
               {problems.length > 0 && <ChangeList label="ایرادهای گزارش‌شده" items={problems} open={requestsOpen} />}
-              {services.length > 0 && <ChangeList label="خدمات درخواستی" items={services} open={requestsOpen} />}
+              {services.length > 0 && <ChangeList label="خدمات درخواستی" items={services} open={requestsOpen} rows />}
             </div>
             {tooLong && (
               <button className="tk-expand" type="button" onClick={() => setRequestsOpen(!requestsOpen)} aria-expanded={requestsOpen}>

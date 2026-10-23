@@ -177,6 +177,8 @@ public static class TenantEndpoints
             Name = name, Phone = phone, Vertical = WorkflowTemplates.MotorcycleRepair, CreatedAt = clock.UtcNow,
             BusinessType = businessType, VehicleKinds = BusinessTypes.DefaultVehicleKinds(businessType),
             OrganizationId = organizationId,
+            // The free 14-day licence includes the customer survey; the platform admin can still switch it.
+            SurveyEnabled = true,
         };
         sp.GetRequiredService<TenantContext>().Set(tenant.Id);
 

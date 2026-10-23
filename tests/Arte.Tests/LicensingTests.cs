@@ -47,6 +47,7 @@ public sealed class LicensingTests(ArteApiFactory api)
         Assert.Equal("active", license.GetProperty("state").GetString());
         Assert.Equal("trial", license.GetProperty("kind").GetString());
         Assert.Equal(14, license.GetProperty("daysLeft").GetInt32());
+        Assert.True((await Me(owner)).GetProperty("business").GetProperty("surveyEnabled").GetBoolean());
 
         var mine = await Json(await owner.GetAsync("/api/v1/license"));
         var plans = mine.GetProperty("plans").EnumerateArray().ToList();
