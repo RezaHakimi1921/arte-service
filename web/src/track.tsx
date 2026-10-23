@@ -4,6 +4,8 @@ import { applyTheme } from "./App";
 import { WAIT_REASONS } from "./labels";
 import { formatNumber } from "./ui";
 
+type Change = { title: string; state: "kept" | "removed" | "added" };
+
 type Survey = { state: "open" | "answered" | "expired"; questions: { id: string; text: string }[] | null; score: number | null };
 
 type Track = {
@@ -14,7 +16,9 @@ type Track = {
     customer: string | null; openedAt: string; promisedAt: string | null; closedAt: string | null; warrantyUntil: string | null;
     vehicle: { title: string; kind: string; identifier: string | null } | null; reportedProblems: string[]; requestedServices: string[];
     /** Services at intake against now: kept, taken off ("removed") or put on after intake ("added"). */
-    serviceChanges?: { title: string; state: "kept" | "removed" | "added" }[];
+    serviceChanges?: Change[];
+    /** The same for the reported problems. */
+    problemChanges?: Change[];
   };
   status: { name: string; key: string; category: string; waitReason: string | null; stageEnteredAt: string };
   stages: { name: string; key: string; state: "done" | "current" | "todo"; at: string | null }[] | null;
@@ -60,6 +64,21 @@ function Section({ icon, eyebrow, title, action, children }: { icon: IconName; e
       </div>
       {children}
     </section>
+  );
+}
+
+/** Chips for one request list: removed ones struck through in red (×), added ones in green (+), the rest plain. */
+function ChangeList({ items }: { items: Change[] }) {
+  return (
+    <ul>
+      {items.map((x) => (
+        <li key={x.title} className={x.state === "kept" ? undefined : `svc-${x.state}`}>
+          {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del><span className="tk-sr">، حذف شد</span></>}
+          {x.state === "added" && <><Icon name="plus" />{x.title}<span className="tk-sr">، اضافه شد</span></>}
+          {x.state === "kept" && x.title}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -296,11 +315,14 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
   const n = now(t);
   const vehicleIcon: IconName = t.case.vehicle?.kind === "motorcycle" ? "moto" : "car";
   const photoUrl = (id: string) => `/api/v1/track/${code}/photos/${id}`;
-  const problems = t.case.reportedProblems;
-  const services = t.case.serviceChanges ?? t.case.requestedServices.map((title) => ({ title, state: "kept" as const }));
-  const hasChanges = services.some((x) => x.state !== "kept");
-  const shownProblems = requestsOpen ? problems : problems.slice(0, 3);
-  const hasMore = problems.length > 3;
+  const asList = (changes: Change[] | undefined, current: string[]): Change[] => changes ?? current.map((title) => ({ title, state: "kept" as const }));
+  const problems = asList(t.case.problemChanges, t.case.reportedProblems);
+  const services = asList(t.case.serviceChanges, t.case.requestedServices);
+  const hasChanges = [...problems, ...services].some((x) => x.state !== "kept");
+  // Collapsed, only the first three unchanged problems show; anything removed or added always shows.
+  let keptSeen = 0;
+  const shownProblems = requestsOpen ? problems : problems.filter((x) => x.state !== "kept" || ++keptSeen <= 3);
+  const hasMore = shownProblems.length < problems.length;
 
   return (
     <main className="tk-page">
@@ -360,33 +382,25 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
               {problems.length > 0 && (
                 <div>
                   <span className="tk-list-label">ایرادهای گزارش‌شده</span>
-                  <ul>{shownProblems.map((p) => <li key={p}>{p}</li>)}</ul>
+                  <ChangeList items={shownProblems} />
                 </div>
               )}
               {services.length > 0 && (
                 <div>
                   <span className="tk-list-label">خدمات درخواستی</span>
-                  <ul>
-                    {services.map((x) => (
-                      <li key={x.title} className={x.state === "kept" ? undefined : `svc-${x.state}`}>
-                        {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del><span className="tk-sr">، حذف شد</span></>}
-                        {x.state === "added" && <><Icon name="plus" />{x.title}<span className="tk-sr">، اضافه شد</span></>}
-                        {x.state === "kept" && x.title}
-                      </li>
-                    ))}
-                  </ul>
-                  {hasChanges && (
-                    <p className="svc-legend">
-                      <span className="svc-removed"><Icon name="close" />حذف‌شده</span>
-                      <span className="svc-added"><Icon name="plus" />اضافه‌شده بعد از پذیرش</span>
-                    </p>
-                  )}
+                  <ChangeList items={services} />
                 </div>
               )}
+              {hasChanges && (
+                <p className="svc-legend">
+                  <span className="svc-removed"><Icon name="close" />حذف‌شده</span>
+                  <span className="svc-added"><Icon name="plus" />اضافه‌شده بعد از پذیرش</span>
+                </p>
+              )}
             </div>
-            {hasMore && (
+            {(hasMore || (requestsOpen && problems.length > 3)) && (
               <button className="tk-expand" type="button" onClick={() => setRequestsOpen(!requestsOpen)} aria-expanded={requestsOpen}>
-                {requestsOpen ? "نمایش کمتر" : `نمایش همه (${formatNumber(problems.length)} ایراد)`}
+                {requestsOpen ? "نمایش کمتر" : `نمایش همه (${formatNumber(problems.filter((x) => x.state !== "removed").length)} ایراد)`}
               </button>
             )}
           </Section>

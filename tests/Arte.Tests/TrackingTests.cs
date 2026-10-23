@@ -77,6 +77,7 @@ public sealed class TrackingTests(ArteApiFactory api)
         var id = (await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
         {
             mobile = ArteApiFactory.NewMobile(), customerName = "سیما کریمی", requestedServices = new[] { "تعویض روغن", "ترمز" },
+            reportedProblems = new[] { "روشن نمی‌شود" },
             newAsset = new { title = "هوندا CG 125", kind = "motorcycle" },
         }))).GetProperty("id").GetGuid();
         var code = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("trackingCode").GetString()!;
@@ -85,12 +86,16 @@ public sealed class TrackingTests(ArteApiFactory api)
         Assert.All(before.GetProperty("case").GetProperty("serviceChanges").EnumerateArray(), x => Assert.Equal("kept", x.GetProperty("state").GetString()));
 
         // The shop drops one service and adds another.
-        await Json(await owner.PatchAsJsonAsync($"/api/v1/cases/{id}", new { requestedServices = new[] { "ترمز", "تنظیم زنجیر" } }));
+        await Json(await owner.PatchAsJsonAsync($"/api/v1/cases/{id}", new { requestedServices = new[] { "ترمز", "تنظیم زنجیر" }, reportedProblems = new[] { "روشن نمی‌شود", "صدای غیرعادی" } }));
         var after = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
         var changes = after.GetProperty("case").GetProperty("serviceChanges").EnumerateArray()
             .Select(x => $"{x.GetProperty("title").GetString()}:{x.GetProperty("state").GetString()}").ToList();
         Assert.Equal(new[] { "تعویض روغن:removed", "ترمز:kept", "تنظیم زنجیر:added" }, changes);
         Assert.Equal(2, after.GetProperty("case").GetProperty("requestedServices").GetArrayLength());   // the current list is unchanged
+        // Reported problems follow the same rule.
+        var problems = after.GetProperty("case").GetProperty("problemChanges").EnumerateArray()
+            .Select(x => $"{x.GetProperty("title").GetString()}:{x.GetProperty("state").GetString()}").ToList();
+        Assert.Equal(new[] { "روشن نمی‌شود:kept", "صدای غیرعادی:added" }, problems);
     }
 
     [Fact]
