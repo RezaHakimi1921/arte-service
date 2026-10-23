@@ -67,37 +67,43 @@ function Section({ icon, eyebrow, title, action, children }: { icon: IconName; e
   );
 }
 
-/** One request list. Unchanged lists are plain chips; once something changed after intake it is split into three labelled groups. */
-function ChangeList({ items }: { items: Change[] }) {
-  const chips = (list: Change[]) => (
-    <ul>
-      {list.map((x) => (
-        <li key={x.title} className={x.state === "kept" ? undefined : `svc-${x.state}`}>
-          {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del></>}
-          {x.state === "added" && <><Icon name="plus" />{x.title}</>}
-          {x.state === "kept" && x.title}
-        </li>
-      ))}
-    </ul>
-  );
-  if (items.every((x) => x.state === "kept")) return chips(items);
-  const groups: { state: Change["state"]; label: string }[] = [
-    { state: "kept", label: "فعلی" },
-    { state: "added", label: "اضافه‌شده بعد از پذیرش" },
-    { state: "removed", label: "حذف‌شده بعد از پذیرش" },
+/** One request list: a header with count pills (current / added / removed) and one compact flow of chips, changed ones first. */
+function ChangeList({ label, items, open }: { label: string; items: Change[]; open: boolean }) {
+  const count = (state: Change["state"]) => items.filter((x) => x.state === state).length;
+  const changed = items.some((x) => x.state !== "kept");
+  const rank = { added: 0, removed: 1, kept: 2 } as const;
+  const sorted = changed ? [...items].sort((a, b) => rank[a.state] - rank[b.state]) : items;
+  let keptSeen = 0;
+  const visible = open ? sorted : sorted.filter((x) => x.state !== "kept" || ++keptSeen <= 3);
+  const pills: { state: Change["state"]; text: string }[] = [
+    { state: "kept", text: "فعلی" }, { state: "added", text: "اضافه" }, { state: "removed", text: "حذف" },
   ];
   return (
-    <>
-      {groups.map(({ state, label }) => {
-        const list = items.filter((x) => x.state === state);
-        return list.length === 0 ? null : (
-          <div className={`svc-group svc-g-${state}`} key={state}>
-            <span className="svc-group-title">{label} <b>({formatNumber(list.length)})</b></span>
-            {chips(list)}
-          </div>
-        );
-      })}
-    </>
+    <div>
+      <div className="svc-head">
+        <span className="tk-list-label">{label}</span>
+        {changed && (
+          <span className="svc-pills">
+            {pills.map(({ state, text }) => count(state) > 0 && (
+              <span key={state} className={`svc-pill svc-pill-${state}`}>
+                {state === "added" && <Icon name="plus" />}{state === "removed" && <Icon name="close" />}
+                {text} {formatNumber(count(state))}
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+      <ul>
+        {visible.map((x) => (
+          <li key={x.title} className={x.state === "kept" ? undefined : `svc-${x.state}`}>
+            {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del><span className="tk-sr">، حذف شد</span></>}
+            {x.state === "added" && <><Icon name="plus" />{x.title}<span className="tk-sr">، اضافه شد</span></>}
+            {x.state === "kept" && x.title}
+          </li>
+        ))}
+      </ul>
+      {visible.length < items.length && <span className="svc-more">و {formatNumber(items.length - visible.length)} مورد دیگر</span>}
+    </div>
   );
 }
 
@@ -338,10 +344,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
   const problems = asList(t.case.problemChanges, t.case.reportedProblems);
   const services = asList(t.case.serviceChanges, t.case.requestedServices);
   // Collapsed, only the first three unchanged problems show; anything removed or added always shows.
-  let keptSeen = 0;
-  const problemsChanged = problems.some((x) => x.state !== "kept");
-  const shownProblems = requestsOpen || problemsChanged ? problems : problems.filter((x) => x.state !== "kept" || ++keptSeen <= 3);
-  const hasMore = shownProblems.length < problems.length;
+  const tooLong = [problems, services].some((l) => l.filter((x) => x.state === "kept").length > 3);
 
   return (
     <main className="tk-page">
@@ -398,23 +401,14 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         {(problems.length > 0 || services.length > 0) && (
           <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">
             <div className="tk-requests">
-              {problems.length > 0 && (
-                <div>
-                  <span className="tk-list-label">ایرادهای گزارش‌شده</span>
-                  <ChangeList items={shownProblems} />
-                </div>
-              )}
-              {services.length > 0 && (
-                <div>
-                  <span className="tk-list-label">خدمات درخواستی</span>
-                  <ChangeList items={services} />
-                </div>
-              )}
+              {problems.length > 0 && <ChangeList label="ایرادهای گزارش‌شده" items={problems} open={requestsOpen} />}
+              {services.length > 0 && <ChangeList label="خدمات درخواستی" items={services} open={requestsOpen} />}
             </div>
-            {(hasMore || (requestsOpen && problems.length > 3)) && (
+            {tooLong && (
               <button className="tk-expand" type="button" onClick={() => setRequestsOpen(!requestsOpen)} aria-expanded={requestsOpen}>
-                {requestsOpen ? "نمایش کمتر" : `نمایش همه (${formatNumber(problems.filter((x) => x.state !== "removed").length)} ایراد)`}
+                {requestsOpen ? "نمایش کمتر" : "نمایش همه"}
               </button>
+            
             )}
           </Section>
         )}

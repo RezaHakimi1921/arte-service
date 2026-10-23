@@ -1571,10 +1571,14 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .tk-requests li.svc-removed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--bad-bg); }
 .tk-requests li.svc-removed del { text-decoration-thickness: 1.5px; }
 .tk-requests li.svc-added { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); background: var(--good-bg); font-weight: 700; }
-.svc-group { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.svc-group-title { font-size: 0.78rem; font-weight: 700; color: var(--muted); }
-.svc-g-added .svc-group-title { color: var(--success); }
-.svc-g-removed .svc-group-title { color: var(--danger); }
+\.svc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.svc-head .tk-list-label { margin: 0; }
+.svc-pills { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.svc-pill { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+.svc-pill svg { width: 11px; height: 11px; stroke-width: 2.8; }
+.svc-pill-added { color: var(--success); background: var(--good-bg); border-color: transparent; }
+.svc-pill-removed { color: var(--danger); background: var(--bad-bg); border-color: transparent; }
+.svc-more { display: block; margin-top: 6px; color: var(--muted); font-size: 0.78rem; }
 
 
 
