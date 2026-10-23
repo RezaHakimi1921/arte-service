@@ -67,18 +67,37 @@ function Section({ icon, eyebrow, title, action, children }: { icon: IconName; e
   );
 }
 
-/** Chips for one request list: removed ones struck through in red (×), added ones in green (+), the rest plain. */
+/** One request list. Unchanged lists are plain chips; once something changed after intake it is split into three labelled groups. */
 function ChangeList({ items }: { items: Change[] }) {
-  return (
+  const chips = (list: Change[]) => (
     <ul>
-      {items.map((x) => (
+      {list.map((x) => (
         <li key={x.title} className={x.state === "kept" ? undefined : `svc-${x.state}`}>
-          {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del><span className="tk-sr">، حذف شد</span></>}
-          {x.state === "added" && <><Icon name="plus" />{x.title}<span className="tk-sr">، اضافه شد</span></>}
+          {x.state === "removed" && <><Icon name="close" /><del>{x.title}</del></>}
+          {x.state === "added" && <><Icon name="plus" />{x.title}</>}
           {x.state === "kept" && x.title}
         </li>
       ))}
     </ul>
+  );
+  if (items.every((x) => x.state === "kept")) return chips(items);
+  const groups: { state: Change["state"]; label: string }[] = [
+    { state: "kept", label: "فعلی" },
+    { state: "added", label: "اضافه‌شده بعد از پذیرش" },
+    { state: "removed", label: "حذف‌شده بعد از پذیرش" },
+  ];
+  return (
+    <>
+      {groups.map(({ state, label }) => {
+        const list = items.filter((x) => x.state === state);
+        return list.length === 0 ? null : (
+          <div className={`svc-group svc-g-${state}`} key={state}>
+            <span className="svc-group-title">{label} <b>({formatNumber(list.length)})</b></span>
+            {chips(list)}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -318,10 +337,10 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
   const asList = (changes: Change[] | undefined, current: string[]): Change[] => changes ?? current.map((title) => ({ title, state: "kept" as const }));
   const problems = asList(t.case.problemChanges, t.case.reportedProblems);
   const services = asList(t.case.serviceChanges, t.case.requestedServices);
-  const hasChanges = [...problems, ...services].some((x) => x.state !== "kept");
   // Collapsed, only the first three unchanged problems show; anything removed or added always shows.
   let keptSeen = 0;
-  const shownProblems = requestsOpen ? problems : problems.filter((x) => x.state !== "kept" || ++keptSeen <= 3);
+  const problemsChanged = problems.some((x) => x.state !== "kept");
+  const shownProblems = requestsOpen || problemsChanged ? problems : problems.filter((x) => x.state !== "kept" || ++keptSeen <= 3);
   const hasMore = shownProblems.length < problems.length;
 
   return (
@@ -390,12 +409,6 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                   <span className="tk-list-label">خدمات درخواستی</span>
                   <ChangeList items={services} />
                 </div>
-              )}
-              {hasChanges && (
-                <p className="svc-legend">
-                  <span className="svc-removed"><Icon name="close" />حذف‌شده</span>
-                  <span className="svc-added"><Icon name="plus" />اضافه‌شده بعد از پذیرش</span>
-                </p>
               )}
             </div>
             {(hasMore || (requestsOpen && problems.length > 3)) && (
