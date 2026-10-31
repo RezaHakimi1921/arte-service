@@ -2274,3 +2274,10 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 
 .photo-thumb { position: relative; }
 .photo-remove { position: absolute; top: 4px; inset-inline-start: 4px; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 1.1rem; line-height: 1; }
+
+.sms-log { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.sms-log li { display: flex; flex-direction: column; gap: 2px; padding-inline-start: 10px; border-inline-start: 3px solid var(--success); }
+.sms-log li.bad { border-inline-start-color: var(--danger); }
+.sms-log-main { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sms-log-state { font-size: 0.8rem; font-weight: 700; color: var(--success); }
+.sms-log li.bad .sms-log-state { color: var(--danger); }

@@ -20,7 +20,7 @@ public static class TrackingCodes
 /// <summary>
 /// SMS to the customer at the moments the business chose (case opened, ready, delivered), each carrying the
 /// tracking link. Off unless the business switched customer SMS on; never for sample cases; a failed or
-/// unconfigured SMS never breaks the action that triggered it. Each send is written to the case timeline.
+/// unconfigured SMS never breaks the action that triggered it. Each send, including one that could not go out (with the reason), is written to the case timeline.
 /// </summary>
 public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock clock, ILogger<CustomerNotifier> logger)
 {
@@ -91,12 +91,10 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
             ["code"] = c.TrackingCode!,
         };
         var result = await sms.SendTemplateAsync(customer.Mobile, messageKey, tokens, ct);
-        if (!result.Accepted && result.Error == "template_not_configured") return result;   // not set up yet: say nothing
-
         db.CaseEvents.Add(new CaseEvent
         {
             TenantId = c.TenantId, CaseId = c.Id, Type = "customer.sms", OccurredAt = clock.UtcNow,
-            Data = JsonSerializer.SerializeToDocument(new { Kind = messageKey, Sent = result.Accepted }, Json),
+            Data = JsonSerializer.SerializeToDocument(new { Kind = messageKey, Sent = result.Accepted, Error = result.Accepted ? null : result.Error }, Json),
         });
         await db.SaveChangesAsync(ct);
         return result;

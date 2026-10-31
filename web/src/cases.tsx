@@ -391,6 +391,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
   if (notFound) return <section><button className="link back" onClick={onBack}>→ پرونده‌ها</button><p className="empty muted">پرونده پیدا نشد.</p></section>;
   if (!c) return <div className="splash" aria-busy="true" />;
 
+  const smsLog = c.timeline.filter((e) => e.type === "customer.sms");
   const photoSection = <PhotoSection caseId={c.id} photos={c.photos ?? []} stageKey={c.stage.key} canAdd={c.canEdit && c.stage.key !== "cancelled"} onChange={load} visibleByDefault={c.photosVisibleByDefault} />;
   const primary = c.transitions.find((t) => t.isPrimary);
   const others = c.transitions.filter((t) => t !== primary);
@@ -504,6 +505,25 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
           </button>
         )}
       </Collapsible>
+
+      {smsLog.length > 0 && (
+        <Collapsible title={`پیامک‌های مشتری (${formatNumber(smsLog.length)})`}>
+          <ul className="sms-log">
+            {smsLog.map((e) => (
+              <li key={e.id} className={e.data?.sent ? "ok" : "bad"}>
+                <span className="sms-log-main">
+                  <strong>{SMS_KIND[String(e.data?.kind)] ?? "پیامک"}</strong>
+                  <span className="sms-log-state">{e.data?.sent ? "✓ به سرویس‌دهنده سپرده شد" : "! ارسال نشد"}</span>
+                </span>
+                <span className="muted small">
+                  {faDateTime.format(new Date(e.occurredAt))}
+                  {!e.data?.sent && ` · ${e.data?.error === "template_not_configured" ? "الگوی این پیامک روی سرور تنظیم نشده" : "سرویس‌دهنده نپذیرفت"}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Collapsible>
+      )}
 
       <Collapsible title={`تاریخچه (${formatNumber(c.timeline.length)})`} tour="timeline">
         <ol className="timeline">
@@ -635,6 +655,11 @@ function PromisePicker({ onPick, busy }: { onPick: (iso: string) => void; busy: 
     </div>
   );
 }
+
+const SMS_KIND: Record<string, string> = {
+  "case.opened": "پیامک پذیرش", "case.ready": "پیامک آماده‌ی تحویل", "case.delivered": "پیامک تحویل",
+  "case.link": "پیامک لینک پیگیری", "survey.request": "پیامک نظرسنجی",
+};
 
 function Collapsible({ title, open, children, tour }: { title: string; open?: boolean; children: ReactNode; tour?: string }) {
   return (

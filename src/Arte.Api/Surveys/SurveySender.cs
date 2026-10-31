@@ -133,7 +133,7 @@ public sealed class SurveySender(IServiceScopeFactory scopes, IClock clock, ILog
             db.CaseEvents.Add(new CaseEvent
             {
                 TenantId = tenantId, CaseId = c.Id, Type = "customer.sms", OccurredAt = now,
-                Data = JsonSerializer.SerializeToDocument(new { Kind = MessageKeys.SurveyRequest, Sent = result.Accepted }, Json),
+                Data = JsonSerializer.SerializeToDocument(new { Kind = MessageKeys.SurveyRequest, Sent = result.Accepted, Error = result.Accepted ? null : result.Error }, Json),
             });
         await db.SaveChangesAsync(ct);
         return result.Accepted;
