@@ -2271,3 +2271,6 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .case-list { grid-auto-rows: 1fr; }
 .card-stack > .card { margin: 0; }
 .stat-card.main { background: var(--surface); color: var(--text); }
+
+.photo-thumb { position: relative; }
+.photo-remove { position: absolute; top: 4px; inset-inline-start: 4px; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 1.1rem; line-height: 1; }

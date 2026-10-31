@@ -2,7 +2,9 @@ import { clearDraft, isBlank, loadDraft, saveDraft } from "./draft";
 import { FuelGauge } from "./fuel";
 import { SelectField, SelectSheet } from "./sheet";
 import { ROLE_NAMES } from "./labels";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { compress } from "./photos";
+import { useFeedback } from "./feedback";
 import { api, ApiError } from "./api";
 import { MotoPlateInput, PlateInput, PlateView, emptyMotoPlate, emptyPlate } from "./plate";
 import { ServicePicker } from "./services";
@@ -28,6 +30,7 @@ const ICONS = {
   body: "M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
   problem: "M12 8v4M12 16h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z",
   list: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+  camera: "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
 };
 
@@ -114,6 +117,27 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   }, [jumpToCondition]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const { notify } = useFeedback();
+  // Photos taken at intake stay on the phone (already compressed) until the case exists, then are uploaded.
+  const [shots, setShots] = useState<{ blob: Blob; url: string }[]>([]);
+  const [shotBusy, setShotBusy] = useState(false);
+  const shotInput = useRef<HTMLInputElement>(null);
+  useEffect(() => () => shots.forEach((x) => URL.revokeObjectURL(x.url)), []); // eslint-disable-line react-hooks/exhaustive-deps
+  async function addShots(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setShotBusy(true);
+    try {
+      const made: { blob: Blob; url: string }[] = [];
+      for (const f of Array.from(files).slice(0, 6)) { const blob = await compress(f); made.push({ blob, url: URL.createObjectURL(blob) }); }
+      setShots((cur) => cur.concat(made).slice(0, 6));
+    } finally {
+      setShotBusy(false);
+      if (shotInput.current) shotInput.current.value = "";
+    }
+  }
+  function dropShot(i: number) {
+    setShots((cur) => { URL.revokeObjectURL(cur[i].url); return cur.filter((_, k) => k !== i); });
+  }
 
   // ── draft: restore once, then keep saving ──
   const [restored, setRestored] = useState(false);
@@ -277,6 +301,15 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         },
       });
       clearDraft(draftScope);
+      let failed = 0;
+      for (const shot of shots) {
+        try {
+          const form = new FormData();
+          form.append("file", shot.blob, "photo.jpg");
+          await api(`/api/v1/cases/${created.id}/attachments`, { body: form });
+        } catch { failed++; }
+      }
+      if (failed > 0) notify(`${formatNumber(failed)} عکس بارگذاری نشد؛ از صفحه‌ی پرونده دوباره اضافه کنید`, "error");
       onCreated(created.id);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -516,6 +549,26 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
       {requireAssignee && assigneeSection}
 
+      <Section icon="camera" title="عکس وسیله (اختیاری)" badge={shots.length > 0 && <span className="badge good">{formatNumber(shots.length)} عکس</span>}>
+        <input ref={shotInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => addShots(e.target.files)} />
+        {shots.length > 0 && (
+          <div className="photo-grid">
+            {shots.map((x, i) => (
+              <div className="photo-thumb" key={x.url}>
+                <img src={x.url} alt={`عکس ${formatNumber(i + 1)}`} />
+                <button type="button" className="photo-remove" aria-label="حذف این عکس" onClick={() => dropShot(i)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        {shots.length < 6 && (
+          <button type="button" className="block secondary" onClick={() => shotInput.current?.click()} disabled={shotBusy || busy} aria-busy={shotBusy}>
+            {shotBusy ? "در حال آماده‌سازی عکس…" : shots.length > 0 ? "📷 افزودن عکس دیگر" : "📷 گرفتن عکس از وسیله"}
+          </button>
+        )}
+        <p className="hint">وضعیت ظاهری وسیله هنگام تحویل؛ بعد از ثبت پذیرش در پرونده می‌ماند.</p>
+      </Section>
+
       {full && (
         <>
           <div id="intake-condition" aria-hidden="true" />
@@ -556,7 +609,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
       {errors.form && <p className="error" role="alert">{errors.form}</p>}
       <div className="intake-footer">
-        <button className="primary block big" disabled={busy} aria-busy={busy}>{busy ? "در حال ثبت پذیرش…" : full ? "ثبت پذیرش" : "ثبت سریع"}</button>
+        <button className="primary block big" disabled={busy} aria-busy={busy}>{busy ? (shots.length > 0 ? "در حال ثبت پذیرش و عکس‌ها…" : "در حال ثبت پذیرش…") : full ? "ثبت پذیرش" : "ثبت سریع"}</button>
         {!full && (
           <button type="button" className="block secondary" onClick={() => { setFull(true); setJumpToCondition(true); }}>
             تکمیل پذیرش (کیلومتر، سوخت، بدنه…)
