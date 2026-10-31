@@ -55,7 +55,7 @@ public sealed class Tenant
 
     // ── What the customer is told, and what their tracking page shows ──
     /// <summary>Master switch for SMS to customers (each SMS costs the platform credit).</summary>
-    public bool CustomerSmsEnabled { get; set; }
+    public bool CustomerSmsEnabled { get; set; } = true;
     public bool SmsOnOpened { get; set; } = true;
     public bool SmsOnReady { get; set; } = true;
     public bool SmsOnDelivered { get; set; } = true;

@@ -129,9 +129,12 @@ public sealed class TrackingTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Customer_sms_only_when_the_business_switched_it_on()
+    public async Task Customer_sms_is_on_by_default_and_stops_when_the_business_switches_it_off()
     {
         var (owner, _) = await api.NewBusinessAsync();
+        Assert.True((await Json(await owner.GetAsync("/api/v1/settings/business"))).GetProperty("customerSmsEnabled").GetBoolean());
+
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = false }));
         var (_, _, quiet) = await OpenCase(owner);
         Assert.False(api.Sms.Keys.ContainsKey(quiet));
 
@@ -236,6 +239,7 @@ public sealed class TrackingTests(ArteApiFactory api)
     public async Task Link_can_be_sent_again_by_hand_only_when_customer_sms_is_on()
     {
         var (owner, _) = await api.NewBusinessAsync();
+        await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = false }));
         var (id, _, mobile) = await OpenCase(owner);
         var off = await owner.PostAsync($"/api/v1/cases/{id}/send-link", null);
         Assert.Equal(HttpStatusCode.Conflict, off.StatusCode);
