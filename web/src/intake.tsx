@@ -105,7 +105,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const [pickAssignee, setPickAssignee] = useState(false);
   const [staff, setStaff] = useState<Assignable[] | null>(null);
   const [parent, setParent] = useState<ParentSuggestion>(null);
-  const [linkParent, setLinkParent] = useState(true);
+  const [linkParent, setLinkParent] = useState(false);
 
   const [full, setFull] = useState(false);
   // After «تکمیل پذیرش», land on the new part (vehicle condition), not wherever the button was.
