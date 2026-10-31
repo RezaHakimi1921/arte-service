@@ -12,7 +12,7 @@ namespace Arte.Api.Surveys;
 /// <summary>
 /// Sends the survey SMS that are due, once a minute. Each invite is claimed first (a conditional update), so it is
 /// never sent twice even if two runs overlap; a failed send is retried a few times, then given up and written to the
-/// case timeline. Survey SMS go out only in sending hours (09:00–23:00 Tehran).
+/// case timeline. Survey SMS go out only in sending hours (08:00–23:00 Tehran).
 /// </summary>
 public sealed class SurveySender(IServiceScopeFactory scopes, IClock clock, ILogger<SurveySender> logger) : BackgroundService
 {

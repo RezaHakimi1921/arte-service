@@ -71,8 +71,8 @@ public static class SurveyRules
     public const int MaxDelayMinutes = 72 * 60;
     public const int ValidDays = 7;
     public const int MaxAttempts = 3;
-    /// <summary>Survey SMS go out only between 09:00 and 23:00 Tehran time; other customer SMS are sent at once.</summary>
-    public const int SendFromHour = 9, SendUntilHour = 23;
+    /// <summary>Survey SMS go out only between 08:00 and 23:00 Tehran time; other customer SMS are sent at once.</summary>
+    public const int SendFromHour = 8, SendUntilHour = 23;
     private static readonly TimeSpan Tehran = TimeSpan.FromHours(3.5);   // Iran has no DST since 2022.
 
     public const int MinAlertBelow = 2, MaxAlertBelow = 5;
@@ -80,7 +80,7 @@ public static class SurveyRules
     /// <summary>Low satisfaction: the average or any single answer below the business's threshold (default 3 stars).</summary>
     public static bool IsLow(IReadOnlyCollection<int> ratings, int below = 3) => ratings.Any(r => r < below) || ratings.Average() < below;
 
-    /// <summary>The same moment if it falls in sending hours, otherwise the next 09:00 Tehran time.</summary>
+    /// <summary>The same moment if it falls in sending hours, otherwise the next 08:00 Tehran time.</summary>
     public static DateTimeOffset IntoSendingHours(DateTimeOffset utc)
     {
         var local = utc.ToOffset(Tehran);

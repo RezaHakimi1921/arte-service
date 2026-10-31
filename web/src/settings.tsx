@@ -406,7 +406,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
             <>
           <h3>نظرسنجی رضایت مشتری</h3>
               <p className="hint">
-                بعد از تحویل، یک پیامک کوتاه با لینک نظرسنجی برای مشتری فرستاده می‌شود (فقط بین ساعت ۹ تا ۲۳). نظر مشتری در پرونده،
+                بعد از تحویل، یک پیامک کوتاه با لینک نظرسنجی برای مشتری فرستاده می‌شود (فقط بین ساعت ۸ تا ۲۳). نظر مشتری در پرونده،
                 زنگوله‌ی اعلان و گزارش‌ها می‌آید و رضایت پایین در خانه نشان داده می‌شود.
               </p>
               <div className="settings-list">
@@ -414,7 +414,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
                   link={{ label: "دیدن متن پیامک", onClick: () => setPreview("survey.request") }}
                   checked={s.surveySendOn} disabled={false} onChange={(v) => save({ surveySendOn: v })} />
                 <div className="setting-row block">
-                  <span><strong>چه مدت بعد از تحویل؟</strong><span className="muted small">الان: {delayText(s.surveyDelayMinutes)} بعد از تحویل (فقط ساعت ۹ تا ۲۳).</span></span>
+                  <span><strong>چه مدت بعد از تحویل؟</strong><span className="muted small">الان: {delayText(s.surveyDelayMinutes)} بعد از تحویل (فقط ساعت ۸ تا ۲۳).</span></span>
                   <div className="chips" role="radiogroup" aria-label="زمان ارسال نظرسنجی">
                     {SURVEY_DELAYS.map(([m, label]) => (
                       <button type="button" key={m} role="radio" aria-checked={!customDelay && s.surveyDelayMinutes === m} disabled={!s.surveySendOn}

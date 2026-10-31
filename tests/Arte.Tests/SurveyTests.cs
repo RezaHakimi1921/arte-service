@@ -323,8 +323,8 @@ public sealed class SurveyTests(ArteApiFactory api)
 
     [Theory]
     [InlineData("2026-10-10T08:30:00Z", "2026-10-10T08:30:00Z")]   // 12:00 Tehran: now
-    [InlineData("2026-10-10T19:45:00Z", "2026-10-11T05:30:00Z")]   // 23:15 Tehran: next morning 09:00
-    [InlineData("2026-10-10T02:00:00Z", "2026-10-10T05:30:00Z")]   // 05:30 Tehran: this morning 09:00
+    [InlineData("2026-10-10T19:45:00Z", "2026-10-11T04:30:00Z")]   // 23:15 Tehran: next morning 08:00
+    [InlineData("2026-10-10T02:00:00Z", "2026-10-10T04:30:00Z")]   // 05:30 Tehran: this morning 08:00
     [InlineData("2026-10-10T19:29:00Z", "2026-10-10T19:29:00Z")]   // 22:59 Tehran: still in hours
     public void Survey_sms_waits_for_sending_hours(string at, string expected) =>
         Assert.Equal(DateTimeOffset.Parse(expected), SurveyRules.IntoSendingHours(DateTimeOffset.Parse(at)));
