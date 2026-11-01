@@ -115,6 +115,26 @@ public sealed class BranchTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task An_admin_who_only_visited_a_branch_can_be_added_to_its_staff_as_a_real_member()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var adminMobile = ArteApiFactory.NewMobile();
+        var (admin, _) = await api.LoginAsync(adminMobile);
+        await using (var scope = api.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Users.Where(u => u.Mobile == adminMobile)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.IsPlatformAdmin, true));
+        await Json(await admin.PostAsync($"/api/v1/admin/businesses/{tenantId}/support", null));
+
+        var added = await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = adminMobile, displayName = "مدیر شعبه", role = "supervisor" });
+        Assert.Equal(HttpStatusCode.Created, added.StatusCode);
+        var staff = await Json(await owner.GetAsync("/api/v1/staff"));
+        var row = Assert.Single(staff.EnumerateArray(), m => m.GetProperty("mobile").GetString() == adminMobile);
+        Assert.Equal("مدیر شعبه", row.GetProperty("displayName").GetString());
+        // A second add is a normal duplicate now.
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = adminMobile, role = "supervisor" })).StatusCode);
+    }
+
+    [Fact]
     public async Task Sign_up_saves_the_owners_mobile_as_the_business_phone()
     {
         var mobile = ArteApiFactory.NewMobile();

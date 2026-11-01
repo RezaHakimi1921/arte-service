@@ -53,9 +53,25 @@ public static class StaffEndpoints
                 user = new User { Mobile = mobile, DisplayName = string.IsNullOrEmpty(name) ? null : name, CreatedAt = clock.UtcNow };
                 db.Users.Add(user);
             }
-            else if (await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).AnyAsync(m => m.UserId == user.Id, ct))
+            else
             {
-                return Results.Problem(statusCode: 409, title: "این شماره قبلاً در کارکنان ثبت شده است.");
+                var existing = await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).SingleOrDefaultAsync(m => m.UserId == user.Id, ct);
+                if (existing is { IsSupport: true })
+                {
+                    // Arte staff who were only visiting this branch (support access) can be added as real members:
+                    // the hidden support membership becomes a normal one with the chosen role.
+                    existing.IsSupport = false;
+                    existing.IsActive = true;
+                    existing.Role = role;
+                    existing.Permissions = granted;
+                    existing.DisplayName = string.IsNullOrEmpty(name) ? null : name;
+                    existing.SurveyNotify = role == Roles.Supervisor;
+                    audit.Record("staff.added", me.RequiredMembership.TenantId, me.RequiredUserId, $"{existing.Id} {role} (from support access)");
+                    await db.SaveChangesAsync(ct);
+                    return Results.Created($"/api/v1/staff/{existing.Id}", new { existing.Id });
+                }
+                if (existing is not null)
+                    return Results.Problem(statusCode: 409, title: "این شماره قبلاً در کارکنان ثبت شده است.");
             }
 
             var membership = new Membership
