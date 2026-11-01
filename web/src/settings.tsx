@@ -178,7 +178,7 @@ export function AccountPage({ onBack }: { onBack: () => void }) {
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={80} />
           </Field>
           {/* The mobile number is the sign-in name; the password is optional (sign-in by SMS code always works). */}
-          <Field label="شماره‌ی ورود">
+          <Field label="شماره تماس و ورود (قابل ویرایش نیست)">
             <input dir="ltr" className="font-num" value={account.mobile} readOnly autoComplete="username" />
           </Field>
           <p className="hint">برای ورود با رمز، همین شماره را بزنید و رمزی که این‌جا می‌گذارید. ورود با کد پیامکی همیشه هم فعال است.</p>
@@ -588,7 +588,10 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
     <BottomSheet open={!!row} title={row ? `ویرایش ${row.displayName ?? row.mobile}` : "ویرایش همکار"} onClose={onClose}>
       {row && (
         <form onSubmit={save} noValidate>
-          <Field label="نام"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
+          <Field label="نام در این شعبه"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
+          <Field label="شماره تماس (قابل ویرایش نیست)">
+            <input dir="ltr" className="font-num" value={row.mobile} readOnly aria-readonly="true" />
+          </Field>
           {row.role !== "owner" && (
             <Field label="نقش">
               <select value={role} onChange={(e) => setRole(e.target.value)}>

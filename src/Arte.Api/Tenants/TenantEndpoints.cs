@@ -31,7 +31,7 @@ public static class TenantEndpoints
             {
                 user.Id,
                 user.Mobile,
-                user.DisplayName,
+                DisplayName = m?.DisplayName ?? user.DisplayName,
                 user.IsPlatformAdmin,
                 // More than one branch: the app opens on the branches dashboard.
                 BranchCount = await db.Memberships.IgnoreQueryFilters([ArteDbContext.TenantFilter]).CountAsync(x => x.UserId == user.Id && x.IsActive, ct),
@@ -188,6 +188,7 @@ public static class TenantEndpoints
             TenantId = tenant.Id,
             UserId = ownerUserId,
             Role = Roles.Owner,
+            DisplayName = string.IsNullOrEmpty(ownerName) ? null : ownerName,
             Permissions = Roles.DefaultPermissions(Roles.Owner),
             CreatedAt = clock.UtcNow,
             SurveyNotify = true,
@@ -199,7 +200,8 @@ public static class TenantEndpoints
         if (!string.IsNullOrEmpty(ownerName))
         {
             var user = await db.Users.SingleAsync(u => u.Id == ownerUserId, ct);
-            user.DisplayName = ownerName;
+            // The user's own default name is set only once; a rename in one branch never rewrites another branch's name.
+            user.DisplayName ??= ownerName;
         }
         sp.GetRequiredService<Audit>().Record("tenant.created", tenant.Id, ownerUserId, tenant.Name);
         await db.SaveChangesAsync(ct);

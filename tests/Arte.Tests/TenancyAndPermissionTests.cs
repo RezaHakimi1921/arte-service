@@ -170,4 +170,28 @@ public sealed class TenancyAndPermissionTests(ArteApiFactory api)
         await Assert.ThrowsAsync<TenantViolationException>(() => db.SaveChangesAsync());
         Assert.NotEqual(tenantA, tenantB);
     }
+
+    [Fact]
+    public async Task A_persons_name_belongs_to_each_branch_and_a_rename_never_crosses_over()
+    {
+        var shared = ArteApiFactory.NewMobile();
+        var (ownerA, _) = await api.NewBusinessAsync();
+        var (ownerB, _) = await api.NewBusinessAsync();
+
+        async Task<JsonElement> Row(HttpClient owner, string mobile) =>
+            (await owner.GetFromJsonAsync<JsonElement>("/api/v1/staff")).EnumerateArray().Single(r => r.GetProperty("mobile").GetString() == mobile);
+
+        var idA = (await (await ownerA.PostAsJsonAsync("/api/v1/staff", new { mobile = shared, displayName = "حسین الف", role = "technician" }))
+            .Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        // Branch B adds the same person under another name: A's name is neither shown nor reused there.
+        var idB = (await (await ownerB.PostAsJsonAsync("/api/v1/staff", new { mobile = shared, role = "technician" }))
+            .Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(JsonValueKind.Null, (await Row(ownerB, shared)).GetProperty("displayName").ValueKind);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await ownerB.PatchAsJsonAsync($"/api/v1/staff/{idB}", new { displayName = "حکیمی" })).StatusCode);
+        Assert.Equal("حکیمی", (await Row(ownerB, shared)).GetProperty("displayName").GetString());
+        Assert.Equal("حسین الف", (await Row(ownerA, shared)).GetProperty("displayName").GetString());
+        Assert.Equal(shared, (await Row(ownerB, shared)).GetProperty("mobile").GetString());
+        Assert.NotEqual(idA, idB);
+    }
 }

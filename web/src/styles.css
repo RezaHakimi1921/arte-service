@@ -2281,3 +2281,5 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .sms-log-main { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .sms-log-state { font-size: 0.8rem; font-weight: 700; color: var(--success); }
 .sms-log li.bad .sms-log-state { color: var(--danger); }
+
+input[readonly] { opacity: 0.75; cursor: default; }

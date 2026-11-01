@@ -17,7 +17,7 @@ public static class AccountEndpoints
         g.MapGet("/", async (RequestUser me, ArteDbContext db, CancellationToken ct) =>
         {
             var u = await db.Users.AsNoTracking().SingleAsync(x => x.Id == me.RequiredUserId, ct);
-            return Results.Ok(new { u.DisplayName, u.Username, u.Mobile, HasPassword = u.PasswordHash != null });
+            return Results.Ok(new { DisplayName = me.Membership?.DisplayName ?? u.DisplayName, u.Username, u.Mobile, HasPassword = u.PasswordHash != null });
         });
 
         g.MapPut("/", async (UpdateAccount req, RequestUser me, ArteDbContext db, Audit audit, IClock clock, CancellationToken ct) =>
@@ -75,11 +75,17 @@ public static class AccountEndpoints
                 user.FailedPasswordAttempts = 0;
                 user.PasswordLockedUntil = null;
             }
-            if (req.DisplayName is not null) user.DisplayName = string.IsNullOrEmpty(name) ? null : name;
+            if (req.DisplayName is not null)
+            {
+                user.DisplayName = string.IsNullOrEmpty(name) ? null : name;
+                // The name people see in this branch is the membership's; other branches keep theirs.
+                if (me.Membership is { } current)
+                    (await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).SingleAsync(x => x.Id == current.Id, ct)).DisplayName = user.DisplayName;
+            }
 
             if (changingCredentials) audit.Record("account.credentials_changed", null, user.Id, user.Username);
             await db.SaveChangesAsync(ct);
-            return Results.Ok(new { user.DisplayName, user.Username, user.Mobile, HasPassword = user.PasswordHash != null });
+            return Results.Ok(new { DisplayName = req.DisplayName is not null ? user.DisplayName : me.Membership?.DisplayName ?? user.DisplayName, user.Username, user.Mobile, HasPassword = user.PasswordHash != null });
         }).RequireRateLimiting("auth");
     }
 }

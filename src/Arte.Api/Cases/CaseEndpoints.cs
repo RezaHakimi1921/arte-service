@@ -78,7 +78,7 @@ public static class CaseEndpoints
             Results.Ok(await db.Memberships.AsNoTracking()
                 .Where(m => m.IsActive && (m.Role == Roles.Owner || m.Permissions.Contains(Permissions.CasesWork)))
                 .OrderBy(m => m.CreatedAt)
-                .Select(m => new { m.Id, Name = m.User!.DisplayName ?? m.User.Mobile, m.Role })
+                .Select(m => new { m.Id, Name = m.DisplayName ?? m.User!.Mobile, m.Role })
                 .ToListAsync(ct))).RequirePermission(Permissions.CasesAssign);
     }
 
@@ -102,7 +102,7 @@ public static class CaseEndpoints
             from a in aj.DefaultIfEmpty()
             join mem in db.Memberships on c.AssigneeId equals mem.Id into mj
             from mem in mj.DefaultIfEmpty()
-            select new { c, s, cu, a, AssigneeName = mem == null ? null : mem.User!.DisplayName ?? mem.User.Mobile };
+            select new { c, s, cu, a, AssigneeName = mem == null ? null : mem.DisplayName ?? mem.User!.Mobile };
 
         if (!string.IsNullOrEmpty(category))
         {
@@ -200,7 +200,7 @@ public static class CaseEndpoints
             .ToList();
 
         var assignee = c.AssigneeId is null ? null : await db.Memberships.AsNoTracking()
-            .Where(m => m.Id == c.AssigneeId).Select(m => new { m.Id, Name = m.User!.DisplayName ?? m.User.Mobile }).SingleOrDefaultAsync(ct);
+            .Where(m => m.Id == c.AssigneeId).Select(m => new { m.Id, Name = m.DisplayName ?? m.User!.Mobile }).SingleOrDefaultAsync(ct);
         var parent = c.ParentCaseId is null ? null : await db.Cases.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking()
             .Where(x => x.Id == c.ParentCaseId).Select(x => new { x.Id, x.Number }).SingleOrDefaultAsync(ct);
 
@@ -209,8 +209,11 @@ public static class CaseEndpoints
             where e.CaseId == c.Id
             join u in db.Users on e.ActorUserId equals u.Id into uj
             from u in uj.DefaultIfEmpty()
+            // The name shown is the one this branch gave the person; the shared user name is only for people with no membership here (platform staff).
+            join mm in db.Memberships on e.ActorUserId equals mm.UserId into mmj
+            from mm in mmj.DefaultIfEmpty()
             orderby e.Id descending
-            select new { e.Id, e.Type, e.OccurredAt, e.Data, Actor = u == null ? null : u.DisplayName ?? u.Mobile })
+            select new { e.Id, e.Type, e.OccurredAt, e.Data, Actor = mm != null ? mm.DisplayName ?? u!.Mobile : u == null ? null : u.DisplayName ?? u.Mobile })
             .Take(200).ToListAsync(ct);
 
         return new
@@ -641,7 +644,7 @@ public static class CaseEndpoints
                 c.Id, c.Number, CustomerName = cu.FullName, CustomerMobile = cu.Mobile,
                 AssetTitle = a == null ? null : a.Title, AssetIdentifier = a == null ? null : a.Identifier,
                 Stage = new { s.Id, s.Key, s.Name, s.Category, s.Color, s.IsTerminal },
-                AssigneeName = mem == null ? null : mem.User!.DisplayName ?? mem.User.Mobile,
+                AssigneeName = mem == null ? null : mem.DisplayName ?? mem.User!.Mobile,
                 c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.ReportedProblems, c.WaitReason, c.OpenedAt,
                 c.OdometerKm, c.FuelLevel, AssetKind = a == null ? null : a.Kind,
                 LastEvent = db.CaseEvents.Where(e => e.CaseId == c.Id).OrderByDescending(e => e.Id)
@@ -721,7 +724,7 @@ public static class CaseEndpoints
                                      && (m.Role == Roles.Owner || m.Permissions.Contains(Permissions.CasesWork)), ct);
 
     private static Task<string?> MemberName(ArteDbContext db, Guid membershipId, CancellationToken ct) =>
-        db.Memberships.Where(m => m.Id == membershipId).Select(m => m.User!.DisplayName ?? m.User.Mobile).SingleOrDefaultAsync(ct);
+        db.Memberships.Where(m => m.Id == membershipId).Select(m => m.DisplayName ?? m.User!.Mobile).SingleOrDefaultAsync(ct);
 
     private static string[]? CleanServices(string[]? services) =>
         services?.Select(s => s.Trim()).Where(s => s.Length > 0).Distinct().ToArray();

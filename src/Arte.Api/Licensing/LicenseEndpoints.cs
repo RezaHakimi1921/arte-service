@@ -47,7 +47,7 @@ public static class LicenseEndpoints
             {
                 var term = q.Trim();
                 var byOwner = allMembers
-                    .Where(m => m.User!.Mobile.Contains(term) || (m.User.DisplayName != null && m.User.DisplayName.Contains(term)))
+                    .Where(m => m.User!.Mobile.Contains(term) || (m.DisplayName != null && m.DisplayName.Contains(term)))
                     .Select(m => m.TenantId);
                 tenants = tenants.Where(t => t.Name.Contains(term) || (t.Phone != null && t.Phone.Contains(term)) || byOwner.Contains(t.Id));
             }
@@ -60,7 +60,7 @@ public static class LicenseEndpoints
                 Mine = allMembers.Any(m => m.TenantId == t.Id && m.UserId == me.UserId && m.IsActive),
                 Owner = allMembers
                     .Where(m => m.TenantId == t.Id && m.Role == Roles.Owner).OrderBy(m => m.CreatedAt)
-                    .Select(m => new { m.User!.DisplayName, m.User.Mobile }).FirstOrDefault(),
+                    .Select(m => new { m.DisplayName, m.User!.Mobile }).FirstOrDefault(),
                 Staff = allMembers.Count(m => m.TenantId == t.Id && m.IsActive),
                 Cases = allCases.Count(c => c.TenantId == t.Id && !c.IsSample),
                 LastCaseAt = allCases.Where(c => c.TenantId == t.Id && !c.IsSample)
@@ -94,7 +94,7 @@ public static class LicenseEndpoints
                 .ToListAsync(ct);
             var members = await db.Memberships.IgnoreQueryFilters([ArteDbContext.TenantFilter]).AsNoTracking()
                 .Where(m => m.TenantId == id).OrderBy(m => m.CreatedAt)
-                .Select(m => new { m.Role, m.IsActive, m.User!.DisplayName, m.User.Mobile, m.User.LastLoginAt }).ToListAsync(ct);
+                .Select(m => new { m.Role, m.IsActive, m.DisplayName, m.User!.Mobile, m.User.LastLoginAt }).ToListAsync(ct);
             return Results.Ok(new
             {
                 t.Id, t.Name, t.Phone, t.Address, t.CreatedAt, t.IsActive, t.DeactivatedReason, t.SurveyEnabled,

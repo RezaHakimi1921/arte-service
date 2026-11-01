@@ -76,6 +76,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasIndex(x => new { x.TenantId, x.UserId }).IsUnique();
             e.HasIndex(x => x.UserId);
             e.Property(x => x.Role).HasMaxLength(20);
+            e.Property(x => x.DisplayName).HasMaxLength(80);
             e.Property(x => x.PayModel).HasMaxLength(20);
             e.Property(x => x.CommissionPercent).HasPrecision(5, 2);
             e.Property(x => x.CommissionType).HasMaxLength(20).HasDefaultValue("none");

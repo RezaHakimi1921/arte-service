@@ -166,11 +166,12 @@ public static class SurveyEndpoints
             .Select(x => new { Question = x.QuestionText, x.Rating }).ToListAsync(ct);
         var ids = i.ResponsibleIds;
         var responsible = await db.Memberships.AsNoTracking().Where(m => ids.Contains(m.Id))
-            .Select(m => m.User!.DisplayName ?? m.User.Mobile).ToListAsync(ct);
+            .Select(m => m.DisplayName ?? m.User!.Mobile).ToListAsync(ct);
         var customer = await db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking()
             .Where(x => x.Id == i.CustomerId).Select(x => x.FullName).SingleOrDefaultAsync(ct);
         var followedBy = i.FollowedUpBy is null ? null
-            : await db.Users.Where(u => u.Id == i.FollowedUpBy).Select(u => u.DisplayName ?? u.Mobile).SingleOrDefaultAsync(ct);
+            : await db.Memberships.Where(m => m.UserId == i.FollowedUpBy).Select(m => m.DisplayName ?? m.User!.Mobile).FirstOrDefaultAsync(ct)
+              ?? await db.Users.Where(u => u.Id == i.FollowedUpBy).Select(u => u.DisplayName ?? u.Mobile).SingleOrDefaultAsync(ct);
         return new
         {
             State = i.AnsweredAt is not null ? "answered" : i.CancelledAt is not null ? "cancelled" : i.SentAt is not null ? "sent"
@@ -200,7 +201,7 @@ public static class SurveyEndpoints
         var staff = members.Select(m =>
         {
             var mine = answered.Where(i => i.ResponsibleIds.Contains(m.Id)).ToList();
-            return new { MembershipId = m.Id, Name = m.User!.DisplayName ?? m.User.Mobile, Responses = mine.Count, Average = Avg(mine), SatisfiedPercent = Satisfied(mine) };
+            return new { MembershipId = m.Id, Name = m.DisplayName ?? m.User!.Mobile, Responses = mine.Count, Average = Avg(mine), SatisfiedPercent = Satisfied(mine) };
         }).Where(x => x.Responses > 0).OrderByDescending(x => x.Responses).ToList();
 
         var lowIds = answered.Where(i => i.IsLow).OrderByDescending(i => i.AnsweredAt).Take(10).Select(i => i.CaseId).ToList();

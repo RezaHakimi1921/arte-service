@@ -27,6 +27,9 @@ public sealed class Membership : ITenantOwned
     public Guid UserId { get; set; }
     public User? User { get; set; }
     public required string Role { get; set; }
+    /// <summary>The name this person has in THIS branch. Names are per branch: the same mobile can be saved differently elsewhere,
+    /// and a rename here never shows up (or leaks) in another branch.</summary>
+    public string? DisplayName { get; set; }
     public string[] Permissions { get; set; } = [];
     public string PayModel { get; set; } = PayModels.None;
     public decimal? CommissionPercent { get; set; }

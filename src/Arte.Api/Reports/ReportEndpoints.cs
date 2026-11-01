@@ -64,7 +64,7 @@ public static class ReportEndpoints
             return new
             {
                 MembershipId = m.Id,
-                Name = m.User!.DisplayName ?? m.User.Mobile,
+                Name = m.DisplayName ?? m.User!.Mobile,
                 m.Role,
                 Cases = mine.Count,
                 BaseRials = mine.Sum(x => x.BaseRials),

@@ -2109,6 +2109,10 @@ namespace Arte.Core.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<long?>("FixedMonthlyRials")
                         .HasColumnType("bigint");
 

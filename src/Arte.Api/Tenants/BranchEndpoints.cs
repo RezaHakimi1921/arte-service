@@ -234,7 +234,7 @@ public static class BranchEndpoints
         foreach (var m in staff.Where(s => !already.Contains(s.UserId)))
             db.Memberships.Add(new Membership
             {
-                UserId = m.UserId, Role = m.Role, Permissions = m.Permissions, PayModel = m.PayModel,
+                UserId = m.UserId, DisplayName = m.DisplayName, Role = m.Role, Permissions = m.Permissions, PayModel = m.PayModel,
                 CommissionPercent = m.CommissionPercent, FixedMonthlyRials = m.FixedMonthlyRials, CommissionType = m.CommissionType,
                 CommissionFixedRials = m.CommissionFixedRials, CommissionBase = m.CommissionBase, SurveyNotify = m.SurveyNotify,
                 CreatedAt = now,

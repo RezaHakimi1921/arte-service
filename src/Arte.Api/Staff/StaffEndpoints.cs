@@ -26,7 +26,7 @@ public static class StaffEndpoints
                 .OrderBy(m => m.CreatedAt)
                 .Select(m => new
                 {
-                    m.Id, m.UserId, m.User!.Mobile, m.User.DisplayName, m.Role,
+                    m.Id, m.UserId, m.User!.Mobile, m.DisplayName, m.Role,
                     Permissions = m.Role == Roles.Owner ? Permissions.All.ToArray() : m.Permissions,
                     m.IsActive, m.PayModel, m.CommissionPercent, m.FixedMonthlyRials,
                     m.CommissionType, m.CommissionFixedRials, m.CommissionBase, m.SurveyNotify,
@@ -61,6 +61,8 @@ public static class StaffEndpoints
             var membership = new Membership
             {
                 UserId = user.Id, Role = role, Permissions = granted, CreatedAt = clock.UtcNow,
+                // The name is this branch's own: an existing user's name from another branch is never read or reused here.
+                DisplayName = string.IsNullOrEmpty(name) ? null : name,
                 // Supervisors follow customer feedback by default; the manager can switch it per member.
                 SurveyNotify = role == Roles.Supervisor,
             };
@@ -123,7 +125,7 @@ public static class StaffEndpoints
             if (req.CommissionFixedRials is not null) target.CommissionFixedRials = req.CommissionFixedRials == 0 ? null : req.CommissionFixedRials;
             if (req.CommissionBase is not null) target.CommissionBase = req.CommissionBase;
             if (req.SurveyNotify is { } notify) target.SurveyNotify = notify;
-            if (displayName is not null && target.User is not null) target.User.DisplayName = displayName.Length == 0 ? null : displayName;
+            if (displayName is not null) target.DisplayName = displayName.Length == 0 ? null : displayName;
 
             audit.Record("staff.updated", target.TenantId, me.RequiredUserId,
                 $"{target.Id} role={target.Role} active={target.IsActive} perms={string.Join(',', target.Permissions)}");
