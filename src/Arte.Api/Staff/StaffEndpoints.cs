@@ -76,7 +76,7 @@ public static class StaffEndpoints
 
             var membership = new Membership
             {
-                UserId = user.Id, Role = role, Permissions = granted, CreatedAt = clock.UtcNow,
+                UserId = user.Id, Role = role, Permissions = granted, CreatedAt = clock.UtcNow, TourDoneAt = clock.UtcNow,
                 // The name is this branch's own: an existing user's name from another branch is never read or reused here.
                 DisplayName = string.IsNullOrEmpty(name) ? null : name,
                 // Supervisors follow customer feedback by default; the manager can switch it per member.

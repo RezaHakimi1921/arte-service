@@ -183,8 +183,12 @@ public static class TenantEndpoints
         sp.GetRequiredService<TenantContext>().Set(tenant.Id);
 
         db.Tenants.Add(tenant);
+        // The intro tour opens by itself only for a person's very first business (their sign-up). Every later
+        // membership starts as «tour done»; the tour stays available from Settings → راهنمای برنامه.
+        var firstEver = !await db.Memberships.IgnoreQueryFilters([ArteDbContext.TenantFilter]).AnyAsync(m => m.UserId == ownerUserId, ct);
         var owner = new Membership
         {
+            TourDoneAt = firstEver ? null : clock.UtcNow,
             TenantId = tenant.Id,
             UserId = ownerUserId,
             Role = Roles.Owner,
