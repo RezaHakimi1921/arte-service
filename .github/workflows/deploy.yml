@@ -1,9 +1,11 @@
 # Manual production deploy. Never runs on push or pull_request (the repository is public).
 #
-# 1. "build" runs on a GitHub-hosted runner: builds the PWA and landing page and packs HEAD + dist folders.
-# 2. "deploy" runs on the self-hosted runner installed on the server (label: arte-prod). It only unpacks the
-#    archive in ~/arte-service and runs docker compose, like deploy/ship.sh. The "production" environment
-#    asks the owner to approve every run before this job starts.
+# 1. "ci" (ci.yml): .NET build + tests and the web/landing builds on GitHub-hosted runners.
+#    If anything fails, every later job is skipped and nothing reaches the server.
+# 2. "build": packs HEAD + the built PWA and landing page, on a GitHub-hosted runner.
+# 3. "deploy": runs on the self-hosted runner on the server (label: arte-prod). It only unpacks the archive in
+#    ~/arte-service and runs docker compose, like deploy/ship.sh. The "production" environment asks the owner to
+#    approve every run, and only the main branch may use it.
 name: deploy
 
 on:
@@ -17,12 +19,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: ci
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - run: npm ci --ignore-scripts && npm run build
@@ -33,18 +43,19 @@ jobs:
         run: |
           git archive --format=tar HEAD -o arte-ship.tar
           tar -rf arte-ship.tar web/dist landing/dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: arte-ship
           path: arte-ship.tar
           retention-days: 3
 
   deploy:
-    needs: build
+    needs: [ci, build]
     runs-on: [self-hosted, arte-prod]
     environment: production
+    timeout-minutes: 30
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: arte-ship
           path: ${{ runner.temp }}/ship
@@ -61,7 +72,29 @@ jobs:
           sleep 10
           docker compose ps --format '{{.Service}} {{.Status}}'
           docker compose logs api --since 2m 2>&1 | grep -E "Applying migration|fail:|Exception" | cut -c1-160 || true
+      # A real check: each URL must answer with exactly the expected status, retried while the containers warm up.
+      # GET /api/v1/me without a token is 401 by design (tests/Arte.Tests/AuthTests.cs), so 401 means "API up and
+      # authenticating"; 200 would mean the API answers without sign-in, and 000/5xx means it is down.
       - name: Health check
+        shell: bash
         run: |
-          curl -s -o /dev/null -w "site %{http_code}\n" https://service.artepersia.com/
-          curl -s -o /dev/null -w "api (unauthenticated) %{http_code}\n" https://service.artepersia.com/api/v1/me
+          set -uo pipefail
+          expect() {
+            local want="$1" url="$2" code=000
+            for attempt in 1 2 3 4 5 6; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$url" || true)
+              [ "$code" = "$want" ] && { echo "OK   $url -> $code"; return 0; }
+              echo "wait $url -> $code (expected $want), attempt $attempt/6"
+              sleep 10
+            done
+            echo "FAIL $url -> $code (expected $want)" >&2
+            return 1
+          }
+          status=0
+          expect 200 https://service.artepersia.com/ || status=1
+          expect 401 https://service.artepersia.com/api/v1/me || status=1
+          expect 200 https://artepersia.com/ || status=1
+          exit $status
+      - name: Remove the downloaded archive
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/ship"

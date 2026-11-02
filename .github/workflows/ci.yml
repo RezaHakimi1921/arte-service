@@ -1,0 +1,60 @@
+# Build and tests on every push and pull request.
+#
+# Safety rules for this file (the repository is public):
+# - GitHub-hosted runners only. Nothing here may use the self-hosted "arte-prod" runner.
+# - No secrets, no environment, read-only token. "pull_request" (never "pull_request_target") keeps fork code away from secrets.
+# - The same workflow is called by deploy.yml, so a deploy can only start after these jobs are green.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # The event name is part of the key so a push run on main never cancels or replaces the run called by a deploy.
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  dotnet:
+    name: dotnet build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Every project targets net10.0 (src/Arte.Core, src/Arte.Api, tests/Arte.Tests); there is no global.json.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore Arte.slnx
+      - run: dotnet build Arte.slnx --configuration Release --no-restore
+      # The tests start PostgreSQL with Testcontainers; Docker is preinstalled on ubuntu-latest.
+      - run: dotnet test tests/Arte.Tests --configuration Release --no-build
+
+  web:
+    name: ${{ matrix.app }} build and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, landing]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
