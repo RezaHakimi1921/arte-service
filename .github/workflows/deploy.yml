@@ -1,0 +1,67 @@
+# Manual production deploy. Never runs on push or pull_request (the repository is public).
+#
+# 1. "build" runs on a GitHub-hosted runner: builds the PWA and landing page and packs HEAD + dist folders.
+# 2. "deploy" runs on the self-hosted runner installed on the server (label: arte-prod). It only unpacks the
+#    archive in ~/arte-service and runs docker compose, like deploy/ship.sh. The "production" environment
+#    asks the owner to approve every run before this job starts.
+name: deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts && npm run build
+        working-directory: web
+      - run: npm ci --ignore-scripts && npm run build
+        working-directory: landing
+      - name: Pack release
+        run: |
+          git archive --format=tar HEAD -o arte-ship.tar
+          tar -rf arte-ship.tar web/dist landing/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-ship
+          path: arte-ship.tar
+          retention-days: 3
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, arte-prod]
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: arte-ship
+          path: ${{ runner.temp }}/ship
+      - name: Unpack and restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$HOME/arte-service"
+          tar -xf "$RUNNER_TEMP/ship/arte-ship.tar" --no-same-owner
+          cd deploy
+          docker compose build api
+          docker compose up -d
+          docker compose restart web landing
+          sleep 10
+          docker compose ps --format '{{.Service}} {{.Status}}'
+          docker compose logs api --since 2m 2>&1 | grep -E "Applying migration|fail:|Exception" | cut -c1-160 || true
+      - name: Health check
+        run: |
+          curl -s -o /dev/null -w "site %{http_code}\n" https://service.artepersia.com/
+          curl -s -o /dev/null -w "api (unauthenticated) %{http_code}\n" https://service.artepersia.com/api/v1/me
