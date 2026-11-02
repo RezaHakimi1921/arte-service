@@ -80,6 +80,28 @@ public sealed class BillingTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task A_member_who_cannot_see_the_case_cannot_void_its_payments()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var c = await OpenCase(owner);
+        var id = c.GetProperty("id");
+        var b = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 1_000_000, method = "cash" }));
+        var paymentId = b.GetProperty("payments").EnumerateArray().Last().GetProperty("id").GetGuid();
+
+        // A technician who may record payments but has no access to this unassigned case.
+        var techMobile = ArteApiFactory.NewMobile();
+        var added = await Json(await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, displayName = "شاگرد", role = "technician" }));
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.PatchAsJsonAsync($"/api/v1/staff/{added.GetProperty("id").GetGuid()}",
+            new { permissions = new[] { "cases.work", "payments.record" } })).StatusCode);
+        var (tech, _) = await api.LoginAsync(techMobile);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await tech.DeleteAsync($"/api/v1/cases/{id}/payments/{paymentId}")).StatusCode);
+        // The payment is still there: the owner can void it (a 404 here would mean the technician already did).
+        var voided = await Json(await owner.DeleteAsync($"/api/v1/cases/{id}/payments/{paymentId}"));
+        Assert.Equal(0, Money(voided, "paidRials"));
+    }
+
+    [Fact]
     public async Task Deposit_payment_void_and_delivery_on_credit_with_warranty()
     {
         var (owner, _) = await api.NewBusinessAsync();

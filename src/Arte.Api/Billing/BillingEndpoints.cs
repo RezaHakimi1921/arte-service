@@ -242,7 +242,8 @@ public static class BillingEndpoints
     private static async Task<IResult> VoidPaymentAsync(Guid caseId, Guid paymentId, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
     {
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == caseId, ct);
-        if (c is null) return Results.NotFound();
+        // Same visibility rule as recording a payment: a member who cannot see the case cannot void its payments.
+        if (c is null || !CaseAccess.CanSee(me.RequiredMembership, c)) return Results.NotFound();
         var p = await db.Payments.SingleOrDefaultAsync(x => x.Id == paymentId && x.CaseId == caseId, ct);
         if (p is null) return Results.NotFound();
         p.DeletedAt = clock.UtcNow;

@@ -100,7 +100,9 @@ public static class AttachmentEndpoints
 
         var root = Root(config, env);
         var full = Path.GetFullPath(Path.Combine(root, a.StoragePath));
-        if (!full.StartsWith(root, StringComparison.Ordinal) || !File.Exists(full)) return Results.NotFound();
+        // Containment check with a trailing separator, so a sibling folder such as "uploads-old" never matches "uploads".
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(rootWithSeparator, StringComparison.Ordinal) || !File.Exists(full)) return Results.NotFound();
         return Results.File(full, a.ContentType, enableRangeProcessing: false);
     }
 

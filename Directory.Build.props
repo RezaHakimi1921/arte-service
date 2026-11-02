@@ -1,6 +1,9 @@
 <Project>
-  <!-- api.nuget.org از بعضی شبکه‌ها timeout می‌دهد و هر بیلد را ~۱–۲ دقیقه کند می‌کند -->
+  <!-- Vulnerable NuGet packages are reported at every restore/build (direct and transitive).
+       If api.nuget.org times out on a slow network, run with -p:NuGetAudit=false for that one build instead of turning it off here. -->
   <PropertyGroup>
-    <NuGetAudit>false</NuGetAudit>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 </Project>

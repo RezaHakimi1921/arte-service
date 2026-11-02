@@ -262,6 +262,9 @@ public partial class Program;
 
 static class StartupChecks
 {
+    /// <summary>The key committed in appsettings.Development.json (public). Refused outside development.</summary>
+    private const string DevelopmentJwtKey = "6oDXpROXQyEUV7GG0Oy4H2i4ea3uJ5XaP7jYroDSqI4=";
+
     /// <summary>Refuses to start with missing or weak secrets.</summary>
     public static void Validate(IHostEnvironment env, JwtOptions jwt, OtpOptions otp, SmsOptions sms, string? connectionString)
     {
@@ -270,6 +273,12 @@ static class StartupChecks
         try { key = Convert.FromBase64String(jwt.Key); } catch (FormatException) { }
         if (key.Length < 32) problems.Add("Jwt:Key must be base64 of at least 32 random bytes.");
         if (otp.Pepper.Length < 32) problems.Add("Otp:Pepper must be at least 32 characters.");
+        // appsettings.Development.json is public (the repository is public): its keys must never sign or hash anything outside development.
+        if (!env.IsDevelopment())
+        {
+            if (jwt.Key == DevelopmentJwtKey) problems.Add("Jwt:Key is the published development key. Generate a new one (deploy/init-env.sh).");
+            if (otp.Pepper.StartsWith("development-only", StringComparison.Ordinal)) problems.Add("Otp:Pepper is the published development value. Generate a new one (deploy/init-env.sh).");
+        }
         if (string.IsNullOrEmpty(connectionString)) problems.Add("ConnectionStrings:Default is missing.");
         if (env.IsProduction() && sms.Provider == "fake" && !sms.AllowFakeInProduction)
             problems.Add("Sms:Provider is 'fake' in production. Set Sms:AllowFakeInProduction with Sms:FakeAllowedMobiles, or configure a real provider.");
