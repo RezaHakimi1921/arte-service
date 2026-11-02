@@ -37,6 +37,15 @@ public sealed class SurveyTests(ArteApiFactory api)
         return (owner, tenantId, admin);
     }
 
+    /// <summary>New sign-ups get the survey add-on with their trial; this business has it switched off by the platform admin.</summary>
+    private async Task<HttpClient> BusinessWithoutSurveyAsync()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var admin = await AdminAsync();
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{tenantId}", new { surveyEnabled = false })).StatusCode);
+        return owner;
+    }
+
     private static async Task<(Guid Id, string Code, string Mobile)> OpenCase(HttpClient owner, Guid? assigneeId = null)
     {
         var mobile = ArteApiFactory.NewMobile();
@@ -183,7 +192,7 @@ public sealed class SurveyTests(ArteApiFactory api)
         Assert.DoesNotContain(MessageKeysSurvey, api.Sms.Keys[mobile2]);
 
         // No add-on: the delivered SMS, no survey.
-        var (plain, _) = await api.NewBusinessAsync();
+        var plain = await BusinessWithoutSurveyAsync();
         await Json(await plain.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = true, smsOnDelivered = true }));
         var (id3, _, mobile3) = await OpenCase(plain);
         Assert.Equal(JsonValueKind.Null, (await Deliver(plain, id3)).GetProperty("survey").ValueKind);
@@ -192,9 +201,16 @@ public sealed class SurveyTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Without_the_add_on_there_is_no_survey()
+    public async Task New_businesses_get_the_survey_add_on_with_their_trial()
     {
         var (owner, _) = await api.NewBusinessAsync();
+        Assert.True((await Json(await owner.GetAsync("/api/v1/settings/business"))).GetProperty("surveyEnabled").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Without_the_add_on_there_is_no_survey()
+    {
+        var owner = await BusinessWithoutSurveyAsync();
         var (id, code, _) = await OpenCase(owner);
         var c = await Deliver(owner, id);
         Assert.Equal(JsonValueKind.Null, c.GetProperty("survey").ValueKind);

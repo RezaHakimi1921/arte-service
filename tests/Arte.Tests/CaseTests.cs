@@ -167,7 +167,8 @@ public sealed class CaseTests(ArteApiFactory api)
         var second = await Open(owner);
         var hits = await Json(await owner.GetAsync("/api/v1/cases?q=CASE-2"));
         Assert.Equal(second.GetProperty("id").GetGuid(), Assert.Single(hits.EnumerateArray()).GetProperty("id").GetGuid());
-        Assert.Equal("case.opened", hits[0].GetProperty("lastEvent").GetProperty("type").GetString());
+        // Customer SMS is on by default: the SMS sent right after opening is the newest timeline event.
+        Assert.Equal("customer.sms", hits[0].GetProperty("lastEvent").GetProperty("type").GetString());
     }
 
     [Fact]
