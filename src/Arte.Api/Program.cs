@@ -65,6 +65,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<Audit>();
 builder.Services.AddScoped<OtpService>();
 builder.Services.AddScoped<Arte.Api.Tracking.CustomerNotifier>();
+builder.Services.AddScoped<Arte.Api.Push.PushNotifier>();
 builder.Services.AddScoped<Arte.Api.Surveys.SurveyService>();
 builder.Services.AddSingleton<Arte.Api.Surveys.SurveySender>();
 // Tests switch the timer off and run the sender by hand.
@@ -199,6 +200,7 @@ app.MapOnboarding();
 Arte.Api.Tracking.TrackingEndpoints.MapTracking(app);
 Arte.Api.Workshop.WorkshopEndpoints.MapWorkshop(app);
 Arte.Api.Billing.FinanceEndpoints.MapFinance(app);
+Arte.Api.Push.PushEndpoints.MapPush(app);
 Arte.Api.Surveys.SurveyEndpoints.MapSurveys(app);
 // Public, for the sign-in and tracking pages: how to reach Arte support.
 app.MapGet("/api/v1/public/info", (IConfiguration c) => Results.Ok(new { SupportPhone = c["Platform:SupportPhone"] })).AllowAnonymous();

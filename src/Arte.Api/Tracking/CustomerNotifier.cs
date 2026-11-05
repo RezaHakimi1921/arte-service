@@ -62,6 +62,7 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
                 MessageKeys.CaseOpened => t.SmsOnOpened,
                 MessageKeys.CaseReady => t.SmsOnReady,
                 MessageKeys.CaseDelivered => t.SmsOnDelivered,
+                MessageKeys.CaseWaitingPart => t.SmsOnWaitingPart,
                 _ => false,
             };
             if (!t.CustomerSmsEnabled || !wanted) return;
@@ -72,6 +73,42 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "Customer SMS {MessageKey} for case {CaseId} failed", messageKey, c.Id);
+        }
+    }
+
+    /// <summary>SMS to the master(s) that a finished job waits for review. Who: members who can approve work (cases.create), except the one who finished it.</summary>
+    public async Task NotifyMastersAsync(Case c, Guid actorUserId, CancellationToken ct)
+    {
+        try
+        {
+            if (c.IsSample) return;
+            var t = await db.Tenants.AsNoTracking().SingleAsync(x => x.Id == c.TenantId, ct);
+            if (!t.SmsToMasterOnFinished) return;
+            var members = await db.Memberships.AsNoTracking().Include(m => m.User).Where(m => m.IsActive && m.UserId != actorUserId).ToListAsync(ct);
+            var mobiles = members.Where(m => m.Has(Arte.Core.Identity.Permissions.CasesCreate) && m.User is not null).Select(m => m.User!.Mobile).Distinct().Take(3).ToList();
+            if (mobiles.Count == 0) return;
+            var asset = c.AssetId is null ? null : await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking().SingleOrDefaultAsync(x => x.Id == c.AssetId, ct);
+            var tokens = new Dictionary<string, string>
+            {
+                ["shop"] = Cut(t.Name, SmsLimits.Shop),
+                ["name"] = "همکار",
+                ["vehicle"] = Cut(asset is null ? "وسیله‌ی" : $"{KindWords.GetValueOrDefault(asset.Kind, "وسیله‌ی")} {asset.Title}", SmsLimits.Vehicle),
+                ["code"] = $"CASE-{c.Number}",
+            };
+            foreach (var mobile in mobiles)
+            {
+                var result = await sms.SendTemplateAsync(mobile, MessageKeys.StaffWorkFinished, tokens, ct);
+                db.CaseEvents.Add(new CaseEvent
+                {
+                    TenantId = c.TenantId, CaseId = c.Id, Type = "staff.sms", OccurredAt = clock.UtcNow,
+                    Data = JsonSerializer.SerializeToDocument(new { Kind = MessageKeys.StaffWorkFinished, Sent = result.Accepted, Error = result.Accepted ? null : result.Error }, Json),
+                });
+            }
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Master SMS for case {CaseId} failed", c.Id);
         }
     }
 

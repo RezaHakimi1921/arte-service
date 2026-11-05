@@ -193,6 +193,7 @@ public static class FinanceEndpoints
                 Data = JsonSerializer.SerializeToDocument(new { claimedRials = claimed }, Json),
             });
             await db.SaveChangesAsync(ct);
+            await sp.GetRequiredService<Arte.Api.Push.PushNotifier>().CaseEventAsync(c.Id, c.Number, null, "رسید پرداخت جدید از مشتری", Permissions.PaymentsRecord, ct);
             return Results.Created($"/api/v1/track/{code}", new { receipt.Id });
         }).AllowAnonymous().RequireRateLimiting("session");
 

@@ -495,7 +495,8 @@ public static class CaseEndpoints
     }
 
     private static async Task<IResult> TransitionAsync(Guid id, Guid transitionId, RunTransition req, RequestUser me,
-        ArteDbContext db, IClock clock, Arte.Api.Tracking.CustomerNotifier notifier, Arte.Api.Surveys.SurveyService surveys, CancellationToken ct)
+        ArteDbContext db, IClock clock, Arte.Api.Tracking.CustomerNotifier notifier, Arte.Api.Surveys.SurveyService surveys,
+        Arte.Api.Push.PushNotifier push, CancellationToken ct)
     {
         var m = me.RequiredMembership;
         var c = await db.Cases.SingleOrDefaultAsync(x => x.Id == id, ct);
@@ -588,6 +589,19 @@ public static class CaseEndpoints
         {
             if (to.Key == "ready") await notifier.NotifyAsync(c, MessageKeys.CaseReady, ct);
             else if (to.Key == "delivered") await notifier.NotifyAsync(c, MessageKeys.CaseDelivered, ct);
+            else if (to.Key == "awaiting_parts" && waitReason == WaitReasons.CustomerParts) await notifier.NotifyAsync(c, MessageKeys.CaseWaitingPart, ct);
+            else if (to.Key == "review") await notifier.NotifyMastersAsync(c, userId, ct);
+
+            // Push to the people who run the business: work started, finished, delivered.
+            var pushTitle = to.Key switch
+            {
+                "repairing" when from.Key != "review" => "کار شروع شد",
+                "review" => "کار تمام شد؛ منتظر بررسی استاد",
+                "ready" => "کار تمام شد؛ آماده تحویل",
+                "delivered" => "وسیله تحویل داده شد",
+                _ => null,
+            };
+            if (pushTitle is not null && !c.IsSample) await push.CaseEventAsync(c.Id, c.Number, userId, pushTitle, Permissions.CasesCreate, ct);
             return Results.Ok(await BuildDetail(c, m, db, ct));
         });
     }
