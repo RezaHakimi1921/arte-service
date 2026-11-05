@@ -1,4 +1,5 @@
 using Arte.Core.Common;
+using Arte.Core.Tenancy;
 
 namespace Arte.Core.Billing;
 
