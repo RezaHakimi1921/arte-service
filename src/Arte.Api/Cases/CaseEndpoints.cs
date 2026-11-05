@@ -236,7 +236,7 @@ public static class CaseEndpoints
             Billing = await BillingEndpoints.MoneyView(db, c.Id, me, ct),
             PhotosVisibleByDefault = await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct),
             Photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.Purpose == AttachmentPurposes.Photo).OrderBy(a => a.CreatedAt)
-                .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt, a.VisibleToCustomer }).ToListAsync(ct),
+                .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt, a.VisibleToCustomer, IsVideo = a.ContentType.StartsWith("video/") }).ToListAsync(ct),
             Survey = await Arte.Api.Surveys.SurveyEndpoints.CaseViewAsync(db, c, ct),
             CanFollowUp = CaseAccess.CanSeeAll(me),
             Transitions = allowed,

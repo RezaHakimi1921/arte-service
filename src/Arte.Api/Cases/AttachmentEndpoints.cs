@@ -14,6 +14,8 @@ namespace Arte.Api.Cases;
 public static class AttachmentEndpoints
 {
     public const long MaxBytes = 6 * 1024 * 1024;
+    /// <summary>A short clip (about 30 seconds from a phone camera). Videos are kept for the shop only, never shown to the customer.</summary>
+    public const long MaxVideoBytes = 30 * 1024 * 1024;
 
     private static readonly (string Type, string Ext, byte[] Magic, int Offset)[] Allowed =
     [
@@ -27,6 +29,15 @@ public static class AttachmentEndpoints
     {
         var kind = Allowed.FirstOrDefault(a => bytes.Length >= a.Offset + a.Magic.Length && bytes.AsSpan(a.Offset, a.Magic.Length).SequenceEqual(a.Magic));
         return kind.Type is null ? null : (kind.Type, kind.Ext);
+    }
+
+    /// <summary>A video type, decided from its first bytes: MP4 or QuickTime («ftyp» box) and WebM (EBML header).</summary>
+    internal static (string Type, string Ext)? SniffVideo(byte[] bytes)
+    {
+        if (bytes.Length >= 12 && bytes.AsSpan(4, 4).SequenceEqual("ftyp"u8))
+            return bytes.AsSpan(8, 2).SequenceEqual("qt"u8) ? ("video/quicktime", "mov") : ("video/mp4", "mp4");
+        if (bytes.Length >= 4 && bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) return ("video/webm", "webm");
+        return null;
     }
 
     public static void MapAttachments(this IEndpointRouteBuilder app)
@@ -51,13 +62,13 @@ public static class AttachmentEndpoints
 
         // This endpoint alone accepts bodies larger than the global 1 MB limit.
         var sizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
-        if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = MaxBytes + 64 * 1024;
+        if (sizeFeature is { IsReadOnly: false }) sizeFeature.MaxRequestBodySize = MaxVideoBytes + 64 * 1024;
         if (!request.HasFormContentType) return Results.Problem(statusCode: 400, title: "فایلی ارسال نشده است.");
 
         var form = await request.ReadFormAsync(ct);
         var file = form.Files.GetFile("file");
         if (file is null || file.Length == 0) return Results.Problem(statusCode: 400, title: "فایلی ارسال نشده است.");
-        if (file.Length > MaxBytes) return Results.Problem(statusCode: 400, title: "حجم عکس حداکثر ۶ مگابایت است.");
+        if (file.Length > MaxVideoBytes) return Results.Problem(statusCode: 400, title: "حجم فیلم حداکثر ۳۰ مگابایت است (حدود ۳۰ ثانیه).");
         var caption = form["caption"].ToString().Trim();
         if (caption.Length > 200) caption = caption[..200];
         // A receipt belongs to a payment: never in the gallery, never shown to the customer.
@@ -71,8 +82,12 @@ public static class AttachmentEndpoints
         await using var buffer = new MemoryStream();
         await file.CopyToAsync(buffer, ct);
         var bytes = buffer.ToArray();
-        var kind = Allowed.FirstOrDefault(a => bytes.Length >= a.Offset + a.Magic.Length && bytes.AsSpan(a.Offset, a.Magic.Length).SequenceEqual(a.Magic));
-        if (kind.Type is null) return Results.Problem(statusCode: 400, title: "فقط عکس JPG، PNG یا WebP قابل بارگذاری است.");
+        var image = Sniff(bytes);
+        var video = image is null && !receipt ? SniffVideo(bytes) : null;
+        if (image is null && video is null) return Results.Problem(statusCode: 400, title: "فقط عکس JPG، PNG یا WebP (یا فیلم کوتاه MP4/MOV/WebM) قابل بارگذاری است.");
+        if (image is not null && bytes.Length > MaxBytes) return Results.Problem(statusCode: 400, title: "حجم عکس حداکثر ۶ مگابایت است.");
+        var kind = image ?? video!.Value;
+        if (video is not null) visible = false;
 
         var stageKey = await db.Stages.Where(s => s.Id == c.StageId).Select(s => s.Key).SingleAsync(ct);
         var id = Guid.CreateVersion7();
@@ -92,7 +107,7 @@ public static class AttachmentEndpoints
         if (!receipt) db.CaseEvents.Add(new CaseEvent
         {
             CaseId = c.Id, Type = "case.photo_added", ActorUserId = me.RequiredUserId, OccurredAt = attachment.CreatedAt,
-            Data = System.Text.Json.JsonSerializer.SerializeToDocument(new { stage = stageKey, caption = attachment.Caption }),
+            Data = System.Text.Json.JsonSerializer.SerializeToDocument(new { stage = stageKey, caption = attachment.Caption, video = video is not null }),
         });
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/attachments/{id}", new { attachment.Id, attachment.StageKey, attachment.CreatedAt, attachment.Caption, attachment.VisibleToCustomer });
@@ -110,7 +125,7 @@ public static class AttachmentEndpoints
         // Containment check with a trailing separator, so a sibling folder such as "uploads-old" never matches "uploads".
         var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
         if (!full.StartsWith(rootWithSeparator, StringComparison.Ordinal) || !File.Exists(full)) return Results.NotFound();
-        return Results.File(full, a.ContentType, enableRangeProcessing: false);
+        return Results.File(full, a.ContentType, enableRangeProcessing: a.ContentType.StartsWith("video/"));
     }
 
     public sealed record UpdatePhoto(bool? VisibleToCustomer, string? Caption);

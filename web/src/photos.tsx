@@ -4,7 +4,9 @@ import { useFeedback } from "./feedback";
 import { BottomSheet, SheetOption } from "./sheet";
 import { formatNumber } from "./ui";
 
-export type CasePhoto = { id: string; stageKey: string; caption: string | null; createdAt: string; visibleToCustomer: boolean };
+export type CasePhoto = { id: string; stageKey: string; caption: string | null; createdAt: string; visibleToCustomer: boolean; isVideo?: boolean };
+
+const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
 
 const STAGE_HINT: Record<string, string> = {
   received: "پذیرش", diagnosing: "عیب‌یابی", awaiting_approval: "تأیید", awaiting_parts: "انتظار قطعه",
@@ -37,8 +39,8 @@ function Thumb({ photo, onOpen }: { photo: CasePhoto; onOpen: (url: string) => v
     return () => { alive = false; if (made) URL.revokeObjectURL(made); };
   }, [photo.id]);
   return (
-    <button type="button" className="photo-thumb" onClick={() => url && onOpen(url)} aria-label={`عکس ${STAGE_HINT[photo.stageKey] ?? ""}`} aria-busy={!url && !failed}>
-      {url ? <img src={url} alt="" /> : <span className="muted small">{failed ? "!" : ""}</span>}
+    <button type="button" className="photo-thumb" onClick={() => url && onOpen(url)} aria-label={`${photo.isVideo ? "فیلم" : "عکس"} ${STAGE_HINT[photo.stageKey] ?? ""}`} aria-busy={!url && !failed}>
+      {url ? (photo.isVideo ? <video src={url} muted playsInline preload="metadata" /> : <img src={url} alt="" />) : <span className="muted small">{failed ? "!" : ""}</span>}
       {photo.visibleToCustomer && <span className="photo-shared" title="مشتری این عکس را می‌بیند">مشتری</span>}
       <span className="photo-tag small">{STAGE_HINT[photo.stageKey] ?? ""}</span>
     </button>
@@ -67,11 +69,15 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
     try {
       for (const file of Array.from(files).slice(0, 6)) {
         const form = new FormData();
-        form.append("file", await compress(file), "photo.jpg");
+        if (file.type.startsWith("video/")) {
+          // Videos go as recorded: keep clips short (about 30 seconds); the server refuses anything over 30 MB.
+          if (file.size > MAX_VIDEO_BYTES) { notify("فیلم بزرگ‌تر از ۳۰ مگابایت است؛ کوتاه‌تر ضبط کنید.", "error"); continue; }
+          form.append("file", file, file.name || "video.mp4");
+        } else form.append("file", await compress(file), "photo.jpg");
         form.append("visibleToCustomer", share ? "true" : "false");
         await api(`/api/v1/cases/${caseId}/attachments`, { body: form });
       }
-      notify(files.length > 1 ? `${formatNumber(files.length)} عکس اضافه شد` : "عکس اضافه شد");
+      notify(files.length > 1 ? `${formatNumber(files.length)} فایل اضافه شد` : "اضافه شد");
       onChange();
     } catch (err) {
       notify(err instanceof ApiError ? err.message : "بارگذاری عکس انجام نشد", "error");
@@ -118,11 +124,11 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
         <h3>عکس‌ها{photos.length > 0 && <span className="muted small font-num"> ({formatNumber(photos.length)})</span>}</h3>
         {canAdd && (
           <button type="button" onClick={() => input.current?.click()} disabled={uploading} aria-busy={uploading}>
-            {uploading ? "در حال بارگذاری…" : "📷 افزودن عکس"}
+            {uploading ? "در حال بارگذاری…" : "📷 عکس یا فیلم"}
           </button>
         )}
       </div>
-      <input ref={input} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => upload(e.target.files)} />
+      <input ref={input} type="file" accept="image/*,video/*" capture="environment" multiple hidden onChange={(e) => upload(e.target.files)} />
       {canAdd && (
         <label className="photo-share">
           <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} />
@@ -140,14 +146,16 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
       <BottomSheet open={!!viewing} title={viewing ? `عکس ${STAGE_HINT[viewing.photo.stageKey] ?? ""}` : "عکس"} onClose={() => setViewing(null)}>
         {viewing && (
           <>
-            <img className="photo-full" src={viewing.url} alt={viewing.photo.caption ?? ""} />
+            {viewing.photo.isVideo
+              ? <video className="photo-full" src={viewing.url} controls playsInline />
+              : <img className="photo-full" src={viewing.url} alt={viewing.photo.caption ?? ""} />}
             <p className="muted small">{new Intl.DateTimeFormat("fa-IR-u-ca-persian", { dateStyle: "medium", timeStyle: "short" }).format(new Date(viewing.photo.createdAt))}</p>
-            <label className="setting-row">
+            {!viewing.photo.isVideo && <label className="setting-row">
               <span><strong>مشتری این عکس را ببیند</strong><span className="muted small">در صفحه‌ی پیگیری مشتری نشان داده می‌شود.</span></span>
               <input type="checkbox" role="switch" className="switch" checked={viewing.photo.visibleToCustomer} disabled={busy}
                 onChange={(e) => toggleShare(viewing.photo, e.target.checked)} />
-            </label>
-            <SheetOption label="حذف عکس" tone="danger" disabled={busy} onClick={() => remove(viewing.photo)} />
+            </label>}
+            <SheetOption label={viewing.photo.isVideo ? "حذف فیلم" : "حذف عکس"} tone="danger" disabled={busy} onClick={() => remove(viewing.photo)} />
           </>
         )}
       </BottomSheet>
