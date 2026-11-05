@@ -23,6 +23,43 @@ namespace Arte.Core.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Arte.Core.Billing.BankCard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Bank")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("CardNumber")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HolderName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowOnTracking")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BankCards");
+                });
+
             modelBuilder.Entity("Arte.Core.Billing.CaseItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -157,6 +194,52 @@ namespace Arte.Core.Data.Migrations
                     b.ToTable("CatalogItems");
                 });
 
+            modelBuilder.Entity("Arte.Core.Billing.CustomerReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AttachmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("ClaimedRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId", "Status");
+
+                    b.ToTable("CustomerReceipts");
+                });
+
             modelBuilder.Entity("Arte.Core.Billing.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -165,6 +248,9 @@ namespace Arte.Core.Data.Migrations
 
                     b.Property<long>("AmountRials")
                         .HasColumnType("bigint");
+
+                    b.Property<Guid?>("CardId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("CaseId")
                         .HasColumnType("uuid");
@@ -199,17 +285,91 @@ namespace Arte.Core.Data.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("TerminalId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CaseId");
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("TerminalId");
+
                     b.HasIndex("TenantId", "CaseId");
 
                     b.HasIndex("TenantId", "PaidAt");
 
                     b.ToTable("Payments");
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.PaymentTerminal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Bank")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PaymentTerminals");
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.PushSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Auth")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Endpoint")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("character varying(600)");
+
+                    b.Property<string>("P256dh")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Endpoint")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PushSubscriptions");
                 });
 
             modelBuilder.Entity("Arte.Core.Billing.ServicePackage", b =>
@@ -2687,6 +2847,10 @@ namespace Arte.Core.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("InstagramId")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2694,6 +2858,22 @@ namespace Arte.Core.Data.Migrations
 
                     b.Property<long>("LastCaseNumber")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("MapBaladUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("MapGoogleUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("MapNeshanUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("MapWazeUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2721,6 +2901,9 @@ namespace Arte.Core.Data.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<bool>("RequirePaymentBeforeWork")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("RequireTransferReceipt")
                         .HasColumnType("boolean");
 
@@ -2738,6 +2921,12 @@ namespace Arte.Core.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<bool>("SmsOnWaitingPart")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SmsToMasterOnFinished")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("SurveyAlertBelow")
                         .ValueGeneratedOnAdd()
@@ -2763,6 +2952,11 @@ namespace Arte.Core.Data.Migrations
                         .HasDefaultValue(true);
 
                     b.Property<bool>("TrackShowItems")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("TrackShowPhone")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
