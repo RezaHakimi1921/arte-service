@@ -104,7 +104,7 @@ public sealed class WorkshopFixesTests(ArteApiFactory api)
     {
         var (owner, _) = await api.NewBusinessAsync();
         var (id, _) = await OpenCase(owner);
-        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/notes", new { text = "یادداشت" }));
+        (await owner.PostAsJsonAsync($"/api/v1/cases/{id}/notes", new { text = "یادداشت" })).EnsureSuccessStatusCode();
 
         var timeline = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("timeline").EnumerateArray().ToList();
         Assert.True(timeline.Count >= 2);
@@ -140,7 +140,7 @@ public sealed class WorkshopFixesTests(ArteApiFactory api)
         var (owner, _) = await api.NewBusinessAsync();
         var mobile = ArteApiFactory.NewMobile();
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/staff", new { mobile, role = "technician", password = "short" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/staff", new { mobile, role = "technician", password = mobile + "00" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/staff", new { mobile, role = "technician", password = mobile })).StatusCode);
 
         var username = "u" + Guid.NewGuid().ToString("N")[..8];
         Assert.Equal(HttpStatusCode.Created, (await owner.PostAsJsonAsync("/api/v1/staff",
