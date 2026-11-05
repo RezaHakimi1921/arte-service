@@ -92,7 +92,7 @@ public sealed class WorkshopFinanceTests(ArteApiFactory api)
 
         (await owner.PostAsJsonAsync($"/api/v1/customer-receipts/{rid}/approve", new { })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsJsonAsync($"/api/v1/customer-receipts/{rid}/approve", new { })).StatusCode);
-        var billing = await Json(await owner.GetAsync($"/api/v1/cases/{id}/billing"));
+        var billing = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("billing");
         Assert.Equal(500_000, billing.GetProperty("money").GetProperty("paidRials").GetInt64());
 
         // A rejected receipt records nothing and tells the customer why.
@@ -101,7 +101,7 @@ public sealed class WorkshopFinanceTests(ArteApiFactory api)
         (await owner.PostAsJsonAsync($"/api/v1/customer-receipts/{second}/reject", new { note = "مبلغ نمی‌خواند" })).EnsureSuccessStatusCode();
         track = await Json(await anon.GetAsync($"/api/v1/track/{code}"));
         Assert.Contains(track.GetProperty("pay").GetProperty("receipts").EnumerateArray(), r => r.GetProperty("note").GetString() == "مبلغ نمی‌خواند");
-        billing = await Json(await owner.GetAsync($"/api/v1/cases/{id}/billing"));
+        billing = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("billing");
         Assert.Equal(500_000, billing.GetProperty("money").GetProperty("paidRials").GetInt64());
     }
 
