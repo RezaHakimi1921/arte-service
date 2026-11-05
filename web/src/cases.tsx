@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { api, ApiError } from "./api";
 import { BillingSection, CreditSheet, MoneyBar, toman as tomanFmt, type Billing } from "./billing";
 import { useFeedback } from "./feedback";
-import { MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, caseCode, eventText, statusText, type Alert } from "./labels";
+import { MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, actorText, caseCode, eventText, statusText, type Alert } from "./labels";
 import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
@@ -530,7 +530,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
           {c.timeline.map((e) => (
             <li key={e.id}>
               <span className="timeline-text">{eventText(e.type, e.data)}</span>
-              <span className="muted small">{faDateTime.format(new Date(e.occurredAt))}{e.actor ? ` · ${e.actor}` : ""}</span>
+              <span className="muted small timeline-meta"><strong className="timeline-actor">{actorText(e.type, e.actor)}</strong> · {faDateTime.format(new Date(e.occurredAt))}</span>
             </li>
           ))}
         </ol>

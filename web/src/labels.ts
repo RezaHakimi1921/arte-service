@@ -73,6 +73,12 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "case.credit": (d) => `تحویل به‌صورت نسیه؛ مانده ${tomanText(d.balanceRials)}`,
 };
 
+/** Who did a timeline step: the staff member's name, or «مشتری» / «سیستم» for steps nobody on staff took. */
+export function actorText(type: string, actor: string | null | undefined): string {
+  if (actor) return `توسط ${actor}`;
+  return type === "survey.answered" || type === "customer.approved" ? "توسط مشتری" : "خودکار (سیستم)";
+}
+
 /** Plain Persian for any timeline event; never shows a raw code. */
 export function eventText(type: string, data: Record<string, unknown> | null | undefined): string {
   return (EVENT_TEXT[type] ?? (() => "تغییر در پرونده"))(data ?? {});

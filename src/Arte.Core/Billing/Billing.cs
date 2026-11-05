@@ -68,6 +68,20 @@ public sealed class CaseItem : ITenantOwned, ISoftDeletable
     public long LineTotalRials => Billable ? Math.Max(0, (long)Math.Round(Quantity * UnitPriceRials) - DiscountRials) : 0;
 
     public long LineCostRials => Billable && UnitCostRials is { } c ? (long)Math.Round(Quantity * c) : 0;
+
+    /// <summary>The discount that really reduced this line's price (never more than the line's price); zero when the line is not billed.</summary>
+    public long AppliedDiscountRials => Billable ? Math.Min(DiscountRials, Math.Max(0, (long)Math.Round(Quantity * UnitPriceRials))) : 0;
+
+    /// <summary>A shop line still waiting for its part: not billed yet, but its profit is already known.</summary>
+    public bool IsPendingForProfit => Status == ItemStatuses.Needed && Supplier == Suppliers.Shop;
+
+    /// <summary>What the line will bring in once it is fitted (sale price minus discount), whatever its status. Customer parts are zero.</summary>
+    public long ExpectedTotalRials => Supplier == Suppliers.Shop ? Math.Max(0, (long)Math.Round(Quantity * UnitPriceRials) - DiscountRials) : 0;
+
+    public long ExpectedCostRials => Supplier == Suppliers.Shop && UnitCostRials is { } c ? (long)Math.Round(Quantity * c) : 0;
+
+    /// <summary>Profit the line will make when fitted; shown for lines that are only waited for, so «منتظر قطعه» is not read as zero profit.</summary>
+    public long ExpectedProfitRials => ExpectedTotalRials - ExpectedCostRials;
 }
 
 public sealed class Payment : ITenantOwned, ISoftDeletable
@@ -103,8 +117,11 @@ public sealed class CatalogItem : ITenantOwned
     public Guid? StandardItemId { get; set; }
 }
 
+/// <param name="DiscountRials">Discounts actually applied on billed lines.</param>
+/// <param name="SubtotalRials">Total before discounts (TotalRials + DiscountRials).</param>
+/// <param name="PendingProfitRials">Expected profit of shop lines that are still waiting for the part (not in ProfitRials, which is the billed profit).</param>
 public sealed record CaseMoney(long TotalRials, long PaidRials, long BalanceRials, long PartsRials, long LaborRials,
-    long ServicesRials, long CostRials, long ProfitRials)
+    long ServicesRials, long CostRials, long ProfitRials, long DiscountRials = 0, long SubtotalRials = 0, long PendingProfitRials = 0)
 {
     public static CaseMoney Of(IEnumerable<CaseItem> items, IEnumerable<Payment> payments)
     {
@@ -112,11 +129,14 @@ public sealed record CaseMoney(long TotalRials, long PaidRials, long BalanceRial
         var total = billable.Sum(i => i.LineTotalRials);
         var paid = payments.Where(p => p.DeletedAt == null).Sum(p => p.AmountRials);
         var cost = billable.Sum(i => i.LineCostRials);
+        var discount = billable.Sum(i => i.AppliedDiscountRials);
         return new CaseMoney(
             total, paid, total - paid,
             billable.Where(i => i.Kind == ItemKinds.Part).Sum(i => i.LineTotalRials),
             billable.Where(i => i.Kind == ItemKinds.Labor).Sum(i => i.LineTotalRials),
             billable.Where(i => i.Kind == ItemKinds.Service).Sum(i => i.LineTotalRials),
-            cost, total - cost);
+            cost, total - cost,
+            discount, total + discount,
+            billable.Where(i => i.IsPendingForProfit && i.UnitCostRials != null).Sum(i => i.ExpectedProfitRials));
     }
 }

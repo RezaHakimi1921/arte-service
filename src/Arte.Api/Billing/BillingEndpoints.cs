@@ -357,14 +357,21 @@ public static class BillingEndpoints
                 i.DiscountRials, i.Supplier, i.Status, i.PerformedBy,
                 PerformedByName = i.PerformedBy is { } pb ? names.GetValueOrDefault(pb) : null,
                 i.WarrantyDays, i.LineTotalRials,
-                ProfitRials = showCost && i.UnitCostRials != null ? i.LineTotalRials - i.LineCostRials : (long?)null,
+                // A line that is only waited for is not billed yet, but its profit is known: show it as expected, never as zero.
+                ProfitRials = showCost && i.UnitCostRials != null
+                    ? (i.IsPendingForProfit ? i.ExpectedProfitRials : i.LineTotalRials - i.LineCostRials)
+                    : (long?)null,
+                ProfitIsExpected = i.IsPendingForProfit,
+                ExpectedTotalRials = i.IsPendingForProfit ? i.ExpectedTotalRials : (long?)null,
             }),
             Payments = payments.Select(p => new { p.Id, p.AmountRials, p.Method, p.PaidAt, p.Note, p.ReceiptId }),
             Money = new
             {
                 money.TotalRials, money.PaidRials, money.BalanceRials, money.PartsRials, money.LaborRials, money.ServicesRials,
+                money.DiscountRials, money.SubtotalRials,
                 CostRials = showCost ? money.CostRials : (long?)null,
                 ProfitRials = showCost ? money.ProfitRials : (long?)null,
+                PendingProfitRials = showCost ? money.PendingProfitRials : (long?)null,
             },
             CanEditItems = true,
             CanRecordPayments = m.Has(Permissions.PaymentsRecord),

@@ -10,7 +10,11 @@ namespace Arte.Api.Staff;
 
 public static class StaffEndpoints
 {
-    public sealed record AddStaff(string? Mobile, string? DisplayName, string? Role);
+    /// <summary>Username and password are optional: a person always signs in with an SMS code; with a password they can sign in with it too.</summary>
+    public sealed record AddStaff(string? Mobile, string? DisplayName, string? Role, string? Username = null, string? Password = null);
+
+    /// <summary>The manager sets (or resets) another member's sign-in name and/or password.</summary>
+    public sealed record SetCredentials(string? Username, string? NewPassword);
 
     public sealed record UpdateStaff(
         string? Role, string[]? Permissions, bool? IsActive,
@@ -26,12 +30,14 @@ public static class StaffEndpoints
                 .OrderBy(m => m.CreatedAt)
                 .Select(m => new
                 {
-                    m.Id, m.UserId, m.User!.Mobile, m.DisplayName, m.Role,
+                    m.Id, m.UserId, m.User!.Mobile, m.User!.Username, HasPassword = m.User!.PasswordHash != null, m.DisplayName, m.Role,
                     Permissions = m.Role == Roles.Owner ? Permissions.All.ToArray() : m.Permissions,
                     m.IsActive, m.PayModel, m.CommissionPercent, m.FixedMonthlyRials,
                     m.CommissionType, m.CommissionFixedRials, m.CommissionBase, m.SurveyNotify,
                 })
                 .ToListAsync(ct)));
+
+        MapCredentials(g);
 
         g.MapPost("/", async (AddStaff req, RequestUser me, ArteDbContext db, Audit audit, IClock clock, CancellationToken ct) =>
         {
@@ -41,6 +47,9 @@ public static class StaffEndpoints
             if (role is not (Roles.Supervisor or Roles.Technician)) errors["role"] = ["نقش باید supervisor یا technician باشد."];
             var name = req.DisplayName?.Trim();
             if (name is { Length: > 80 }) errors["displayName"] = ["نام حداکثر ۸۰ حرف."];
+            var username = CredentialRules.NormalizeUsername(req.Username);
+            var password = string.IsNullOrEmpty(req.Password) ? null : req.Password;
+            if (errors.ContainsKey("mobile") is false) CredentialRules.Validate(errors, username, password, mobile);
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var granted = Roles.DefaultPermissions(role);
@@ -50,11 +59,21 @@ public static class StaffEndpoints
             var user = await db.Users.SingleOrDefaultAsync(u => u.Mobile == mobile, ct);
             if (user is null)
             {
-                user = new User { Mobile = mobile, DisplayName = string.IsNullOrEmpty(name) ? null : name, CreatedAt = clock.UtcNow };
+                if (username is not null && await db.Users.AnyAsync(u => u.Username == username, ct))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["username"] = ["این نام کاربری گرفته شده است."] });
+                user = new User
+                {
+                    Mobile = mobile, DisplayName = string.IsNullOrEmpty(name) ? null : name, CreatedAt = clock.UtcNow,
+                    Username = username, PasswordHash = password is null ? null : PasswordHasher.Hash(password),
+                };
                 db.Users.Add(user);
             }
             else
             {
+                // A person who already has an account (maybe in another branch) keeps their own password: nobody else sets it here.
+                if (username is not null || password is not null)
+                    return Results.ValidationProblem(new Dictionary<string, string[]>
+                        { ["password"] = ["این شماره قبلاً حساب دارد؛ رمز و نام کاربری را خود شخص در «حساب من» تعیین می‌کند."] });
                 var existing = await db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).SingleOrDefaultAsync(m => m.UserId == user.Id, ct);
                 if (existing is { IsSupport: true })
                 {
@@ -83,7 +102,7 @@ public static class StaffEndpoints
                 SurveyNotify = role == Roles.Supervisor,
             };
             db.Memberships.Add(membership);
-            audit.Record("staff.added", me.RequiredMembership.TenantId, me.RequiredUserId, $"{membership.Id} {role}");
+            audit.Record("staff.added", me.RequiredMembership.TenantId, me.RequiredUserId, $"{membership.Id} {role}{(password is null ? "" : " with password")}");
             await db.SaveChangesAsync(ct);
             return Results.Created($"/api/v1/staff/{membership.Id}", new { membership.Id });
         });
@@ -152,6 +171,57 @@ public static class StaffEndpoints
 
             return Results.NoContent();
         });
+    }
+
+    private static void MapCredentials(RouteGroupBuilder g)
+    {
+        g.MapPut("/{id:guid}/credentials", async (Guid id, SetCredentials req, RequestUser me, ArteDbContext db, Audit audit,
+            TokenService tokens, CancellationToken ct) =>
+        {
+            var target = await db.Memberships.Include(m => m.User).SingleOrDefaultAsync(m => m.Id == id, ct);
+            if (target?.User is not { } user) return Results.NotFound();
+            if (target.Id == me.RequiredMembership.Id)
+                return Results.Problem(statusCode: 400, title: "رمز خودتان را از «حساب من» در تنظیمات تغییر دهید.");
+            if (target.Role == Roles.Owner && me.RequiredMembership.Role != Roles.Owner)
+                return Results.Problem(statusCode: 403, title: "رمز مالک را فقط خودش می‌تواند تغییر دهد.");
+            if (!CanGrant(me.RequiredMembership, target.Permissions))
+                return Results.Problem(statusCode: 403, title: "این عضو دسترسی‌ای بیشتر از شما دارد.");
+
+            // One account can belong to several branches: a manager of one branch must not take it over.
+            var elsewhere = await db.Memberships.IgnoreQueryFilters([ArteDbContext.TenantFilter, ArteDbContext.SupportFilter])
+                .AnyAsync(m => m.UserId == user.Id && m.TenantId != target.TenantId && !m.IsSupport, ct);
+            if (elsewhere)
+                return Results.Problem(statusCode: 409, title: "این شخص در شعبه‌ی دیگری هم عضو است؛ رمز را خودش در «حساب من» تعیین می‌کند.");
+
+            var username = CredentialRules.NormalizeUsername(req.Username);
+            var password = string.IsNullOrEmpty(req.NewPassword) ? null : req.NewPassword;
+            if (username is null && password is null)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["newPassword"] = ["رمز جدید یا نام کاربری را وارد کنید."] });
+            var errors = new Dictionary<string, string[]>();
+            CredentialRules.Validate(errors, username, password, user.Mobile);
+            if (errors.Count > 0) return Results.ValidationProblem(errors);
+
+            if (username is not null && username != user.Username)
+            {
+                if (await db.Users.AnyAsync(u => u.Username == username && u.Id != user.Id, ct))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["username"] = ["این نام کاربری گرفته شده است."] });
+                user.Username = username;
+            }
+            if (password is not null)
+            {
+                user.PasswordHash = PasswordHasher.Hash(password);
+                user.FailedPasswordAttempts = 0;
+                user.PasswordLockedUntil = null;
+            }
+
+            // Never log the password itself.
+            audit.Record("staff.credentials_set", target.TenantId, me.RequiredUserId,
+                $"{target.Id}{(username is null ? "" : " username")}{(password is null ? "" : " password")}");
+            await db.SaveChangesAsync(ct);
+            // The old password may be what leaked: every session of that person ends.
+            if (password is not null) await tokens.RevokeAllForUserAsync(user.Id, "credentials_reset_by_manager", ct);
+            return Results.NoContent();
+        }).RequireRateLimiting("auth");
     }
 
     /// <summary>Nobody can hand out a permission they do not hold themselves.</summary>

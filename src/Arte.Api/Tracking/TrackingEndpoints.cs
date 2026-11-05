@@ -112,12 +112,14 @@ public static class TrackingEndpoints
                     {
                         i.Kind, i.Title, i.Quantity, i.Status, i.Supplier,
                         LineTotalRials = t.TrackShowAmounts ? i.LineTotalRials : (long?)null,
+                        DiscountRials = t.TrackShowAmounts && i.AppliedDiscountRials > 0 ? i.AppliedDiscountRials : (long?)null,
                     }).ToList();
                 if (t.TrackShowAmounts)
                 {
                     var payments = await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct);
                     var m = CaseMoney.Of(all, payments);
-                    money = new { m.TotalRials, m.PaidRials, m.BalanceRials };
+                    // The discount is shown on its own line so the customer sees what they saved.
+                    money = new { m.TotalRials, m.PaidRials, m.BalanceRials, m.SubtotalRials, m.DiscountRials };
                 }
             }
 

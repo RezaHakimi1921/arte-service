@@ -11,11 +11,14 @@ export type Item = {
   id: string; kind: string; title: string; quantity: number; unitPriceRials: number; unitCostRials: number | null;
   discountRials: number; supplier: string; status: string; performedBy: string | null; performedByName: string | null;
   warrantyDays: number | null; lineTotalRials: number; profitRials: number | null;
+  /** True while the line is only waited for: the profit is what it will make once fitted, not zero. */
+  profitIsExpected?: boolean; expectedTotalRials?: number | null;
 };
 export type PaymentRow = { id: string; amountRials: number; method: string; paidAt: string; note: string | null; receiptId: string | null };
 export type Billing = {
   items: Item[]; payments: PaymentRow[];
-  money: { totalRials: number; paidRials: number; balanceRials: number; partsRials: number; laborRials: number; servicesRials: number; costRials: number | null; profitRials: number | null };
+  money: { totalRials: number; paidRials: number; balanceRials: number; partsRials: number; laborRials: number; servicesRials: number; costRials: number | null; profitRials: number | null;
+    discountRials?: number; subtotalRials?: number; pendingProfitRials?: number | null };
   canEditItems: boolean; canRecordPayments: boolean; canSeeCost: boolean; requireTransferReceipt: boolean;
 };
 type CatalogRow = { id: string; kind: string; title: string; defaultPriceRials: number; defaultCostRials: number | null; defaultWarrantyDays: number | null; isActive: boolean };
@@ -122,7 +125,9 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                     {!!i.warrantyDays && ` · ضمانت ${formatNumber(i.warrantyDays)} روز`}
                   </span>
                   {billing.canSeeCost && i.unitCostRials != null && (
-                    <span className="small cost-line">خرید {toman(i.unitCostRials)} · سود {toman(i.profitRials ?? 0)}</span>
+                    <span className="small cost-line">
+                      خرید {toman(i.unitCostRials)} · {i.profitIsExpected ? "سود مورد انتظار" : "سود"} {toman(i.profitRials ?? 0)}
+                    </span>
                   )}
                 </button>
               </li>
@@ -138,11 +143,15 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
               {standard && standard.packages.length > 0 && <button onClick={() => setPackages(true)}>+ بسته‌ی آماده</button>}
             </div>
           )}
-          {m.totalRials > 0 && (
+          {(m.totalRials > 0 || (m.pendingProfitRials ?? 0) > 0) && (
             <div className="totals">
+              {(m.discountRials ?? 0) > 0 && <span>تخفیف: <span className="font-num">{toman(m.discountRials ?? 0)}</span></span>}
               {m.partsRials > 0 && <span>کالا: <span className="font-num">{toman(m.partsRials)}</span></span>}
               {m.laborRials + m.servicesRials > 0 && <span>اجرت و خدمات: <span className="font-num">{toman(m.laborRials + m.servicesRials)}</span></span>}
               {billing.canSeeCost && m.profitRials != null && <span className="cost-line">سود پرونده: <span className="font-num">{toman(m.profitRials)}</span></span>}
+              {billing.canSeeCost && (m.pendingProfitRials ?? 0) > 0 && (
+                <span className="cost-line">سود مورد انتظار قطعه‌های در انتظار: <span className="font-num">{toman(m.pendingProfitRials ?? 0)}</span></span>
+              )}
             </div>
           )}
         </div>

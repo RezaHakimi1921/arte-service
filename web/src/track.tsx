@@ -22,8 +22,8 @@ type Track = {
   };
   status: { name: string; key: string; category: string; waitReason: string | null; stageEnteredAt: string };
   stages: { name: string; key: string; state: "done" | "current" | "todo"; at: string | null }[] | null;
-  items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null }[] | null;
-  money: { totalRials: number; paidRials: number; balanceRials: number } | null;
+  items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null; discountRials?: number | null }[] | null;
+  money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number } | null;
 };
 
 type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "plus" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet";
@@ -465,6 +465,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                       {i.supplier === "customer" && <span className="tk-muted"> (کالای خودتان)</span>}
                       {i.status === "needed" && <span className="tk-muted"> (در انتظار تهیه)</span>}
                     </span>
+                    {i.discountRials != null && i.discountRials > 0 && <span className="tk-muted tk-discount">تخفیف {toman(i.discountRials)}</span>}
                     {i.lineTotalRials != null && i.lineTotalRials > 0 && <strong className="font-num">{toman(i.lineTotalRials)}</strong>}
                   </li>
                 ))}
@@ -474,7 +475,13 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
             )}
             {t.money && t.money.totalRials > 0 && (
               <div className="tk-money">
-                <p><span>جمع</span><strong className="font-num">{toman(t.money.totalRials)}</strong></p>
+                {(t.money.discountRials ?? 0) > 0 && (
+                  <>
+                    <p><span>جمع قبل از تخفیف</span><strong className="font-num">{toman(t.money.subtotalRials ?? t.money.totalRials)}</strong></p>
+                    <p className="saved"><span>تخفیف شما</span><strong className="font-num">− {toman(t.money.discountRials ?? 0)}</strong></p>
+                  </>
+                )}
+                <p><span>{(t.money.discountRials ?? 0) > 0 ? "جمع پس از تخفیف" : "جمع"}</span><strong className="font-num">{toman(t.money.totalRials)}</strong></p>
                 <p><span>پرداخت‌شده</span><strong className="font-num">{toman(t.money.paidRials)}</strong></p>
                 <p className={t.money.balanceRials > 0 ? "owe" : ""}><span>مانده</span><strong className="font-num">{toman(t.money.balanceRials)}</strong></p>
               </div>

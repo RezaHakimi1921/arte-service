@@ -347,6 +347,7 @@ button.big { min-height: 52px; font-size: 1.05rem; margin-bottom: 1rem; }
 .note-form input { flex: 1; }
 .timeline { list-style: none; margin: 0; padding: 0; border-inline-start: 2px solid var(--border); }
 .timeline li { display: flex; flex-direction: column; padding: 0.4rem 0.9rem 0.6rem; position: relative; }
+.timeline-actor { color: var(--text); font-weight: 700; }
 .timeline li::before {
   content: "";
   position: absolute;
@@ -1628,6 +1629,8 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .tk-money { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
 .tk-money p { display: flex; justify-content: space-between; margin: 4px 0; font-size: 0.9rem; }
 .tk-money p.owe strong { color: var(--danger); }
+.tk-money p.saved strong { color: var(--success); }
+.tk-discount { white-space: nowrap; font-size: 0.8rem; color: var(--success); }
 
 .tk-help { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border)); border-radius: 20px; background: var(--accent-soft); }
 .tk-help-icon { display: grid; width: 42px; height: 42px; flex: 0 0 auto; place-items: center; color: var(--accent-text); border-radius: 13px; background: var(--accent); }
@@ -2283,3 +2286,9 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .sms-log li.bad .sms-log-state { color: var(--danger); }
 
 input[readonly] { opacity: 0.75; cursor: default; }
+
+/* ── staff credentials ── */
+.cred-box { border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin: 14px 0; display: flex; flex-direction: column; gap: 10px; }
+.cred-box legend { padding: 0 6px; font-weight: 700; }
+.cred-details { border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; }
+.cred-details summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }

@@ -501,7 +501,7 @@ export function AppearancePage({ onBack, applyTheme }: { onBack: () => void; app
 /* ───────── staff ───────── */
 
 type StaffRow = {
-  id: string; mobile: string; displayName: string | null; role: string; isActive: boolean;
+  id: string; mobile: string; username: string | null; hasPassword: boolean; displayName: string | null; role: string; isActive: boolean;
   fixedMonthlyRials: number | null; commissionType: string; commissionPercent: number | null;
   commissionFixedRials: number | null; commissionBase: string; surveyNotify: boolean;
 };
@@ -526,9 +526,18 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
   const [surveyNotify, setSurveyNotify] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [username, setUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [credErrors, setCredErrors] = useState<Record<string, string>>({});
+  const [credBusy, setCredBusy] = useState(false);
 
   useEffect(() => {
     if (!row) return;
+    setUsername(row.username ?? "");
+    setNewPassword("");
+    setRepeat("");
+    setCredErrors({});
     setName(row.displayName ?? "");
     setRole(row.role);
     setSalary(tomanDigits(row.fixedMonthlyRials));
@@ -567,6 +576,27 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
       setError(err instanceof ApiError ? err.message : "خطا");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** The manager sets or resets the member's sign-in name / password; every session of that person ends when a password changes. */
+  async function saveCredentials() {
+    if (!row || credBusy) return;
+    if (newPassword && newPassword !== repeat) { setCredErrors({ repeat: "تکرار رمز یکسان نیست." }); return; }
+    const body: Record<string, string> = {};
+    if (username.trim() && username.trim().toLowerCase() !== (row.username ?? "")) body.username = username.trim();
+    if (newPassword) body.newPassword = newPassword;
+    if (!body.username && !body.newPassword) { setCredErrors({ newPassword: "رمز جدید یا نام کاربری تازه را بنویسید." }); return; }
+    setCredBusy(true);
+    try {
+      await api(`/api/v1/staff/${row.id}/credentials`, { method: "PUT", body });
+      notify(body.newPassword ? "رمز عبور تغییر کرد" : "نام کاربری ذخیره شد");
+      onSaved();
+    } catch (err) {
+      if (err instanceof ApiError && Object.keys(err.fields).length > 0) setCredErrors(Object.fromEntries(Object.entries(err.fields).map(([k, v]) => [k, v[0] ?? ""])));
+      else setCredErrors({ newPassword: err instanceof ApiError ? err.message : "خطا" });
+    } finally {
+      setCredBusy(false);
     }
   }
 
@@ -642,6 +672,24 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
           {error && <span className="error" role="alert">{error}</span>}
           <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
           {row.role !== "owner" && (
+            <fieldset className="cred-box">
+              <legend>ورود با رمز عبور</legend>
+              <p className="hint">{row.hasPassword ? "این همکار رمز دارد. رمز تازه که بگذارید، همه‌ی دستگاه‌هایش خارج می‌شوند." : "این همکار هنوز رمز ندارد؛ با کد پیامکی وارد می‌شود. می‌توانید برایش رمز بگذارید."}</p>
+              <Field label="نام کاربری (اختیاری؛ شماره موبایل همیشه کار می‌کند)" error={credErrors.username}>
+                <input dir="ltr" autoComplete="off" value={username} maxLength={40} onChange={(e) => setUsername(e.target.value)} />
+              </Field>
+              <Field label={row.hasPassword ? "رمز جدید" : "رمز عبور (حداقل ۱۰ کاراکتر)"} error={credErrors.newPassword}>
+                <input type="password" dir="ltr" autoComplete="new-password" value={newPassword} maxLength={200} onChange={(e) => setNewPassword(e.target.value)} />
+              </Field>
+              <Field label="تکرار رمز" error={credErrors.repeat}>
+                <input type="password" dir="ltr" autoComplete="new-password" value={repeat} maxLength={200} onChange={(e) => setRepeat(e.target.value)} />
+              </Field>
+              <button type="button" disabled={credBusy} aria-busy={credBusy} onClick={saveCredentials}>
+                {credBusy ? "در حال ذخیره…" : row.hasPassword ? "تغییر رمز عبور" : "ثبت رمز عبور"}
+              </button>
+            </fieldset>
+          )}
+          {row.role !== "owner" && (
             <button type="button" disabled={busy} onClick={toggleActive}>
               {row.isActive ? "غیرفعال کردن همکار" : "فعال کردن دوباره"}
             </button>
@@ -666,6 +714,9 @@ export function StaffPage({ onBack, surveyEnabled = false }: { onBack: () => voi
   const [mobile, setMobile] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState("technician");
+  const [newUsername, setNewUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<StaffRow | null>(null);
@@ -678,13 +729,20 @@ export function StaffPage({ onBack, surveyEnabled = false }: { onBack: () => voi
     if (busy) return;
     setBusy(true);
     try {
-      await api("/api/v1/staff", { body: { mobile, displayName: name, role } });
+      const body: Record<string, string> = { mobile, displayName: name, role };
+      if (newUsername.trim()) body.username = newUsername.trim();
+      if (password) body.password = password;
+      await api("/api/v1/staff", { body });
       setMobile("");
       setName("");
+      setNewUsername("");
+      setPassword("");
+      setFieldErrors({});
       setError(null);
       notify("همکار اضافه شد");
       await load();
     } catch (err) {
+      if (err instanceof ApiError && Object.keys(err.fields).length > 0) setFieldErrors(Object.fromEntries(Object.entries(err.fields).map(([k, v]) => [k, v[0] ?? ""])));
       setError(err instanceof ApiError ? err.message : "خطا");
     } finally {
       setBusy(false);
@@ -711,7 +769,7 @@ export function StaffPage({ onBack, surveyEnabled = false }: { onBack: () => voi
       <StaffSheet row={editing} surveyEnabled={surveyEnabled} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       <h3>افزودن همکار</h3>
       <form className="plain-form" onSubmit={add}>
-        <Field label="شماره موبایل" error={error}><MobileInput value={mobile} onChange={setMobile} /></Field>
+        <Field label="شماره موبایل" error={fieldErrors.mobile ?? (Object.keys(fieldErrors).length === 0 ? error : null)}><MobileInput value={mobile} onChange={setMobile} /></Field>
         <Field label="نام"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
         <Field label="نقش">
           <select value={role} onChange={(e) => setRole(e.target.value)}>
@@ -719,6 +777,16 @@ export function StaffPage({ onBack, surveyEnabled = false }: { onBack: () => voi
             <option value="supervisor">مدیر داخلی: ثبت پرونده و تخصیص</option>
           </select>
         </Field>
+        <details className="cred-details">
+          <summary>ورود با رمز عبور (اختیاری)</summary>
+          <p className="hint">بدون رمز هم با کد پیامکی وارد می‌شود. اگر رمز بگذارید، با شماره موبایل یا نام کاربری و همین رمز هم می‌تواند وارد شود.</p>
+          <Field label="نام کاربری (اختیاری)" error={fieldErrors.username}>
+            <input dir="ltr" autoComplete="off" value={newUsername} maxLength={40} onChange={(e) => setNewUsername(e.target.value)} />
+          </Field>
+          <Field label="رمز عبور (حداقل ۱۰ کاراکتر)" error={fieldErrors.password}>
+            <input type="password" dir="ltr" autoComplete="new-password" value={password} maxLength={200} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+        </details>
         <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال افزودن…" : "افزودن"}</button>
       </form>
     </SubPage>
