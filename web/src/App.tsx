@@ -245,7 +245,11 @@ function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Ses
 
 function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSignOut: () => void; onSettingsChanged: () => void; onBranches: () => void }) {
   const [tab, setTab] = useState<Tab>("home");
-  const [caseId, setCaseId] = useState<string | null>(null);
+  // A tapped push notification opens the app on that case (/?case=…).
+  const [caseId, setCaseId] = useState<string | null>(() => {
+    const c = new URLSearchParams(location.search).get("case");
+    return c && /^[0-9a-f-]{36}$/i.test(c) ? c : null;
+  });
   // Opened from a notification: the case page scrolls to the customer's feedback.
   const [surveyCase, setSurveyCase] = useState<string | null>(null);
   const [newCase, setNewCase] = useState(false);

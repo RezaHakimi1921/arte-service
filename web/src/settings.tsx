@@ -10,6 +10,7 @@ export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "wor
 
 export { ROLE_NAMES } from "./labels";
 import { ROLE_NAMES } from "./labels";
+import { PushToggle } from "./push";
 
 const APP_VERSION = "۰٫۵";
 
@@ -175,6 +176,8 @@ export function AccountPage({ onBack }: { onBack: () => void }) {
   return (
     <SubPage title="حساب من" onBack={onBack}>
       {!account ? <div className="splash" aria-busy="true" /> : (
+        <>
+        <div className="settings-list"><PushToggle /></div>
         <form className="plain-form" onSubmit={save} noValidate>
           <Field label="نام نمایشی" error={errors.displayName}>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={80} />
@@ -198,6 +201,7 @@ export function AccountPage({ onBack }: { onBack: () => void }) {
           {errors.form && <span className="error" role="alert">{errors.form}</span>}
           <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
         </form>
+        </>
       )}
     </SubPage>
   );
@@ -404,6 +408,13 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
               <Switch title="هنگام تحویل" link={{ label: "دیدن متن پیامک", onClick: () => setPreview("case.delivered") }} sub="«… شما تحویل شد.» همراه با لینک ضمانت و سابقه."
                 checked={s.smsOnDelivered} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnDelivered: v })} />
             )}
+            <Switch title="هنگام انتظار برای قطعه‌ی مشتری" sub="وقتی پرونده منتظر قطعه‌ای می‌ماند که مشتری می‌آورد، به او پیامک می‌رود."
+              checked={s.smsOnWaitingPart} disabled={!s.customerSmsEnabled} onChange={(v) => save({ smsOnWaitingPart: v })} />
+          </div>
+          <h3>پیامک به استاد</h3>
+          <div className="settings-list">
+            <Switch title="وقتی کاری تمام شد" sub="کسی که کار را تمام می‌کند، برای استاد (و مدیر) پیامک می‌فرستد تا بررسی کند."
+              checked={s.smsToMasterOnFinished} disabled={false} onChange={(v) => save({ smsToMasterOnFinished: v })} />
           </div>
           <h3>صفحه‌ی پیگیری مشتری</h3>
           <p className="hint">وضعیت فعلی، قول تحویل و نام و تلفن تعمیرگاه همیشه نشان داده می‌شود.</p>

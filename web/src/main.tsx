@@ -6,6 +6,11 @@ import { installErrorReporting, reportError } from "./errors";
 
 installErrorReporting();
 
+// Push notifications need a service worker (it caches nothing).
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch(() => {}); });
+}
+
 // Light is the default: readable in a bright workshop. Dark stays one tap away in settings.
 let saved = "light";
 try {
