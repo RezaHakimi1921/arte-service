@@ -198,6 +198,7 @@ app.MapClientErrors();
 app.MapOnboarding();
 Arte.Api.Tracking.TrackingEndpoints.MapTracking(app);
 Arte.Api.Workshop.WorkshopEndpoints.MapWorkshop(app);
+Arte.Api.Billing.FinanceEndpoints.MapFinance(app);
 Arte.Api.Surveys.SurveyEndpoints.MapSurveys(app);
 // Public, for the sign-in and tracking pages: how to reach Arte support.
 app.MapGet("/api/v1/public/info", (IConfiguration c) => Results.Ok(new { SupportPhone = c["Platform:SupportPhone"] })).AllowAnonymous();

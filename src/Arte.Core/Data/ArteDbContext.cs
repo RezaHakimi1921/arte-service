@@ -54,6 +54,10 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
     public DbSet<CaseChecklistItem> CaseChecklistItems => Set<CaseChecklistItem>();
     public DbSet<CaseFinding> CaseFindings => Set<CaseFinding>();
+    public DbSet<PaymentTerminal> PaymentTerminals => Set<PaymentTerminal>();
+    public DbSet<BankCard> BankCards => Set<BankCard>();
+    public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -359,6 +363,36 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         });
 
         b.Entity<Case>().Property(x => x.MotorType).HasMaxLength(20);
+
+        b.Entity<Tenant>().Property(x => x.TrackShowPhone).HasDefaultValue(true);
+        foreach (var f in new[] { nameof(Tenant.InstagramId), nameof(Tenant.MapNeshanUrl), nameof(Tenant.MapGoogleUrl), nameof(Tenant.MapWazeUrl), nameof(Tenant.MapBaladUrl) })
+            b.Entity<Tenant>().Property<string?>(f).HasMaxLength(f == nameof(Tenant.InstagramId) ? 60 : 300);
+        b.Entity<Payment>().HasIndex(x => x.TerminalId);
+        b.Entity<PaymentTerminal>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(60);
+            e.Property(x => x.Bank).HasMaxLength(60);
+        });
+        b.Entity<BankCard>(e =>
+        {
+            e.Property(x => x.CardNumber).HasMaxLength(16);
+            e.Property(x => x.HolderName).HasMaxLength(80);
+            e.Property(x => x.Bank).HasMaxLength(60);
+        });
+        b.Entity<CustomerReceipt>(e =>
+        {
+            e.Property(x => x.Status).HasMaxLength(12);
+            e.Property(x => x.ReviewNote).HasMaxLength(200);
+            e.HasIndex(x => new { x.CaseId, x.Status });
+        });
+        b.Entity<PushSubscription>(e =>
+        {
+            e.Property(x => x.Endpoint).HasMaxLength(600);
+            e.Property(x => x.P256dh).HasMaxLength(200);
+            e.Property(x => x.Auth).HasMaxLength(100);
+            e.HasIndex(x => x.Endpoint).IsUnique();
+            e.HasIndex(x => x.UserId);
+        });
 
         b.Entity<IntakeOption>(e =>
         {

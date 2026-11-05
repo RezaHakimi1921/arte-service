@@ -532,6 +532,13 @@ public static class CaseEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["waitReason"] = ["علت انتظار نامعتبر است."] });
         }
 
+        // When the business asks for payment first, work and buying parts wait until some payment is recorded.
+        if (to.Key is "repairing" or "awaiting_parts"
+            && await db.Tenants.Where(x => x.Id == c.TenantId).Select(x => x.RequirePaymentBeforeWork).SingleAsync(ct)
+            && !await db.Payments.AnyAsync(p => p.CaseId == c.Id, ct))
+            return Results.Problem(statusCode: 409, title: "طبق تنظیمات، شروع کار و تهیه قطعه بعد از ثبت پرداخت مشتری است.",
+                extensions: new Dictionary<string, object?> { ["code"] = "payment_required" });
+
         // Delivery with money still owed must be an explicit decision (نسیه), and starts the warranty.
         long creditRials = 0;
         DateTimeOffset? warrantyUntil = null;

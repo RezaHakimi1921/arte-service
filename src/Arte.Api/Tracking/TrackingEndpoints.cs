@@ -146,7 +146,25 @@ public static class TrackingEndpoints
 
             return Results.Ok(new
             {
-                Shop = new { t.Name, t.Phone, t.Address },
+                Shop = new
+                {
+                    t.Name, Phone = t.TrackShowPhone ? t.Phone : null, t.Address,
+                    Instagram = t.InstagramId,
+                    Maps = new[]
+                    {
+                        new { Key = "neshan", Name = "نشان", Url = t.MapNeshanUrl },
+                        new { Key = "google", Name = "گوگل‌مپ", Url = t.MapGoogleUrl },
+                        new { Key = "waze", Name = "ویز", Url = t.MapWazeUrl },
+                        new { Key = "balad", Name = "بلد", Url = t.MapBaladUrl },
+                    }.Where(x => !string.IsNullOrEmpty(x.Url)).ToList(),
+                },
+                Pay = new
+                {
+                    Card = await db.BankCards.AsNoTracking().Where(x => x.IsActive && x.ShowOnTracking)
+                        .Select(x => new { x.CardNumber, x.HolderName, x.Bank }).FirstOrDefaultAsync(ct),
+                    Receipts = await db.CustomerReceipts.AsNoTracking().Where(x => x.CaseId == c.Id).OrderBy(x => x.CreatedAt)
+                        .Select(x => new { x.Status, x.ClaimedRials, x.CreatedAt, Note = x.Status == ReceiptStatuses.Rejected ? x.ReviewNote : null }).ToListAsync(ct),
+                },
                 Survey = survey,
                 Photos = photos,
                 Case = new

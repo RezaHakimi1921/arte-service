@@ -22,6 +22,13 @@ public static class AttachmentEndpoints
         ("image/webp", "webp", "WEBP"u8.ToArray(), 8),
     ];
 
+    /// <summary>The image type of a file, decided from its first bytes (never from the name or the declared type).</summary>
+    internal static (string Type, string Ext)? Sniff(byte[] bytes)
+    {
+        var kind = Allowed.FirstOrDefault(a => bytes.Length >= a.Offset + a.Magic.Length && bytes.AsSpan(a.Offset, a.Magic.Length).SequenceEqual(a.Magic));
+        return kind.Type is null ? null : (kind.Type, kind.Ext);
+    }
+
     public static void MapAttachments(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/v1/cases/{caseId:guid}/attachments", UploadAsync).RequireTenant();

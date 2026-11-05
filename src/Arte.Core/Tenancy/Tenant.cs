@@ -69,6 +69,23 @@ public sealed class Tenant
     public bool PhotosVisibleByDefault { get; set; }
     /// <summary>Business setting: a card-to-card payment must come with a photo of its receipt.</summary>
     public bool RequireTransferReceipt { get; set; }
+    /// <summary>Business setting: work (repairing) or buying parts may only start once a payment is recorded.</summary>
+    public bool RequirePaymentBeforeWork { get; set; }
+
+    // ── Shop contact shown at the bottom of the tracking page ──
+    /// <summary>Tracking page: show the shop's phone number with a call button.</summary>
+    public bool TrackShowPhone { get; set; } = true;
+    public string? InstagramId { get; set; }
+    public string? MapNeshanUrl { get; set; }
+    public string? MapGoogleUrl { get; set; }
+    public string? MapWazeUrl { get; set; }
+    public string? MapBaladUrl { get; set; }
+
+    // ── Automatic messages beyond the three customer SMS ──
+    /// <summary>SMS to the customer when the case waits for a part the customer brings.</summary>
+    public bool SmsOnWaitingPart { get; set; }
+    /// <summary>SMS to the master when someone else marks work as finished (ready for his review).</summary>
+    public bool SmsToMasterOnFinished { get; set; }
 
     // ── Customer satisfaction survey (a paid add-on) ──
     /// <summary>The add-on is on for this business. Only the platform admin changes it.</summary>

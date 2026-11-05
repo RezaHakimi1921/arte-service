@@ -19,7 +19,7 @@ public static class BillingEndpoints
 
     public sealed record BatchInput(List<ItemInput>? Lines, string? Package);
 
-    public sealed record PaymentInput(long? AmountRials, string? Method, string? Note, DateTimeOffset? PaidAt, Guid? ReceiptId = null);
+    public sealed record PaymentInput(long? AmountRials, string? Method, string? Note, DateTimeOffset? PaidAt, Guid? ReceiptId = null, Guid? TerminalId = null, Guid? CardId = null);
 
     public sealed record CatalogInput(string? Kind, string? Title, long? DefaultPriceRials, long? DefaultCostRials, int? DefaultWarrantyDays, bool? IsActive);
 
@@ -218,6 +218,10 @@ public static class BillingEndpoints
         if (req.ReceiptId is null && req.Method == PaymentMethods.Transfer
             && await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.RequireTransferReceipt).SingleAsync(ct))
             errors["receiptId"] = ["برای کارت به کارت، عکس رسید را بارگذاری کنید."];
+        if (req.TerminalId is { } tid && (req.Method != PaymentMethods.Card || !await db.PaymentTerminals.AnyAsync(x => x.Id == tid && x.IsActive, ct)))
+            errors["terminalId"] = ["کارتخوان نامعتبر است."];
+        if (req.CardId is { } cid && (req.Method != PaymentMethods.Transfer || !await db.BankCards.AnyAsync(x => x.Id == cid && x.IsActive, ct)))
+            errors["cardId"] = ["کارت نامعتبر است."];
         if (req.AmountRials is not > 0 || req.AmountRials > MaxRials) errors["amountRials"] = ["مبلغ نامعتبر است."];
         if (req.Method is null || !PaymentMethods.All.Contains(req.Method)) errors["method"] = ["روش پرداخت را انتخاب کنید."];
         if (req.Note is { Length: > 300 }) errors["note"] = ["حداکثر ۳۰۰ حرف."];
@@ -230,7 +234,7 @@ public static class BillingEndpoints
             CaseId = c.Id, CustomerId = c.CustomerId, AmountRials = req.AmountRials!.Value, Method = req.Method!,
             PaidAt = (req.PaidAt ?? now).ToUniversalTime(), RecordedBy = me.RequiredUserId,
             Note = string.IsNullOrWhiteSpace(req.Note) ? null : req.Note.Trim(),
-            ReceiptId = req.ReceiptId,
+            ReceiptId = req.ReceiptId, TerminalId = req.TerminalId, CardId = req.CardId,
         };
         db.Payments.Add(payment);
         AddEvent(db, c, CaseEventTypes.PaymentRecorded, me.RequiredUserId, now, new { payment.AmountRials, payment.Method, payment.Note, Receipt = payment.ReceiptId != null });
@@ -364,7 +368,7 @@ public static class BillingEndpoints
                 ProfitIsExpected = i.IsPendingForProfit,
                 ExpectedTotalRials = i.IsPendingForProfit ? i.ExpectedTotalRials : (long?)null,
             }),
-            Payments = payments.Select(p => new { p.Id, p.AmountRials, p.Method, p.PaidAt, p.Note, p.ReceiptId }),
+            Payments = payments.Select(p => new { p.Id, p.AmountRials, p.Method, p.PaidAt, p.Note, p.ReceiptId, p.TerminalId, p.CardId }),
             Money = new
             {
                 money.TotalRials, money.PaidRials, money.BalanceRials, money.PartsRials, money.LaborRials, money.ServicesRials,
@@ -377,6 +381,10 @@ public static class BillingEndpoints
             CanRecordPayments = m.Has(Permissions.PaymentsRecord),
             CanSeeCost = showCost,
             RequireTransferReceipt = await db.Tenants.Where(t => t.Id == m.TenantId).Select(t => t.RequireTransferReceipt).SingleAsync(ct),
+            Terminals = m.Has(Permissions.PaymentsRecord)
+                ? await db.PaymentTerminals.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Bank }).ToListAsync(ct) : null,
+            Cards = m.Has(Permissions.PaymentsRecord)
+                ? await db.BankCards.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.HolderName).Select(x => new { x.Id, x.CardNumber, x.HolderName, x.Bank }).ToListAsync(ct) : null,
         };
     }
 

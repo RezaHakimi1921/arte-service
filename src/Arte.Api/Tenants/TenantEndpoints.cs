@@ -19,7 +19,14 @@ public static class TenantEndpoints
         bool? RequireCustomerApproval, bool? RequireFinalReview, string? BusinessType = null, string[]? VehicleKinds = null,
         bool? CustomerSmsEnabled = null, bool? SmsOnOpened = null, bool? SmsOnReady = null, bool? SmsOnDelivered = null,
         bool? TrackShowStages = null, bool? TrackShowItems = null, bool? TrackShowAmounts = null, bool? PhotosVisibleByDefault = null,
-        bool? SurveySendOn = null, int? SurveyDelayMinutes = null, int? SurveyAlertBelow = null, bool? RequireTransferReceipt = null);
+        bool? SurveySendOn = null, int? SurveyDelayMinutes = null, int? SurveyAlertBelow = null, bool? RequireTransferReceipt = null,
+        bool? RequirePaymentBeforeWork = null, bool? TrackShowPhone = null, string? InstagramId = null, string? MapNeshanUrl = null,
+        string? MapGoogleUrl = null, string? MapWazeUrl = null, string? MapBaladUrl = null, bool? SmsOnWaitingPart = null, bool? SmsToMasterOnFinished = null);
+
+    /// <summary>An https link on the app's own domain (or a subdomain), up to 300 characters: it is shown to customers, so nothing else is accepted.</summary>
+    internal static bool ValidMapUrl(string url, string[] hosts) =>
+        url.Length <= 300 && Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
+        && hosts.Any(h => u.Host.Equals(h, StringComparison.OrdinalIgnoreCase) || u.Host.EndsWith("." + h, StringComparison.OrdinalIgnoreCase));
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -66,7 +73,7 @@ public static class TenantEndpoints
                     t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                     t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                     t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
-                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt, t.RequirePaymentBeforeWork, t.TrackShowPhone, t.InstagramId, t.MapNeshanUrl, t.MapGoogleUrl, t.MapWazeUrl, t.MapBaladUrl, t.SmsOnWaitingPart, t.SmsToMasterOnFinished,
                 }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
 
@@ -83,6 +90,15 @@ public static class TenantEndpoints
                 errors["surveyDelayMinutes"] = ["زمان ارسال بین ۵ دقیقه تا ۷۲ ساعت بعد از تحویل."];
             if (req.SurveyAlertBelow is < Arte.Core.Surveys.SurveyRules.MinAlertBelow or > Arte.Core.Surveys.SurveyRules.MaxAlertBelow)
                 errors["surveyAlertBelow"] = ["حد رضایت پایین بین ۲ تا ۵ ستاره."];
+            if (req.InstagramId is { } ig && ig.Trim().TrimStart('@') is var igName && igName.Length > 0
+                && (igName.Length > 30 || !System.Text.RegularExpressions.Regex.IsMatch(igName, @"^[A-Za-z0-9._]+$")))
+                errors["instagramId"] = ["آیدی اینستاگرام فقط حرف انگلیسی، عدد، نقطه و _ دارد."];
+            foreach (var (field, url, hosts) in new (string, string?, string[])[]
+            {
+                ("mapNeshanUrl", req.MapNeshanUrl, ["neshan.org"]), ("mapGoogleUrl", req.MapGoogleUrl, ["google.com", "goo.gl", "maps.app.goo.gl", "g.co"]),
+                ("mapWazeUrl", req.MapWazeUrl, ["waze.com"]), ("mapBaladUrl", req.MapBaladUrl, ["balad.ir"]),
+            })
+                if (!string.IsNullOrWhiteSpace(url) && !ValidMapUrl(url.Trim(), hosts)) errors[field] = ["لینک معتبر (https) از همین برنامه وارد کنید."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var t = await db.Tenants.SingleAsync(x => x.Id == me.RequiredMembership.TenantId, ct);
@@ -107,6 +123,15 @@ public static class TenantEndpoints
             if (req.SurveyDelayMinutes is { } sdm) t.SurveyDelayMinutes = sdm;
             if (req.SurveyAlertBelow is { } sab) t.SurveyAlertBelow = sab;
             if (req.RequireTransferReceipt is { } rr) t.RequireTransferReceipt = rr;
+            if (req.RequirePaymentBeforeWork is { } rpw) t.RequirePaymentBeforeWork = rpw;
+            if (req.TrackShowPhone is { } tsp) t.TrackShowPhone = tsp;
+            if (req.InstagramId is not null) t.InstagramId = string.IsNullOrWhiteSpace(req.InstagramId) ? null : req.InstagramId.Trim().TrimStart('@');
+            if (req.MapNeshanUrl is not null) t.MapNeshanUrl = string.IsNullOrWhiteSpace(req.MapNeshanUrl) ? null : req.MapNeshanUrl.Trim();
+            if (req.MapGoogleUrl is not null) t.MapGoogleUrl = string.IsNullOrWhiteSpace(req.MapGoogleUrl) ? null : req.MapGoogleUrl.Trim();
+            if (req.MapWazeUrl is not null) t.MapWazeUrl = string.IsNullOrWhiteSpace(req.MapWazeUrl) ? null : req.MapWazeUrl.Trim();
+            if (req.MapBaladUrl is not null) t.MapBaladUrl = string.IsNullOrWhiteSpace(req.MapBaladUrl) ? null : req.MapBaladUrl.Trim();
+            if (req.SmsOnWaitingPart is { } swp) t.SmsOnWaitingPart = swp;
+            if (req.SmsToMasterOnFinished is { } smf) t.SmsToMasterOnFinished = smf;
             audit.Record("settings.business_updated", t.Id, me.RequiredUserId);
             await db.SaveChangesAsync(ct);
             // Optional workflow steps follow the settings.
@@ -117,7 +142,7 @@ public static class TenantEndpoints
                 t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                 t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                 t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
-                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt, t.RequirePaymentBeforeWork, t.TrackShowPhone, t.InstagramId, t.MapNeshanUrl, t.MapGoogleUrl, t.MapWazeUrl, t.MapBaladUrl, t.SmsOnWaitingPart, t.SmsToMasterOnFinished,
             });
         }).RequirePermission(Permissions.SettingsManage);
 

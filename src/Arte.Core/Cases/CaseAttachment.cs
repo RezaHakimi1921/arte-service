@@ -7,6 +7,8 @@ public static class AttachmentPurposes
 {
     public const string Photo = "photo";
     public const string Receipt = "receipt";
+    /// <summary>A receipt sent by the customer, waiting for the shop; becomes a normal receipt when approved.</summary>
+    public const string CustomerReceipt = "customer_receipt";
 }
 
 /// <summary>A photo on a case (work done, delivery, damage). The file lives on disk, never publicly reachable.</summary>
