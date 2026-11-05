@@ -78,6 +78,9 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     /// <summary>Random code in the customer's tracking link (/t/{code}); unguessable, can be renewed.</summary>
     public string? TrackingCode { get; set; }
 
+    /// <summary>geared | automatic for motorcycles (which intake checklist was used); null for everything else (see Workshop.MotorTypes).</summary>
+    public string? MotorType { get; set; }
+
     public string CustodyStatus { get; set; } = CustodyStatuses.InShop;
     /// <summary>What came in with the motorcycle: helmet, key, papers, visible damage…</summary>
     public JsonDocument? IntakeChecklist { get; set; }
@@ -135,4 +138,8 @@ public static class CaseEventTypes
     public const string PaymentRecorded = "payment.recorded";
     public const string PaymentVoided = "payment.voided";
     public const string Credit = "case.credit";
+    public const string ChecklistChanged = "case.checklist_changed";
+    public const string FindingAdded = "case.finding_added";
+    public const string FindingRemoved = "case.finding_removed";
+    public const string FindingRestored = "case.finding_restored";
 }

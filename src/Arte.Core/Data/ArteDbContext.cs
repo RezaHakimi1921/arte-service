@@ -7,6 +7,7 @@ using Arte.Core.Identity;
 using Arte.Core.Surveys;
 using Arte.Core.Tenancy;
 using Arte.Core.Workflows;
+using Arte.Core.Workshop;
 using Microsoft.EntityFrameworkCore;
 
 namespace Arte.Core.Data;
@@ -49,6 +50,10 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<SurveyAnswer> SurveyAnswers => Set<SurveyAnswer>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
+    public DbSet<IntakeOption> IntakeOptions => Set<IntakeOption>();
+    public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
+    public DbSet<CaseChecklistItem> CaseChecklistItems => Set<CaseChecklistItem>();
+    public DbSet<CaseFinding> CaseFindings => Set<CaseFinding>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -314,6 +319,11 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Ignore(x => x.Billable);
             e.Ignore(x => x.LineTotalRials);
             e.Ignore(x => x.LineCostRials);
+            e.Ignore(x => x.AppliedDiscountRials);
+            e.Ignore(x => x.IsPendingForProfit);
+            e.Ignore(x => x.ExpectedTotalRials);
+            e.Ignore(x => x.ExpectedCostRials);
+            e.Ignore(x => x.ExpectedProfitRials);
             e.HasIndex(x => new { x.TenantId, x.CaseId });
             e.HasIndex(x => new { x.TenantId, x.PerformedBy });
             e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
@@ -346,6 +356,44 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Kind).HasMaxLength(20);
             e.Property(x => x.Title).HasMaxLength(120);
             e.HasIndex(x => new { x.TenantId, x.Kind, x.Title });
+        });
+
+        b.Entity<Case>().Property(x => x.MotorType).HasMaxLength(20);
+
+        b.Entity<IntakeOption>(e =>
+        {
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Group).HasMaxLength(40);
+            e.Property(x => x.Title).HasMaxLength(80);
+            e.HasIndex(x => new { x.TenantId, x.Kind, x.SortOrder });
+        });
+
+        b.Entity<ChecklistTemplateItem>(e =>
+        {
+            e.Property(x => x.MotorType).HasMaxLength(20);
+            e.Property(x => x.Group).HasMaxLength(40);
+            e.Property(x => x.Title).HasMaxLength(80);
+            e.HasIndex(x => new { x.TenantId, x.MotorType, x.SortOrder });
+        });
+
+        b.Entity<CaseChecklistItem>(e =>
+        {
+            e.Property(x => x.Group).HasMaxLength(40);
+            e.Property(x => x.Title).HasMaxLength(80);
+            e.Property(x => x.Note).HasMaxLength(200);
+            e.HasIndex(x => new { x.TenantId, x.CaseId, x.SortOrder });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<CaseFinding>(e =>
+        {
+            e.Property(x => x.Source).HasMaxLength(20);
+            e.Property(x => x.Title).HasMaxLength(120);
+            e.Property(x => x.Note).HasMaxLength(300);
+            e.Property(x => x.MotorType).HasMaxLength(20);
+            e.HasIndex(x => new { x.TenantId, x.CaseId });
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
         });
 
         ApplyTenantFilters(b);
