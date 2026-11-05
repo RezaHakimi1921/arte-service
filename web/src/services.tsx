@@ -6,8 +6,8 @@ import { serviceCategoriesFor } from "./vehicles";
  * Multi-select for requested services, from the categorised list only (no free text):
  * search across every category, browse by category, tick as many as needed, remove from the tags.
  */
-export function ServicePicker({ value, onChange, kind }: { value: string[]; onChange: (v: string[]) => void; kind?: string | null }) {
-  const categories = serviceCategoriesFor(kind);
+export function ServicePicker({ value, onChange, kind, custom }: { value: string[]; onChange: (v: string[]) => void; kind?: string | null; custom?: { name: string; services: string[] }[] | null }) {
+  const categories = custom && custom.length > 0 ? custom : serviceCategoriesFor(kind);
   const all = categories.flatMap((c) => c.services);
   const [category, setCategory] = useState(categories[0].name);
   const [q, setQ] = useState("");

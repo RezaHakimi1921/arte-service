@@ -7,6 +7,7 @@ import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
 import { PhotoSection, type CasePhoto } from "./photos";
+import { CaseWorkshopSections, type CaseChecklistRow, type CaseFinding } from "./workshop";
 import { SurveySection, type CaseSurvey } from "./survey";
 import { ROLE_NAMES } from "./labels";
 import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
@@ -36,7 +37,7 @@ type CaseDetailView = {
   asset: { id: string; title: string; identifier: string | null; kind: string; attributes: Record<string, string> | null } | null;
   assignee: { id: string; name: string } | null; parentCase: { id: string; number: number } | null;
   photos: CasePhoto[]; trackingCode: string | null; photosVisibleByDefault: boolean;
-  transitions: TransitionView[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
+  transitions: TransitionView[]; motorType?: string | null; checklist?: CaseChecklistRow[]; findings?: CaseFinding[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
   survey: CaseSurvey | null; canFollowUp: boolean;
 };
@@ -476,6 +477,8 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
 
       {c.stage.key !== "review" && photoSection}
+
+      <CaseWorkshopSections caseId={c.id} checklist={c.checklist ?? []} findings={c.findings ?? []} motorType={c.motorType ?? null} canEdit={c.canEdit || c.canManage} onChange={load} />
 
       {/* Secondary details, collapsible. */}
       <Collapsible title="درخواست مشتری" open>

@@ -8,6 +8,7 @@ import { useFeedback } from "./feedback";
 import { api, ApiError } from "./api";
 import { MotoPlateInput, PlateInput, PlateView, emptyMotoPlate, emptyPlate } from "./plate";
 import { ServicePicker } from "./services";
+import { IntakeChecklist, useIntakeOptions } from "./workshop";
 import { Combobox, Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import {
   ACCOMPANYING, COLORS, FUELS, GEARBOXES, VEHICLE_CATALOG, VEHICLE_KINDS, problemsFor,
@@ -229,6 +230,9 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   // Existing vehicles: the kind is not loaded with the chip list, so treat an unknown as a car.
   const vehicleKind = newVehicle ? kind : customer?.assets.find((a) => a.id === assetId)?.kind ?? null;
   const isMoto = kind === "motorcycle";
+  const custom = useIntakeOptions();
+  const [motorType, setMotorType] = useState<string | null>(null);
+  const [ticks, setTicks] = useState<Record<string, boolean>>({});
   const plateId = isMoto ? formatMotoPlate(motoPlate) : formatPlate(plate);
   const plateStarted = isMoto ? !!(motoPlate.top || motoPlate.bottom) : !!(plate.two || plate.letter || plate.three || plate.region);
 
@@ -274,6 +278,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     if (vin.trim()) attributes.vin = vin.trim().toUpperCase();
     if (fuelType) attributes.fuelType = fuelType;
     if (gearbox) attributes.gearbox = gearbox;
+    if (isMoto && motorType) attributes.motorType = motorType;
     const intake: Record<string, string> = {};
     for (const i of items) intake[i] = "دارد";
 
@@ -289,6 +294,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
             ? { title: `${brand.trim()} ${model.trim()}`, identifier: plateId, kind, attributes }
             : undefined,
           reportedProblems: problems,
+          motorType: isMoto && motorType ? motorType : undefined,
+          checklist: isMoto && motorType ? Object.entries(ticks).filter(([, v]) => v).map(([itemId]) => ({ itemId, isChecked: true })) : undefined,
           requestedServices: services,
           request: notes.trim(),
           odometerKm: odometer ? Number(odometer) : undefined,
@@ -533,7 +540,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
       <Section icon="problem" title="ایراد اعلامی مشتری">
         <div className="chips">
-          {problemsFor(vehicleKind).map((p) => (
+          {(custom.problems ?? problemsFor(vehicleKind)).map((p) => (
             <button type="button" key={p} aria-pressed={problems.includes(p)} className={`chip-button${problems.includes(p) ? " active" : ""}`}
               onClick={() => toggle(problems, setProblems, p)}>{p}</button>
           ))}
@@ -543,8 +550,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         {errors.problems && <span className="error">{errors.problems}</span>}
       </Section>
 
+      {vehicleKind === "motorcycle" && (
+        <Section icon="list" title="چک‌لیست بازدید موتور">
+          <IntakeChecklist motorType={motorType} onMotorType={setMotorType} ticks={ticks} onTicks={setTicks} error={errors.checklist} />
+        </Section>
+      )}
+
       <Section icon="list" title="خدمات درخواستی" badge={services.length > 0 && <span className="badge good">{formatNumber(services.length)} خدمت</span>}>
-        <ServicePicker value={services} onChange={setServices} kind={vehicleKind} />
+        <ServicePicker value={services} onChange={setServices} kind={vehicleKind} custom={custom.serviceCategories} />
       </Section>
 
       {requireAssignee && assigneeSection}

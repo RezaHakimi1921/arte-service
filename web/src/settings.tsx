@@ -6,7 +6,7 @@ import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./
 import { resetWorkflow } from "./workflow";
 import { SMS_PATTERNS, fillSms, type SmsKey } from "./smsTexts";
 
-export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
+export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "workshop" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
 
 export { ROLE_NAMES } from "./labels";
 import { ROLE_NAMES } from "./labels";
@@ -75,6 +75,7 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
           <Row icon="shop" title="اطلاعات کسب‌وکار" sub="نام، تلفن، نشانی" onClick={() => onOpen("business")} />
           <Row icon="license" title="اشتراک" sub={licenseText} onClick={() => onOpen("license")} />
           <Row icon="vehicle" title="نوع کسب‌وکار و وسایل نقلیه" sub="کدام وسایل در پذیرش نشان داده شوند" onClick={() => onOpen("vehicles")} />
+          <Row icon="rules" title="فهرست‌ها و چک‌لیست" sub="ایراد، خدمات و چک‌لیست بازدید موتور" onClick={() => onOpen("workshop")} />
           <Row icon="sms" title="پیامک و پیگیری مشتری" sub="لینک وضعیت پرونده و پیامک به مشتری" onClick={() => onOpen("customer")} />
           <Row icon="rules" title="قوانین پذیرش و روند کار" sub="مسئول الزامی، بررسی استاد، تأیید مشتری" onClick={() => onOpen("intake")} />
         </Group>
