@@ -30,7 +30,7 @@ public static class ReportEndpoints
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["to"] = ["بازه نامعتبر است."] });
         var dFrom = (dayFrom ?? DateTimeOffset.UtcNow.AddHours(-24)).ToUniversalTime();
         var dTo = (dayTo ?? dFrom.AddDays(1)).ToUniversalTime();
-        if (dTo <= dFrom || dTo - dFrom > TimeSpan.FromDays(2))
+        if (dTo <= dFrom || dTo - dFrom > TimeSpan.FromDays(3))
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["dayTo"] = ["بازه‌ی امروز نامعتبر است."] });
 
         // Today: what came in and what went out, and how many cases sit in each status right now.
