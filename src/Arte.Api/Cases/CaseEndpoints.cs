@@ -9,6 +9,8 @@ using Arte.Core.Customers;
 using Arte.Core.Data;
 using Arte.Core.Identity;
 using Arte.Core.Workflows;
+using Arte.Core.Workshop;
+using Arte.Api.Workshop;
 using Microsoft.EntityFrameworkCore;
 
 namespace Arte.Api.Cases;
@@ -21,7 +23,8 @@ public static class CaseEndpoints
         string? Mobile, string? CustomerName, Guid? AssetId, NewAsset? NewAsset,
         string? Request, int? OdometerKm, Guid? AssigneeId, Guid? ParentCaseId, string? Relation,
         Dictionary<string, string>? Intake, DateTimeOffset? PromisedAt, long? EstimatedAmountRials,
-        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems);
+        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems,
+        string? MotorType = null, WorkshopEndpoints.ChecklistTick[]? Checklist = null);
 
     public sealed record UpdateCase(
         string? Request, string? Diagnosis, int? OdometerKm, long? EstimatedAmountRials,
@@ -221,6 +224,9 @@ public static class CaseEndpoints
             c.Id, c.Number, c.TrackingCode, c.Request, c.RequestedServices, c.ReportedProblems, c.FuelLevel, c.BodyStatus, c.BodyNotes,
             c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
             c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation, c.WaitReason,
+            c.MotorType,
+            Checklist = await WorkshopEndpoints.ChecklistViewAsync(db, c.Id, ct),
+            Findings = await WorkshopEndpoints.FindingsViewAsync(db, c.Id, ct),
             c.OpenedAt, c.StageEnteredAt, c.ClosedAt,
             Stage = new { stage.Id, stage.Key, stage.Name, stage.Category, stage.Color, stage.IsTerminal },
             Customer = customer,
@@ -321,7 +327,29 @@ public static class CaseEndpoints
         }
         if (req.Relation is not null && !CaseRelations.All.Contains(req.Relation)) errors["relation"] = ["نوع ارتباط نامعتبر است."];
         if (ValidateIntake(req.Intake) is { } intakeError) errors["intake"] = [intakeError];
+        var motorType = string.IsNullOrWhiteSpace(req.MotorType) ? null : req.MotorType.Trim();
+        if (motorType is not null && !MotorTypes.All.Contains(motorType)) errors["motorType"] = ["نوع موتور نامعتبر است."];
+        if (req.Checklist is { } ticks && (ticks.Length > 100 || ticks.Any(t => t.Note is { Length: > 200 })))
+            errors["checklist"] = ["چک‌لیست نامعتبر است (حداکثر ۱۰۰ ردیف، توضیح هر ردیف تا ۲۰۰ حرف)."];
         if (errors.Count > 0) return Results.ValidationProblem(errors);
+
+        // The intake checklist of this motor type: every required row must be ticked before the case opens.
+        var template = new List<ChecklistTemplateItem>();
+        var tickById = new Dictionary<Guid, WorkshopEndpoints.ChecklistTick>();
+        if (motorType is not null)
+        {
+            template = await db.ChecklistTemplateItems.AsNoTracking().Where(t => t.MotorType == motorType && t.IsActive)
+                .OrderBy(t => t.SortOrder).ThenBy(t => t.CreatedAt).ToListAsync(ct);
+            foreach (var tick in req.Checklist ?? [])
+                if (tick.ItemId is { } tickId) tickById[tickId] = tick;
+            var missing = template.Where(t => t.IsRequired && !(tickById.TryGetValue(t.Id, out var tk) && tk.IsChecked == true))
+                .Select(t => t.Title).ToList();
+            if (missing.Count > 0)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["checklist"] = [$"این موارد چک‌لیست هنوز بررسی نشده: {string.Join("، ", missing.Take(5))}{(missing.Count > 5 ? $" و {missing.Count - 5} مورد دیگر" : "")}"],
+                });
+        }
 
         var now = clock.UtcNow;
         var userId = me.RequiredUserId;
@@ -392,12 +420,23 @@ public static class CaseEndpoints
             RequestedServices = services ?? [], ReportedProblems = problems ?? [], FuelLevel = req.FuelLevel,
             BodyStatus = req.BodyStatus, BodyNotes = NullIfEmpty(req.BodyNotes),
             EstimatedAmountRials = req.EstimatedAmountRials, PromisedAt = req.PromisedAt?.ToUniversalTime(),
-            IntakeChecklist = ToJson(req.Intake),
+            IntakeChecklist = ToJson(req.Intake), MotorType = motorType,
             ParentCaseId = req.ParentCaseId, Relation = req.ParentCaseId is null ? null : req.Relation ?? CaseRelations.Comeback,
             OpenedAt = now, StageEnteredAt = now, OpenedBy = userId,
             TrackingCode = Arte.Api.Tracking.TrackingCodes.New(),
         };
         db.Cases.Add(c);
+        var order = 0;
+        foreach (var t in template)
+        {
+            tickById.TryGetValue(t.Id, out var tick);
+            var done = tick?.IsChecked == true;
+            db.CaseChecklistItems.Add(new CaseChecklistItem
+            {
+                CaseId = c.Id, TemplateItemId = t.Id, Group = t.Group, Title = t.Title, IsRequired = t.IsRequired, IsChecked = done,
+                Note = NullIfEmpty(tick?.Note), SortOrder = ++order, CheckedBy = done ? userId : null, CheckedAt = done ? now : null,
+            });
+        }
         AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.ReportedProblems, c.OdometerKm, c.ParentCaseId });
         if (c.AssigneeId is not null) AddEvent(db, c, CaseEventTypes.Assigned, userId, now, new { To = await MemberName(db, c.AssigneeId.Value, ct) });
 
