@@ -7,6 +7,7 @@ import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
 import { PhotoSection, type CasePhoto } from "./photos";
+import { CustomerReceipts } from "./finance";
 import { CaseWorkshopSections, type CaseChecklistRow, type CaseFinding } from "./workshop";
 import { SurveySection, type CaseSurvey } from "./survey";
 import { ROLE_NAMES } from "./labels";
@@ -477,6 +478,8 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
 
       {c.stage.key !== "review" && photoSection}
+
+      {c.billing.canRecordPayments && <CustomerReceipts caseId={c.id} onChange={load} />}
 
       <CaseWorkshopSections caseId={c.id} checklist={c.checklist ?? []} findings={c.findings ?? []} motorType={c.motorType ?? null} canEdit={c.canEdit || c.canManage} onChange={load} />
 

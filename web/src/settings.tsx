@@ -6,7 +6,7 @@ import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./
 import { resetWorkflow } from "./workflow";
 import { SMS_PATTERNS, fillSms, type SmsKey } from "./smsTexts";
 
-export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "workshop" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
+export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "workshop" | "finance" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
 
 export { ROLE_NAMES } from "./labels";
 import { ROLE_NAMES } from "./labels";
@@ -75,6 +75,7 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
           <Row icon="shop" title="اطلاعات کسب‌وکار" sub="نام، تلفن، نشانی" onClick={() => onOpen("business")} />
           <Row icon="license" title="اشتراک" sub={licenseText} onClick={() => onOpen("license")} />
           <Row icon="vehicle" title="نوع کسب‌وکار و وسایل نقلیه" sub="کدام وسایل در پذیرش نشان داده شوند" onClick={() => onOpen("vehicles")} />
+          <Row icon="credit" title="مالی: کارتخوان و کارت‌ها" sub="انتخاب کارتخوان در پرداخت، کارت نمایشی برای مشتری" onClick={() => onOpen("finance")} />
           <Row icon="rules" title="فهرست‌ها و چک‌لیست" sub="ایراد، خدمات و چک‌لیست بازدید موتور" onClick={() => onOpen("workshop")} />
           <Row icon="sms" title="پیامک و پیگیری مشتری" sub="لینک وضعیت پرونده و پیامک به مشتری" onClick={() => onOpen("customer")} />
           <Row icon="rules" title="قوانین پذیرش و روند کار" sub="مسئول الزامی، بررسی استاد، تأیید مشتری" onClick={() => onOpen("intake")} />
@@ -211,6 +212,9 @@ type BusinessSettings = {
   customerSmsEnabled: boolean; smsOnOpened: boolean; smsOnReady: boolean; smsOnDelivered: boolean;
   trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean; photosVisibleByDefault: boolean;
   surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number; surveyAlertBelow: number; requireTransferReceipt: boolean;
+  requirePaymentBeforeWork: boolean; trackShowPhone: boolean; instagramId: string | null;
+  mapNeshanUrl: string | null; mapGoogleUrl: string | null; mapWazeUrl: string | null; mapBaladUrl: string | null;
+  smsOnWaitingPart: boolean; smsToMasterOnFinished: boolean;
 };
 
 function delayText(m: number) {
@@ -266,10 +270,19 @@ export function BusinessPage({ onBack, onSaved }: { onBack: () => void; onSaved:
   return (
     <SubPage title="اطلاعات کسب‌وکار" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
-        <form className="plain-form" onSubmit={(e) => { e.preventDefault(); save({ name: s.name, phone: s.phone ?? "", address: s.address ?? "" }); }}>
+        <form className="plain-form" onSubmit={(e) => { e.preventDefault(); save({ name: s.name, phone: s.phone ?? "", address: s.address ?? "", instagramId: s.instagramId ?? "", mapNeshanUrl: s.mapNeshanUrl ?? "", mapGoogleUrl: s.mapGoogleUrl ?? "", mapWazeUrl: s.mapWazeUrl ?? "", mapBaladUrl: s.mapBaladUrl ?? "" }); }}>
           <Field label="نام کسب‌وکار"><input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} maxLength={120} /></Field>
           <Field label="تلفن"><input type="tel" inputMode="tel" dir="ltr" value={s.phone ?? ""} onChange={(e) => setS({ ...s, phone: e.target.value })} maxLength={20} /></Field>
           <Field label="نشانی"><textarea rows={2} value={s.address ?? ""} onChange={(e) => setS({ ...s, address: e.target.value })} maxLength={300} /></Field>
+          <Switch title="نمایش شماره‌ی تلفن در لینک مشتری" sub="با دکمه‌ی تماس پایین صفحه‌ی پیگیری نشان داده می‌شود." checked={s.trackShowPhone} disabled={busy}
+            onChange={(v) => save({ trackShowPhone: v })} />
+          <h3>اینستاگرام و نقشه</h3>
+          <p className="hint">فقط مواردی که پر کنید در لینک مشتری نشان داده می‌شود. لینک نقشه باید از خود همان برنامه (https) باشد.</p>
+          <Field label="آیدی اینستاگرام"><input dir="ltr" value={s.instagramId ?? ""} onChange={(e) => setS({ ...s, instagramId: e.target.value })} maxLength={30} placeholder="my_shop" /></Field>
+          <Field label="لینک نشان"><input dir="ltr" inputMode="url" value={s.mapNeshanUrl ?? ""} onChange={(e) => setS({ ...s, mapNeshanUrl: e.target.value })} maxLength={300} /></Field>
+          <Field label="لینک گوگل‌مپ"><input dir="ltr" inputMode="url" value={s.mapGoogleUrl ?? ""} onChange={(e) => setS({ ...s, mapGoogleUrl: e.target.value })} maxLength={300} /></Field>
+          <Field label="لینک ویز"><input dir="ltr" inputMode="url" value={s.mapWazeUrl ?? ""} onChange={(e) => setS({ ...s, mapWazeUrl: e.target.value })} maxLength={300} /></Field>
+          <Field label="لینک بلد"><input dir="ltr" inputMode="url" value={s.mapBaladUrl ?? ""} onChange={(e) => setS({ ...s, mapBaladUrl: e.target.value })} maxLength={300} /></Field>
           <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
         </form>
       )}
@@ -305,6 +318,8 @@ export function IntakeRulesPage({ onBack, onSaved }: { onBack: () => void; onSav
             checked={s.requireFinalReview} disabled={false} onChange={(v) => save({ requireFinalReview: v })} />
           <Switch title="تأیید هزینه توسط مشتری قبل از تعمیر" sub="بعد از عیب‌یابی، کار تا تأیید مشتری متوقف می‌ماند. معمولاً لازم نیست چون مشتری خودش کار را سپرده است."
             checked={s.requireCustomerApproval} disabled={false} onChange={(v) => save({ requireCustomerApproval: v })} />
+          <Switch title="شروع کار و تهیه قطعه بعد از پرداخت مشتری" sub="تا پرداختی ثبت نشده (یا رسید مشتری تأیید نشده)، پرونده به «در حال تعمیر» یا «منتظر قطعه» نمی‌رود."
+            checked={s.requirePaymentBeforeWork} disabled={false} onChange={(v) => save({ requirePaymentBeforeWork: v })} />
           <Switch title="رسید کارت به کارت لازم باشد" sub="با هر پرداخت کارت به کارت باید عکس رسید بارگذاری شود؛ برای بقیه‌ی روش‌ها اختیاری است."
             checked={s.requireTransferReceipt} disabled={false} onChange={(v) => save({ requireTransferReceipt: v })} />
         </div>

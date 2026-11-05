@@ -2303,3 +2303,12 @@ input[readonly] { opacity: 0.75; cursor: default; }
 .case-section { margin: 0.75rem 0; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .case-section > summary { min-height: 44px; display: flex; align-items: center; gap: 0.5rem; font-weight: 700; cursor: pointer; }
 .case-section .checks, .case-section form { margin-top: 0.5rem; }
+
+/* ───────── customer page: pay, maps, instagram ───────── */
+.tk-pay { display: grid; gap: 0.75rem; }
+.tk-card-number { display: grid; gap: 0.4rem; padding: 0.8rem; border-radius: 1rem; background: var(--surface-2); }
+.tk-card-number strong { font-size: 1.15rem; word-spacing: 0.15em; }
+.tk-links { display: grid; gap: 0.6rem; margin-top: 0.75rem; }
+.tk-maps { display: flex; gap: 0.4rem; padding: 0.25rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.tk-maps a { flex: 1; min-height: 44px; display: grid; place-items: center; border-radius: 999px; color: var(--accent); font-size: 0.85rem; text-decoration: none; }
+.tk-insta { justify-self: center; min-height: 44px; display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.85rem; text-decoration: none; }

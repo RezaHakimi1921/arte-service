@@ -14,12 +14,13 @@ export type Item = {
   /** True while the line is only waited for: the profit is what it will make once fitted, not zero. */
   profitIsExpected?: boolean; expectedTotalRials?: number | null;
 };
-export type PaymentRow = { id: string; amountRials: number; method: string; paidAt: string; note: string | null; receiptId: string | null };
+export type PaymentRow = { id: string; amountRials: number; method: string; paidAt: string; note: string | null; receiptId: string | null; terminalId?: string | null; cardId?: string | null };
 export type Billing = {
   items: Item[]; payments: PaymentRow[];
   money: { totalRials: number; paidRials: number; balanceRials: number; partsRials: number; laborRials: number; servicesRials: number; costRials: number | null; profitRials: number | null;
     discountRials?: number; subtotalRials?: number; pendingProfitRials?: number | null };
   canEditItems: boolean; canRecordPayments: boolean; canSeeCost: boolean; requireTransferReceipt: boolean;
+  terminals?: { id: string; name: string; bank: string | null }[] | null; cards?: { id: string; cardNumber: string; holderName: string; bank: string | null }[] | null;
 };
 type CatalogRow = { id: string; kind: string; title: string; defaultPriceRials: number; defaultCostRials: number | null; defaultWarrantyDays: number | null; isActive: boolean };
 type Assignable = { id: string; name: string; role: string };
@@ -216,7 +217,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
         {receiptUrl && <img className="receipt-image" src={receiptUrl} alt="رسید پرداخت" />}
       </BottomSheet>
 
-      <PaymentSheet open={paying} caseId={caseId} requireReceipt={billing.requireTransferReceipt} suggested={Math.max(0, m.balanceRials)} busy={busy} onClose={() => setPaying(false)}
+      <PaymentSheet open={paying} caseId={caseId} requireReceipt={billing.requireTransferReceipt} terminals={billing.terminals ?? []} cards={billing.cards ?? []} suggested={Math.max(0, m.balanceRials)} busy={busy} onClose={() => setPaying(false)}
         onSave={(body) => run(async () => { const b = await api<Billing>(`/api/v1/cases/${caseId}/payments`, { body }); setPaying(false); return b; }, "پرداخت ثبت شد")} />
     </>
   );
@@ -526,12 +527,15 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
 
 /* ───────── payment sheet ───────── */
 
-function PaymentSheet({ open, caseId, requireReceipt, suggested, busy, onClose, onSave }: {
+function PaymentSheet({ open, caseId, requireReceipt, terminals, cards, suggested, busy, onClose, onSave }: {
   open: boolean; caseId: string; requireReceipt: boolean; suggested: number; busy: boolean; onClose: () => void;
-  onSave: (body: { amountRials: number; method: string; note?: string; receiptId?: string }) => void;
+  terminals: { id: string; name: string; bank: string | null }[]; cards: { id: string; cardNumber: string; holderName: string; bank: string | null }[];
+  onSave: (body: { amountRials: number; method: string; note?: string; receiptId?: string; terminalId?: string; cardId?: string }) => void;
 }) {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("card");
+  const [terminalId, setTerminalId] = useState("");
+  const [cardId, setCardId] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{ id: string; url: string } | null>(null);
@@ -541,6 +545,8 @@ function PaymentSheet({ open, caseId, requireReceipt, suggested, busy, onClose, 
     if (!open) return;
     setAmount(suggested > 0 ? String(Math.round(suggested / 10)) : "");
     setMethod("card");
+    setTerminalId("");
+    setCardId("");
     setNote("");
     setError(null);
     setReceipt(null);
@@ -570,7 +576,8 @@ function PaymentSheet({ open, caseId, requireReceipt, suggested, busy, onClose, 
     e.preventDefault();
     if (!amount) { setError("مبلغ را وارد کنید."); return; }
     if (needsReceipt && !receipt) { setError("برای کارت به کارت، عکس رسید را بارگذاری کنید."); return; }
-    onSave({ amountRials: toRials(amount), method, note: note.trim() || undefined, receiptId: receipt?.id });
+    onSave({ amountRials: toRials(amount), method, note: note.trim() || undefined, receiptId: receipt?.id,
+      terminalId: method === "card" && terminalId ? terminalId : undefined, cardId: method === "transfer" && cardId ? cardId : undefined });
   }
 
   return (
@@ -584,6 +591,22 @@ function PaymentSheet({ open, caseId, requireReceipt, suggested, busy, onClose, 
             <button type="button" key={k} role="radio" aria-checked={method === k} className={`chip-button${method === k ? " active" : ""}`} onClick={() => setMethod(k)}>{label}</button>
           ))}
         </div>
+        {method === "card" && terminals.length > 0 && (
+          <div className="chips" role="radiogroup" aria-label="کارتخوان">
+            {terminals.map((t) => (
+              <button type="button" key={t.id} role="radio" aria-checked={terminalId === t.id} className={`chip-button${terminalId === t.id ? " active" : ""}`}
+                onClick={() => setTerminalId(terminalId === t.id ? "" : t.id)}>{t.name}</button>
+            ))}
+          </div>
+        )}
+        {method === "transfer" && cards.length > 0 && (
+          <div className="chips" role="radiogroup" aria-label="کارت مقصد">
+            {cards.map((c) => (
+              <button type="button" key={c.id} role="radio" aria-checked={cardId === c.id} className={`chip-button${cardId === c.id ? " active" : ""}`}
+                onClick={() => setCardId(cardId === c.id ? "" : c.id)}>{c.holderName} · {c.cardNumber.slice(-4)}</button>
+            ))}
+          </div>
+        )}
         <div className="field">
           <span className="label">عکس رسید واریز {needsReceipt ? "(لازم)" : "(اختیاری)"}</span>
           {receipt ? (

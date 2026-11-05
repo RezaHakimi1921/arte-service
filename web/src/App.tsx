@@ -16,6 +16,7 @@ import { BranchBlocked, LicenseBanner, LicensePage, type LicenseStatus } from ".
 import { AdminPanel } from "./admin";
 import { useFeedback } from "./feedback";
 import { WorkshopListsPage } from "./workshop";
+import { FinancePage } from "./finance";
 import { AccountPage, AppearancePage, BusinessPage, CustomerPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, VehiclesPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
@@ -390,6 +391,7 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
     else if (morePage === "business") page = <BusinessPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "intake") page = <IntakeRulesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "vehicles") page = <VehiclesPage onBack={back} onSaved={onSettingsChanged} />;
+    else if (morePage === "finance") page = <FinancePage onBack={back} />;
     else if (morePage === "workshop") page = <WorkshopListsPage onBack={back} />;
     else if (morePage === "customer") page = <CustomerPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "staff") page = <StaffPage onBack={back} surveyEnabled={me.business!.surveyEnabled} />;

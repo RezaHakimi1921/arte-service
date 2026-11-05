@@ -3,13 +3,15 @@ import { ApiError, api } from "./api";
 import { applyTheme } from "./App";
 import { WAIT_REASONS } from "./labels";
 import { formatNumber } from "./ui";
+import { compress } from "./photos";
 
 type Change = { title: string; state: "kept" | "removed" | "added" };
 
 type Survey = { state: "open" | "answered" | "expired"; questions: { id: string; text: string }[] | null; score: number | null };
 
 type Track = {
-  shop: { name: string; phone: string | null; address: string | null };
+  shop: { name: string; phone: string | null; address: string | null; instagram?: string | null; maps?: { key: string; name: string; url: string }[] };
+  pay?: { card: { cardNumber: string; holderName: string; bank: string | null } | null; receipts: { status: string; claimedRials: number | null; createdAt: string; note: string | null }[] };
   survey: Survey | null;
   photos: { id: string; stageKey: string; caption: string | null; createdAt: string }[];
   case: {
@@ -51,6 +53,70 @@ function Icon({ name }: { name: IconName }) {
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       {paths[name]}
     </svg>
+  );
+}
+
+const cardGroups = (n: string) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
+
+/** Pay by card: the shop's card with a copy button, and a way to send the bank receipt. */
+function PaySection({ code, pay, onSent }: { code: string; pay: NonNullable<Track["pay"]>; onSent: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const digits = (s: string) => s.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/\D/g, "");
+
+  async function copy() {
+    try { await navigator.clipboard.writeText(pay.card!.cardNumber); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    catch { setMsg({ text: "کپی نشد؛ شماره را به‌صورت دستی بنویسید.", ok: false }); }
+  }
+
+  async function send(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setBusy(true); setMsg(null);
+    try {
+      const blob = await compress(file);
+      const form = new FormData();
+      form.append("file", blob, "receipt.jpg");
+      if (digits(amount)) form.append("amountRials", String(Number(digits(amount)) * 10));
+      await api(`/api/v1/track/${code}/receipts`, { body: form });
+      setAmount("");
+      setMsg({ text: "رسید ارسال شد؛ بعد از بررسی تعمیرگاه، پرداخت شما ثبت می‌شود.", ok: true });
+      onSent();
+    } catch (err) {
+      setMsg({ text: err instanceof ApiError ? err.message : "ارسال رسید انجام نشد.", ok: false });
+    } finally { setBusy(false); }
+  }
+
+  const label: Record<string, string> = { pending: "در انتظار بررسی", approved: "تأیید شد", rejected: "رد شد" };
+  return (
+    <section className="tk-card tk-pay">
+      <h3>پرداخت</h3>
+      {pay.card && (
+        <div className="tk-card-number">
+          <span>کارت به کارت · {pay.card.holderName}{pay.card.bank ? ` · ${pay.card.bank}` : ""}</span>
+          <strong dir="ltr" className="font-num">{cardGroups(pay.card.cardNumber)}</strong>
+          <button type="button" className="secondary" onClick={copy}>{copied ? "کپی شد ✓" : "کپی شماره کارت"}</button>
+        </div>
+      )}
+      <label className="field">
+        <span>مبلغ واریزی (تومان، اختیاری)</span>
+        <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} maxLength={14} />
+      </label>
+      <label className={`button receipt-button${busy ? " busy" : ""}`} aria-busy={busy}>
+        <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { void send(e.target.files); e.target.value = ""; }} />
+        {busy ? "در حال ارسال…" : "ارسال عکس رسید واریز"}
+      </label>
+      {msg && <p className={msg.ok ? "hint" : "error"} role="status">{msg.text}</p>}
+      {pay.receipts.length > 0 && (
+        <ul className="plain-list">
+          {pay.receipts.map((r, i) => (
+            <li key={i}>{when(r.createdAt)} · {label[r.status] ?? r.status}{r.status === "rejected" && r.note ? ` (${r.note})` : ""}</li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -489,14 +555,35 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </Section>
         )}
 
-        <section className="tk-help">
-          <div className="tk-help-icon"><Icon name="phone" /></div>
-          <div>
-            <strong>سؤالی دارید؟</strong>
-            <span>{t.shop.phone ? "با تعمیرگاه تماس بگیرید." : "شماره‌ی تعمیرگاه هنوز ثبت نشده است."}</span>
-          </div>
-          {t.shop.phone && <a className="tk-call" href={`tel:${t.shop.phone}`}>تماس</a>}
-        </section>
+        {t.pay && (t.pay.card || t.pay.receipts.length > 0 || (t.money && t.money.balanceRials > 0)) && (
+          <PaySection code={code} pay={t.pay} onSent={() => api<Track>(`/api/v1/track/${code}`).then((d) => setT(withoutInternalSteps(d))).catch(() => {})} />
+        )}
+
+        {t.shop.phone && (
+          <section className="tk-help">
+            <div className="tk-help-icon"><Icon name="phone" /></div>
+            <div>
+              <strong>سؤالی دارید؟</strong>
+              <span>با تعمیرگاه تماس بگیرید.</span>
+            </div>
+            <a className="tk-call" href={`tel:${t.shop.phone}`}>تماس</a>
+          </section>
+        )}
+
+        {((t.shop.maps?.length ?? 0) > 0 || t.shop.instagram) && (
+          <section className="tk-links" aria-label="نشانی و شبکه‌های اجتماعی">
+            {(t.shop.maps?.length ?? 0) > 0 && (
+              <div className="tk-maps" role="group" aria-label="مسیریابی">
+                {t.shop.maps!.map((m) => <a key={m.key} href={m.url} target="_blank" rel="noopener noreferrer">{m.name}</a>)}
+              </div>
+            )}
+            {t.shop.instagram && (
+              <a className="tk-insta" href={`https://instagram.com/${encodeURIComponent(t.shop.instagram)}`} target="_blank" rel="noopener noreferrer" dir="ltr">
+                <span aria-hidden="true">◎</span> @{t.shop.instagram}
+              </a>
+            )}
+          </section>
+        )}
       </div>
 
       {photo !== null && (
