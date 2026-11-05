@@ -87,7 +87,7 @@ public sealed class WorkshopFinanceTests(ArteApiFactory api)
         var list = await Json(await owner.GetAsync($"/api/v1/cases/{id}/customer-receipts"));
         var rid = list[0].GetProperty("id").GetGuid();
         Assert.Equal(500_000, list[0].GetProperty("claimedRials").GetInt64());
-        Assert.Equal(HttpStatusCode.Forbidden, (await tech.PostAsync($"/api/v1/customer-receipts/{rid}/approve", JsonContent.Create(new { }))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await tech.PostAsync($"/api/v1/customer-receipts/{rid}/approve", JsonContent.Create(new { }))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"/api/v1/customer-receipts/{rid}/approve", new { })).StatusCode);
 
         (await owner.PostAsJsonAsync($"/api/v1/customer-receipts/{rid}/approve", new { })).EnsureSuccessStatusCode();
