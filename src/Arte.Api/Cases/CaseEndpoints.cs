@@ -567,7 +567,7 @@ public static class CaseEndpoints
             if (creditRials > 0) AddEvent(db, c, CaseEventTypes.Credit, userId, now, new { BalanceRials = creditRials, DueAt = c.CreditDueAt });
         }
         AddEvent(db, c, CaseEventTypes.StageChanged, userId, now,
-            new { From = from.Name, To = to.Name, to.Category, Action = t.Label, Reason = reason, WaitReason = waitReason });
+            new { From = from.Name, To = to.Name, FromKey = from.Key, ToKey = to.Key, to.Category, Action = t.Label, Reason = reason, WaitReason = waitReason });
 
         if (from.IsTerminal && !to.IsTerminal)
         {

@@ -137,10 +137,66 @@ export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () 
             <p className="hint">{period === "today" || period === "week" ? "در بازه روزانه و هفتگی فقط پورسانت در جمع آمده است." : "جمع = پورسانت این بازه + حقوق ثابت یک ماه."}</p>
           )}
 
+          <WorkshopBlock from={from} to={to} />
+
           {data.survey && <SurveyBlock r={data.survey} onOpenCase={onOpenCase} />}
         </>
       )}
     </SubPage>
+  );
+}
+
+type WorkshopReport = {
+  today: { opened: number; delivered: number; byStatus: { key: string; name: string; count: number }[] };
+  people: { membershipId: string; name: string; role: string; finished: number; surveys: number; averageScore: number | null }[];
+  reportedProblems: { title: string; count: number }[]; foundProblems: { title: string; count: number }[];
+  motorTypes: { type: string; count: number }[];
+};
+
+/** The workshop at a glance (today), each person's finished jobs and satisfaction, and the most frequent problems of the period. */
+function WorkshopBlock({ from, to }: { from: Date; to: Date }) {
+  const [r, setR] = useState<WorkshopReport | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const t0 = midnight(new Date());
+    const q = new URLSearchParams({ from: from.toISOString(), to: to.toISOString(), dayFrom: t0.toISOString(), dayTo: addDays(t0, 1).toISOString() });
+    api<WorkshopReport>(`/api/v1/reports/workshop?${q}`).then((d) => alive && setR(d)).catch(() => alive && setR(null));
+    return () => { alive = false; };
+  }, [from.getTime(), to.getTime()]);
+  if (!r) return null;
+  const TYPE_NAMES: Record<string, string> = { geared: "دنده‌ای", automatic: "کلیچ / اتوماتیک" };
+  const list = (rows: { title: string; count: number }[], empty: string) => rows.length === 0
+    ? <p className="muted small">{empty}</p>
+    : <div className="settings-list">{rows.map((x) => <div key={x.title} className="setting-row"><span><strong>{x.title}</strong></span><span className="font-num">{formatNumber(x.count)} بار</span></div>)}</div>;
+  return (
+    <>
+      <h3>کارگاه امروز</h3>
+      <div className="report-grid">
+        <Stat label="پذیرش امروز" value={`${formatNumber(r.today.opened)} پرونده`} />
+        <Stat label="تحویل امروز" value={`${formatNumber(r.today.delivered)} پرونده`} />
+        {r.today.byStatus.map((s) => <Stat key={s.key} label={s.name} value={`${formatNumber(s.count)} پرونده`} />)}
+      </div>
+
+      <h3>عملکرد همکاران در این بازه</h3>
+      {r.people.length === 0 ? <p className="muted small">در این بازه کاری تمام‌شده‌ای ثبت نشده است.</p> : (
+        <div className="settings-list">
+          {r.people.map((p) => (
+            <div key={p.membershipId} className="setting-row">
+              <span><strong>{p.name}</strong><span className="muted small">{ROLE_NAMES[p.role] ?? p.role}</span></span>
+              <span className="font-num">{formatNumber(p.finished)} کار تمام‌شده{p.averageScore != null ? ` · رضایت ${new Intl.NumberFormat("fa-IR").format(p.averageScore)} از ۵ (${formatNumber(p.surveys)} نظر)` : ""}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="hint">«کار تمام‌شده» یعنی همکار پرونده را از «در حال تعمیر» برای بررسی یا تحویل فرستاده است.</p>
+
+      <h3>پرتکرارترین ایرادها</h3>
+      <h4>اعلام‌شده توسط مشتری</h4>
+      {list(r.reportedProblems, "در این بازه ایرادی اعلام نشده است.")}
+      <h4>پیدا‌شده در کارگاه</h4>
+      {list(r.foundProblems, "هنوز ایرادی در پرونده‌ها ثبت نشده است.")}
+      {r.motorTypes.length > 0 && <p className="hint">نوع موتور: {r.motorTypes.map((m) => `${TYPE_NAMES[m.type] ?? m.type} ${formatNumber(m.count)}`).join(" · ")}</p>}
+    </>
   );
 }
 
