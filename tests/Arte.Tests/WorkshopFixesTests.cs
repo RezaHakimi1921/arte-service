@@ -108,7 +108,9 @@ public sealed class WorkshopFixesTests(ArteApiFactory api)
 
         var timeline = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("timeline").EnumerateArray().ToList();
         Assert.True(timeline.Count >= 2);
-        Assert.All(timeline, e => Assert.False(string.IsNullOrWhiteSpace(e.GetProperty("actor").GetString())));
+        // Everything a person did names that person; only the automatic customer SMS has no actor (the screen says «خودکار»).
+        Assert.All(timeline.Where(e => e.GetProperty("type").GetString() != "customer.sms"),
+            e => Assert.False(string.IsNullOrWhiteSpace(e.GetProperty("actor").GetString())));
     }
 
     // ───────── 18: users and passwords from the panel ─────────
