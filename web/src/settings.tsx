@@ -653,8 +653,9 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
           {row.role !== "owner" && (
             <Field label="نقش">
               <select value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="technician">شاگرد: فقط پرونده‌های خودش</option>
-                <option value="supervisor">مدیر داخلی: ثبت پرونده و تخصیص</option>
+                <option value="technician">مکانیک: پذیرش و کار روی پرونده‌های خودش</option>
+                <option value="supervisor">مکانیک ارشد: همه‌ی پرونده‌ها، تأیید و گزارش‌ها</option>
+                <option value="apprentice">کارآموز: فقط مشاهده</option>
               </select>
             </Field>
           )}
@@ -801,8 +802,9 @@ export function StaffPage({ onBack, surveyEnabled = false }: { onBack: () => voi
         <Field label="نام"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} /></Field>
         <Field label="نقش">
           <select value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="technician">شاگرد: فقط پرونده‌های خودش</option>
-            <option value="supervisor">مدیر داخلی: ثبت پرونده و تخصیص</option>
+            <option value="technician">مکانیک: پذیرش و کار روی پرونده‌های خودش</option>
+            <option value="supervisor">مکانیک ارشد: همه‌ی پرونده‌ها، تأیید و گزارش‌ها</option>
+            <option value="apprentice">کارآموز: فقط مشاهده</option>
           </select>
         </Field>
         <details className="cred-details">

@@ -84,4 +84,4 @@ export function eventText(type: string, data: Record<string, unknown> | null | u
   return (EVENT_TEXT[type] ?? (() => "تغییر در پرونده"))(data ?? {});
 }
 
-export const ROLE_NAMES: Record<string, string> = { owner: "استاد (مالک)", supervisor: "مدیر داخلی", technician: "شاگرد" };
+export const ROLE_NAMES: Record<string, string> = { owner: "مدیر (مالک)", supervisor: "مکانیک ارشد", technician: "مکانیک", apprentice: "کارآموز" };

@@ -44,7 +44,7 @@ public static class StaffEndpoints
             var errors = new Dictionary<string, string[]>();
             if (!Mobile.TryNormalize(req.Mobile, out var mobile)) errors["mobile"] = ["شماره موبایل معتبر نیست."];
             var role = req.Role ?? Roles.Technician;
-            if (role is not (Roles.Supervisor or Roles.Technician)) errors["role"] = ["نقش باید supervisor یا technician باشد."];
+            if (role is not (Roles.Supervisor or Roles.Technician or Roles.Apprentice)) errors["role"] = ["نقش نامعتبر است."];
             var name = req.DisplayName?.Trim();
             if (name is { Length: > 80 }) errors["displayName"] = ["نام حداکثر ۸۰ حرف."];
             var username = CredentialRules.NormalizeUsername(req.Username);
@@ -123,7 +123,7 @@ public static class StaffEndpoints
                 return Results.Problem(statusCode: 403, title: "این عضو دسترسی‌ای بیشتر از شما دارد.");
 
             var errors = new Dictionary<string, string[]>();
-            if (req.Role is not null and not (Roles.Supervisor or Roles.Technician)) errors["role"] = ["نقش نامعتبر است."];
+            if (req.Role is not null and not (Roles.Supervisor or Roles.Technician or Roles.Apprentice)) errors["role"] = ["نقش نامعتبر است."];
             if (req.Permissions is { } perms && (perms.Length > 20 || perms.Any(p => !Permissions.All.Contains(p))))
                 errors["permissions"] = ["دسترسی نامعتبر است."];
             if (req.PayModel is not null && !PayModels.All.Contains(req.PayModel)) errors["payModel"] = ["مدل دستمزد نامعتبر است."];

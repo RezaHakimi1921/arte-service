@@ -399,7 +399,7 @@ public sealed class CaseTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Technician_cannot_open_assign_or_change_price()
+    public async Task Technician_can_open_but_cannot_assign_or_change_price()
     {
         var (owner, _) = await api.NewBusinessAsync();
         var techMobile = ArteApiFactory.NewMobile();
@@ -408,7 +408,8 @@ public sealed class CaseTests(ArteApiFactory api)
         var (tech, _) = await api.LoginAsync(techMobile);
         var id = c.GetProperty("id");
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await tech.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), request = "x" })).StatusCode);
+        // A mechanic takes cars in (پذیرش), but cannot assign or change prices.
+        Assert.Equal(HttpStatusCode.Created, (await tech.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), request = "x" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await tech.PostAsJsonAsync($"/api/v1/cases/{id}/assign", new { assigneeId = (Guid?)null })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await tech.PatchAsJsonAsync($"/api/v1/cases/{id}", new { estimatedAmountRials = 1 })).StatusCode);
         // A promised time in Tehran local time is accepted (stored as UTC).

@@ -54,7 +54,9 @@ public sealed class Membership : ITenantOwned
     /// </summary>
     public bool IsSupport { get; set; }
 
-    public bool Has(string permission) => Role == Roles.Owner || Permissions.Contains(permission);
+    public bool Has(string permission) =>
+        Role == Roles.Owner || Permissions.Contains(permission)
+        || (permission == Identity.Permissions.CasesIntake && Permissions.Contains(Identity.Permissions.CasesCreate));
 }
 
 public sealed class OtpChallenge

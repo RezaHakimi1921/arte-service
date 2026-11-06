@@ -259,7 +259,7 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
   const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
   const [morePage, setMorePage] = useState<SettingsPage | null>(null);
   const can = (p: string) => me.business!.permissions.includes(p);
-  const canIntake = can("cases.create") && (me.openMode || me.business!.license.state !== "expired");
+  const canIntake = (can("cases.create") || can("cases.intake")) && (me.openMode || me.business!.license.state !== "expired");
   const { notify } = useFeedback();
   // Businesses from before the tour have no sample yet: it is created first, then the tour opens.
   const needsSample = !me.business!.tourDone && can("cases.create") && !me.business!.sampleCaseId;

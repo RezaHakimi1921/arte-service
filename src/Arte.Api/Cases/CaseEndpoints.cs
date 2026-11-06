@@ -44,7 +44,7 @@ public static class CaseEndpoints
 
         g.MapGet("/", ListAsync);
         g.MapGet("/{id:guid}", DetailAsync);
-        g.MapPost("/", CreateAsync).RequirePermission(Permissions.CasesCreate);
+        g.MapPost("/", CreateAsync).RequirePermission(Permissions.CasesIntake);
         g.MapPatch("/{id:guid}", UpdateAsync);
         g.MapPost("/{id:guid}/transitions/{transitionId:guid}", TransitionAsync);
         g.MapPost("/{id:guid}/assign", AssignAsync).RequirePermission(Permissions.CasesAssign);
@@ -53,7 +53,7 @@ public static class CaseEndpoints
         g.MapDelete("/{id:guid}", DeleteAsync).RequirePermission(Permissions.CasesCreate);
         g.MapPost("/{id:guid}/restore", RestoreAsync).RequirePermission(Permissions.CasesCreate);
         g.MapGet("/trash", TrashAsync).RequirePermission(Permissions.CasesCreate);
-        g.MapGet("/suggest-parent", SuggestParentAsync).RequirePermission(Permissions.CasesCreate);
+        g.MapGet("/suggest-parent", SuggestParentAsync).RequirePermission(Permissions.CasesIntake);
 
         app.MapGet("/api/v1/dashboard", DashboardAsync).RequireTenant();
         app.MapGet("/api/v1/inbox", InboxAsync).RequireTenant();
@@ -76,7 +76,7 @@ public static class CaseEndpoints
                              select new { Asset = new { a.Id, a.Title, a.Identifier, a.Kind }, Customer = new { c.Id, c.FullName, c.Mobile } })
                 .FirstOrDefaultAsync(ct);
             return hit is null ? Results.NotFound() : Results.Ok(hit);
-        }).RequirePermission(Permissions.CasesCreate);
+        }).RequirePermission(Permissions.CasesIntake);
         app.MapGet("/api/v1/staff/assignable", async (ArteDbContext db, CancellationToken ct) =>
             Results.Ok(await db.Memberships.AsNoTracking()
                 .Where(m => m.IsActive && (m.Role == Roles.Owner || m.Permissions.Contains(Permissions.CasesWork)))
@@ -634,6 +634,8 @@ public static class CaseEndpoints
     {
         var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
         if (c is null || !CaseAccess.CanSee(me.RequiredMembership, c)) return Results.NotFound();
+        if (!CaseAccess.CanWorkOn(me.RequiredMembership, c) && !me.RequiredMembership.Has(Permissions.CasesCreate))
+            return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
         var text = req.Text?.Trim();
         if (string.IsNullOrEmpty(text) || text.Length > 2000)
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["text"] = ["متن یادداشت لازم است (حداکثر ۲۰۰۰ حرف)."] });
