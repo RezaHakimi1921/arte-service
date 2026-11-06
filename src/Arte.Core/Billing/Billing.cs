@@ -143,3 +143,23 @@ public sealed record CaseMoney(long TotalRials, long PaidRials, long BalanceRial
             billable.Where(i => i.IsPendingForProfit && i.UnitCostRials != null).Sum(i => i.ExpectedProfitRials));
     }
 }
+
+/// <summary>
+/// The permanent record of what an item was bought and sold for, one row per event. Append-only: rows are never
+/// edited or deleted, so «bought for 200, sold for 300; later bought for 300, sold for 400» is always readable.
+/// </summary>
+public sealed class CatalogPriceLog : ITenantOwned
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid TenantId { get; set; }
+    public Guid CatalogItemId { get; set; }
+    /// <summary>"sale" (a line on a case), "sale_edit" (that line's price was changed) or "catalog" (the default price was set or edited).</summary>
+    public required string Source { get; set; }
+    public decimal? Quantity { get; set; }
+    public long PriceRials { get; set; }
+    /// <summary>Purchase price per unit; shown to the owner only.</summary>
+    public long? CostRials { get; set; }
+    public Guid? CaseId { get; set; }
+    public Guid RecordedBy { get; set; }
+    public DateTimeOffset RecordedAt { get; set; }
+}

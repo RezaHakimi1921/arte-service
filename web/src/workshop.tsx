@@ -12,7 +12,7 @@ export const MOTOR_TYPES = [
   { key: "automatic", label: "کلیچ / اتوماتیک" },
 ] as const;
 
-export type IntakeOption = { id: string; kind: "problem" | "service" | "category"; group: string | null; title: string; sortOrder: number; isActive: boolean };
+export type IntakeOption = { id: string; kind: "problem" | "service" | "category" | "service_category"; group: string | null; title: string; sortOrder: number; isActive: boolean };
 export type TemplateRow = { id: string; group: string | null; title: string; isRequired: boolean; sortOrder: number; isActive: boolean };
 export type CaseChecklistRow = { id: string; group: string | null; title: string; isRequired: boolean; isChecked: boolean; note: string | null; checkedAt: string | null; checkedByName: string | null };
 export type CaseFinding = { id: string; source: string; title: string; note: string | null; createdAt: string; createdByName: string | null };
@@ -302,10 +302,11 @@ function ProblemsEditor() {
 }
 
 /** Services: one branch per category (the service's own group), each opening to its services. */
-function ServicesEditor() {
+function ServicesEditor({ categories, onChanged }: { categories: string[]; onChanged: () => void }) {
   const { rows, busy, act } = useEditor<IntakeOption>("/api/v1/intake-options?kind=service&includeInactive=true");
   const [title, setTitle] = useState("");
   const [group, setGroup] = useState("");
+  const [pick, setPick] = useState(false);
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const defaults = MOTO_SERVICE_CATEGORIES.flatMap((c) => c.services.map((t) => ({ group: c.name, title: t })));
   if (!rows) return <div className="splash" aria-busy="true" />;
@@ -315,10 +316,15 @@ function ServicesEditor() {
         <div className="hint-action">
           <p className="hint">فعلاً فهرست پیش‌فرض برنامه نشان داده می‌شود. با «شروع از فهرست پیش‌فرض» یک نسخه‌ی قابل‌ویرایش از آن بسازید.</p>
           <button type="button" className="secondary" disabled={busy}
-            onClick={() => act(() => api("/api/v1/intake-options/import", { body: { items: defaults.map((d) => ({ kind: "service", group: d.group, title: d.title })) } }), "فهرست پیش‌فرض اضافه شد")}>شروع از فهرست پیش‌فرض</button>
+            onClick={() => act(async () => {
+              // The default groups become the service categories too, so every service has a category to pick from.
+              await api("/api/v1/intake-options/import", { body: { items: MOTO_SERVICE_CATEGORIES.map((c) => ({ kind: "service_category", title: c.name })) } });
+              await api("/api/v1/intake-options/import", { body: { items: defaults.map((d) => ({ kind: "service", group: d.group, title: d.title })) } });
+              onChanged();
+            }, "فهرست پیش‌فرض اضافه شد")}>شروع از فهرست پیش‌فرض</button>
         </div>
       )}
-      {groupByCategory(rows, []).map((g) => (
+      {groupByCategory(rows, categories).map((g) => (
         <Branch key={g.name} level={2} title={g.name || "بدون دسته"} count={g.rows.length}>
           <SortableList items={g.rows} disabled={busy} label={(r) => r.title}
             onReorder={(ids) => act(() => api("/api/v1/intake-options/order", { method: "PUT", body: { ids: mergeOrder(rows, g.rows.map((r) => r.id), ids) } }))}
@@ -329,13 +335,17 @@ function ServicesEditor() {
             )} />
         </Branch>
       ))}
-      <EditSheet target={edit} withRequired={false} groupLabel="دسته" busy={busy} onClose={() => setEdit(null)}
+      <EditSheet target={edit} withRequired={false} categories={categories} groupLabel="دسته‌بندی" busy={busy} onClose={() => setEdit(null)}
         onSave={(v) => act(async () => { await api(`/api/v1/intake-options/${edit!.id}`, { method: "PATCH", body: { title: v.title, group: v.group } }); setEdit(null); }, "ذخیره شد")} />
       <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!title.trim()) return;
         act(async () => { await api("/api/v1/intake-options", { body: { kind: "service", title: title.trim(), group: group.trim() || undefined } }); setTitle(""); }, "اضافه شد"); }}>
         <label className="field"><span>خدمت جدید</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></label>
-        <label className="field"><span>دسته</span><input value={group} onChange={(e) => setGroup(e.target.value)} maxLength={40} list="service-groups" /></label>
-        <datalist id="service-groups">{[...new Set(rows.map((r) => r.group).filter(Boolean))].map((g) => <option key={g} value={g!} />)}</datalist>
+        <div className="field">
+          <span className="label">دسته‌بندی</span>
+          <SelectField label={group || undefined} placeholder="بدون دسته" onOpen={() => setPick(true)} />
+          <SelectSheet open={pick} title="دسته‌بندی خدمات" items={categories.map((n) => ({ value: n, label: n }))} value={group || null} noneLabel="بدون دسته"
+            onSelect={(v) => { setGroup(v ?? ""); setPick(false); }} onClose={() => setPick(false)} />
+        </div>
         <button type="submit" className="primary" disabled={busy || !title.trim()} aria-busy={busy}>افزودن</button>
       </form>
     </>
@@ -388,46 +398,38 @@ function TemplateEditor({ motorType, categories }: { motorType: string; categori
 }
 
 /**
- * The main categories of the checklists: one list, read by both checklists when a row picks its category.
- * Reordering it also reorders the rows of each checklist to follow, so the intake form shows the same order.
+ * A managed list of categories (checklist categories, or service categories). Rows elsewhere pick from it instead of typing.
+ * `follow` is called after a reorder so the rows that use the categories are put in the same order, and `existing` lists
+ * the group names already in use, offered as a one-tap starting point.
  */
-function CategoryEditor({ onChanged }: { onChanged: () => void }) {
-  const { rows, busy, act } = useEditor<IntakeOption>("/api/v1/intake-options?kind=category&includeInactive=true");
+function CategoryListEditor({ kind, hint, newLabel, follow, existing, onChanged }: {
+  kind: "category" | "service_category"; hint: string; newLabel: string;
+  follow: (orderedNames: string[]) => Promise<void>; existing: () => Promise<string[]>; onChanged: () => void;
+}) {
+  const { rows, busy, act } = useEditor<IntakeOption>(`/api/v1/intake-options?kind=${kind}&includeInactive=true`);
   const { notify } = useFeedback();
   const [title, setTitle] = useState("");
   const [edit, setEdit] = useState<EditTarget | null>(null);
 
-  async function syncChecklists(orderedNames: string[]) {
-    for (const t of MOTOR_TYPES) {
-      const items = await api<TemplateRow[]>(`/api/v1/checklist-templates/${t.key}?includeInactive=true`);
-      if (items.length === 0) continue;
-      const rank = (g: string | null) => { const i = g ? orderedNames.indexOf(g) : -1; return i >= 0 ? i : 1e6; };
-      const ids = items.map((x, i) => ({ x, i })).sort((a, b) => rank(a.x.group) - rank(b.x.group) || a.i - b.i).map((p) => p.x.id);
-      await api(`/api/v1/checklist-templates/${t.key}/order`, { method: "PUT", body: { ids } });
-    }
-  }
-
-  // Starting point: the group names the checklists already use.
   async function fromExisting() {
-    const names = new Set<string>();
-    for (const t of MOTOR_TYPES) (await api<TemplateRow[]>(`/api/v1/checklist-templates/${t.key}?includeInactive=true`)).forEach((x) => x.group && names.add(x.group));
-    if (names.size === 0) { notify("هنوز دسته‌ای در چک‌لیست‌ها نیست؛ دسته‌ی جدید بسازید."); return; }
-    await api("/api/v1/intake-options/import", { body: { items: [...names].map((n) => ({ kind: "category", title: n })) } });
+    const names = await existing();
+    if (names.length === 0) { notify("هنوز دسته‌ای ثبت نشده؛ دسته‌ی جدید بسازید."); return; }
+    await api("/api/v1/intake-options/import", { body: { items: names.map((n) => ({ kind, title: n })) } });
   }
 
   if (!rows) return <div className="splash" aria-busy="true" />;
   return (
     <>
-      <p className="hint">دسته‌ها را یک بار این‌جا بسازید؛ هر ردیف چک‌لیست یکی از آن‌ها را انتخاب می‌کند. با کشیدن، ترتیب دسته‌ها در هر دو چک‌لیست عوض می‌شود.</p>
+      <p className="hint">{hint}</p>
       {rows.length === 0 && (
         <div className="hint-action">
-          <button type="button" className="secondary" disabled={busy} onClick={() => act(fromExisting, "دسته‌ها ساخته شد")}>ساخت از دسته‌های فعلی چک‌لیست‌ها</button>
+          <button type="button" className="secondary" disabled={busy} onClick={() => act(async () => { await fromExisting(); onChanged(); }, "دسته‌ها ساخته شد")}>ساخت از دسته‌های فعلی</button>
         </div>
       )}
       <SortableList items={rows} disabled={busy} label={(r) => r.title}
         onReorder={(ids) => act(async () => {
           await api("/api/v1/intake-options/order", { method: "PUT", body: { ids } });
-          await syncChecklists(ids.map((id) => rows.find((r) => r.id === id)!.title));
+          await follow(ids.map((id) => rows.find((r) => r.id === id)!.title));
           onChanged();
         })}
         render={(r, handle) => (
@@ -438,37 +440,80 @@ function CategoryEditor({ onChanged }: { onChanged: () => void }) {
       <EditSheet target={edit} withRequired={false} busy={busy} onClose={() => setEdit(null)}
         onSave={(v) => act(async () => { await api(`/api/v1/intake-options/${edit!.id}`, { method: "PATCH", body: { title: v.title } }); setEdit(null); onChanged(); }, "ذخیره شد")} />
       <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!title.trim()) return;
-        act(async () => { await api("/api/v1/intake-options", { body: { kind: "category", title: title.trim() } }); setTitle(""); onChanged(); }, "اضافه شد"); }}>
-        <label className="field"><span>دسته‌ی جدید</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} /></label>
+        act(async () => { await api("/api/v1/intake-options", { body: { kind, title: title.trim() } }); setTitle(""); onChanged(); }, "اضافه شد"); }}>
+        <label className="field"><span>{newLabel}</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} /></label>
         <button type="submit" className="primary" disabled={busy || !title.trim()} aria-busy={busy}>افزودن دسته</button>
       </form>
     </>
   );
 }
 
+/** Checklist categories: reordering them reorders the rows of both checklists, so the intake form shows the same order. */
+function ChecklistCategoryEditor({ onChanged }: { onChanged: () => void }) {
+  async function follow(orderedNames: string[]) {
+    for (const t of MOTOR_TYPES) {
+      const items = await api<TemplateRow[]>(`/api/v1/checklist-templates/${t.key}?includeInactive=true`);
+      if (items.length === 0) continue;
+      const rank = (g: string | null) => { const i = g ? orderedNames.indexOf(g) : -1; return i >= 0 ? i : 1e6; };
+      const ids = items.map((x, i) => ({ x, i })).sort((a, b) => rank(a.x.group) - rank(b.x.group) || a.i - b.i).map((p) => p.x.id);
+      await api(`/api/v1/checklist-templates/${t.key}/order`, { method: "PUT", body: { ids } });
+    }
+  }
+  async function existing() {
+    const names = new Set<string>();
+    for (const t of MOTOR_TYPES) (await api<TemplateRow[]>(`/api/v1/checklist-templates/${t.key}?includeInactive=true`)).forEach((x) => x.group && names.add(x.group));
+    return [...names];
+  }
+  return <CategoryListEditor kind="category" newLabel="دسته‌ی جدید" onChanged={onChanged} follow={follow} existing={existing}
+    hint="دسته‌ها را یک بار این‌جا بسازید؛ هر ردیف چک‌لیست یکی از آن‌ها را انتخاب می‌کند. با کشیدن، ترتیب دسته‌ها در هر دو چک‌لیست عوض می‌شود." />;
+}
+
+/** Service categories: the same idea for the requested services; reordering follows through to the services. */
+function ServiceCategoryEditor({ onChanged }: { onChanged: () => void }) {
+  async function follow(orderedNames: string[]) {
+    const items = await api<IntakeOption[]>("/api/v1/intake-options?kind=service&includeInactive=true");
+    if (items.length === 0) return;
+    const rank = (g: string | null) => { const i = g ? orderedNames.indexOf(g) : -1; return i >= 0 ? i : 1e6; };
+    const ids = items.map((x, i) => ({ x, i })).sort((a, b) => rank(a.x.group) - rank(b.x.group) || a.i - b.i).map((p) => p.x.id);
+    await api("/api/v1/intake-options/order", { method: "PUT", body: { ids } });
+  }
+  async function existing() {
+    const items = await api<IntakeOption[]>("/api/v1/intake-options?kind=service&includeInactive=true");
+    return [...new Set(items.map((x) => x.group).filter((g): g is string => !!g))];
+  }
+  return <CategoryListEditor kind="service_category" newLabel="دسته‌ی خدمات جدید" onChanged={onChanged} follow={follow} existing={existing}
+    hint="دسته‌های خدمات را یک بار این‌جا بسازید؛ هر خدمت یکی از آن‌ها را انتخاب می‌کند. با کشیدن، ترتیب دسته‌ها در فرم پذیرش هم عوض می‌شود." />;
+}
+
 /** Settings → «فهرست‌ها و چک‌لیست»: five branches, each closed until tapped. */
 export function WorkshopListsPage({ onBack, onOpenCatalog }: { onBack: () => void; onOpenCatalog: () => void }) {
   const [cats, setCats] = useState<IntakeOption[]>([]);
+  const [svcCats, setSvcCats] = useState<IntakeOption[]>([]);
   const [version, setVersion] = useState(0);
-  const loadCats = () => api<IntakeOption[]>("/api/v1/intake-options?kind=category").then(setCats).catch(() => {});
+  const loadCats = () => {
+    api<IntakeOption[]>("/api/v1/intake-options?kind=category").then(setCats).catch(() => {});
+    api<IntakeOption[]>("/api/v1/intake-options?kind=service_category").then(setSvcCats).catch(() => {});
+  };
   useEffect(() => { loadCats(); }, []);
   const names = cats.map((c) => c.title);
+  const svcNames = svcCats.map((c) => c.title);
   const changed = () => { loadCats(); setVersion((v) => v + 1); };
   return (
     <SubPage title="فهرست‌ها و چک‌لیست" onBack={onBack}>
       <p className="hint">روی هر بخش بزنید تا باز شود. ردیف‌ها را با گرفتن آیکن شش‌نقطه و کشیدن جابه‌جا کنید؛ تغییرها فقط پذیرش‌های بعدی را عوض می‌کنند.</p>
       <Branch title="خدمات">
         <Branch level={2} title="ایرادهای اعلامی مشتری"><ProblemsEditor /></Branch>
-        <ServicesEditor />
+        <ServicesEditor key={`svc-${version}`} categories={svcNames} onChanged={changed} />
+        <Branch level={2} title="دسته‌بندی خدمات" count={svcCats.length}><ServiceCategoryEditor onChanged={changed} /></Branch>
       </Branch>
       <Branch title="کالا">
-        <p className="hint">کالاها، اجرت‌ها و قیمت‌ها در «فهرست قیمت» نگهداری می‌شوند.</p>
-        <button type="button" className="secondary" onClick={onOpenCatalog}>باز کردن فهرست قیمت</button>
+        <p className="hint">کالاها با قیمت خرید و فروش در «فهرست قیمت» نگهداری می‌شوند؛ آن‌جا برای هر کالا تاریخچه‌ی خرید و فروش هم هست.</p>
+        <button type="button" className="secondary" onClick={onOpenCatalog}>باز کردن فهرست کالا و قیمت</button>
       </Branch>
       {MOTOR_TYPES.map((t) => (
         <Branch key={t.key} title={`چک‌لیست ${t.label}`}><TemplateEditor key={`${t.key}-${version}`} motorType={t.key} categories={names} /></Branch>
       ))}
-      <Branch title="دسته‌بندی اصلی چک‌لیست" count={cats.length}><CategoryEditor onChanged={changed} /></Branch>
+      <Branch title="دسته‌بندی اصلی چک‌لیست" count={cats.length}><ChecklistCategoryEditor onChanged={changed} /></Branch>
     </SubPage>
   );
 }

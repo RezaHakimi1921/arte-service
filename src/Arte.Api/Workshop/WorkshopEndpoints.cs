@@ -93,6 +93,8 @@ public static class WorkshopEndpoints
             // A renamed category follows through to the checklist rows that use it.
             if (option.Kind == IntakeOptionKinds.Category && option.Title != oldTitle)
                 foreach (var row in await db.ChecklistTemplateItems.Where(t => t.Group == oldTitle).ToListAsync(ct)) row.Group = option.Title;
+            if (option.Kind == IntakeOptionKinds.ServiceCategory && option.Title != oldTitle)
+                foreach (var row in await db.IntakeOptions.Where(o => o.Kind == IntakeOptionKinds.Service && o.Group == oldTitle).ToListAsync(ct)) row.Group = option.Title;
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         }).RequirePermission(Permissions.SettingsManage);
