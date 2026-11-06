@@ -24,11 +24,11 @@ type Track = {
   };
   status: { name: string; key: string; category: string; waitReason: string | null; stageEnteredAt: string };
   stages: { name: string; key: string; state: "done" | "current" | "todo"; at: string | null }[] | null;
-  items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null; discountRials?: number | null }[] | null;
-  money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number } | null;
+  items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null; discountRials?: number | null; image?: string | null }[] | null;
+  money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number; payments?: { amountRials: number; method: string; paidAt: string }[] } | null;
 };
 
-type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "plus" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet";
+type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "plus" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet" | "box" | "chevron";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -47,6 +47,8 @@ function Icon({ name }: { name: IconName }) {
     star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />,
     sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
     wrench: <path d="M14.7 6.3a4.5 4.5 0 0 0-5.6 5.6L3 18l3 3 6.1-6.1a4.5 4.5 0 0 0 5.6-5.6L15 12l-3-3 2.7-2.7Z" />,
+    box: <><path d="M21 8 12 3 3 8v8l9 5 9-5Z" /><path d="m3 8 9 5 9-5M12 13v8" /></>,
+    chevron: <path d="m6 9 6 6 6-6" />,
     wallet: <><rect x="3" y="6" width="18" height="14" rx="3" /><path d="M3 10h18M16 15h2" /></>,
   };
   return (
@@ -244,6 +246,7 @@ const dayTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "long",
 const time = new Intl.DateTimeFormat("fa-IR", { hour: "2-digit", minute: "2-digit" });
 const shortDay = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
+const PAY_METHOD: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
 const KIND: Record<string, string> = { part: "کالا", labor: "اجرت", service: "اجرت" };
 const STAGE_NAMES: Record<string, string> = {
   received: "پذیرش", diagnosing: "عیب‌یابی", awaiting_approval: "تأیید", awaiting_parts: "انتظار قطعه",
@@ -286,20 +289,6 @@ function withoutInternalSteps(t: Track): Track {
 
 const RATING_WORDS = ["", "خیلی بد", "بد", "معمولی", "خوب", "عالی"];
 
-/** Five large stars (58px) for one question, coloured by the score (red 1 … green 5). */
-function Stars({ id, value, onChange }: { id: string; value: number; onChange: (v: number) => void }) {
-  return (
-    <div className={`tk-stars${value ? ` r${value}` : ""}`} role="radiogroup" aria-labelledby={id}>
-      {[1, 2, 3, 4, 5].map((v) => (
-        <button key={v} type="button" role="radio" aria-checked={value === v} aria-label={`${formatNumber(v)} از ۵، ${RATING_WORDS[v]}`}
-          className={v <= value ? "on" : ""} onClick={() => onChange(v)}>
-          <Icon name="star" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /**
  * The survey tab: a navy header with the customer's name, a progress line, numbered questions, an optional note,
  * then a thank-you page with the overall score. One answer per case.
@@ -309,6 +298,7 @@ function SurveyView({ code, survey, customer, vehicle, shop, instagram, onDone, 
 }) {
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comment, setComment] = useState("");
+  const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -352,15 +342,25 @@ function SurveyView({ code, survey, customer, vehicle, shop, instagram, onDone, 
   }
 
   const questions = survey.questions ?? [];
+  // One question per step, then a last step for the optional note.
+  const total = questions.length + 1;
+  const last = step >= questions.length;
   const answered = questions.filter((q) => ratings[q.id]).length;
-  const percent = questions.length ? Math.round((answered / questions.length) * 100) : 0;
+  const percent = Math.round((Math.min(step, questions.length) / total) * 100 + (last ? 100 / total : 0));
+  const q = questions[step];
+  const pick = (v: number) => {
+    setRatings((r) => ({ ...r, [q.id]: v }));
+    setError(null);
+    // Move on by itself shortly after the choice, so the answer is seen first.
+    window.setTimeout(() => setStep((x) => Math.min(x + 1, questions.length)), 260);
+  };
   async function submit() {
     if (answered < questions.length) { setError("لطفاً به همه‌ی سؤال‌ها جواب دهید."); return; }
     setBusy(true);
     setError(null);
     try {
       await api(`/api/v1/track/${encodeURIComponent(code)}/survey`, {
-        method: "POST", body: { answers: questions.map((q) => ({ questionId: q.id, rating: ratings[q.id] })), comment: comment.trim() || undefined },
+        method: "POST", body: { answers: questions.map((x) => ({ questionId: x.id, rating: ratings[x.id] })), comment: comment.trim() || undefined },
       });
       window.scrollTo(0, 0);
       onDone();
@@ -383,40 +383,50 @@ function SurveyView({ code, survey, customer, vehicle, shop, instagram, onDone, 
           <div className="tk-progress">
             <div className="tk-progress-top">
               <div>
-                <span>میزان تکمیل</span>
-                <strong>{answered === questions.length ? "آماده‌ی ثبت نظر" : `${formatNumber(answered)} از ${formatNumber(questions.length)} سؤال پاسخ داده شده`}</strong>
+                <span>{last ? "آخرین مرحله" : `سؤال ${formatNumber(step + 1)} از ${formatNumber(questions.length)}`}</span>
+                <strong>{last ? "نکته‌ای برای گفتن دارید؟" : "یک گزینه را انتخاب کنید"}</strong>
               </div>
               <span className="tk-progress-ring font-num">{formatNumber(percent)}٪</span>
             </div>
             <div className="tk-progress-bar" aria-hidden="true"><i style={{ width: `${percent}%` }} /></div>
           </div>
 
-          {questions.map((q, i) => (
+          {!last && q && (
             <div className="tk-q" key={q.id}>
               <div className="tk-q-head">
-                <span className="tk-q-num font-num">{formatNumber(i + 1)}</span>
-                <div>
-                  <p id={`q-${q.id}`}>{q.text}</p>
-                  {ratings[q.id] ? <span className={`tk-q-word r${ratings[q.id]}`}>{RATING_WORDS[ratings[q.id]]}</span> : null}
-                </div>
+                <span className="tk-q-num font-num">{formatNumber(step + 1)}</span>
+                <p id={`q-${q.id}`}>{q.text}</p>
               </div>
-              <Stars id={`q-${q.id}`} value={ratings[q.id] ?? 0} onChange={(v) => { setRatings((r) => ({ ...r, [q.id]: v })); setError(null); }} />
+              <div className="tk-scale" role="radiogroup" aria-labelledby={`q-${q.id}`}>
+                {[1, 2, 3, 4, 5].map((v) => (
+                  <button key={v} type="button" role="radio" aria-checked={ratings[q.id] === v} className={`r${v}${ratings[q.id] === v ? " on" : ""}`} onClick={() => pick(v)}>
+                    <b className="font-num">{formatNumber(v)}</b><span>{RATING_WORDS[v]}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
 
-          <div className="tk-q">
-            <label className="tk-q-title" htmlFor="tk-comment">نکته‌ای هست که دوست دارید بدانیم؟</label>
-            <p className="tk-q-hint">این بخش اختیاری است و مستقیم برای مدیر تعمیرگاه فرستاده می‌شود.</p>
-            <textarea id="tk-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={4}
-              placeholder="مثلاً چه چیزی خوب بود یا چه چیزی می‌تواند بهتر شود…" />
-            <span className="tk-counter font-num" dir="ltr">{formatNumber(comment.length)} / ۵۰۰</span>
-          </div>
+          {last && (
+            <div className="tk-q">
+              <label className="tk-q-title" htmlFor="tk-comment">نکته‌ای هست که دوست دارید بدانیم؟</label>
+              <p className="tk-q-hint">این بخش اختیاری است و مستقیم برای مدیر تعمیرگاه فرستاده می‌شود.</p>
+              <textarea id="tk-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={4}
+                placeholder="مثلاً چه چیزی خوب بود یا چه چیزی می‌تواند بهتر شود…" />
+              <span className="tk-counter font-num" dir="ltr">{formatNumber(comment.length)} / ۵۰۰</span>
+            </div>
+          )}
 
           <div className="tk-survey-foot">
             {error && <p className="tk-error" role="alert">{error}</p>}
-            <button type="button" className="tk-submit" onClick={submit} disabled={busy || answered < questions.length} aria-busy={busy}>
-              {busy ? "در حال ثبت…" : "ثبت نظر"}
-            </button>
+            {last ? (
+              <button type="button" className="tk-submit" onClick={submit} disabled={busy || answered < questions.length} aria-busy={busy}>
+                {busy ? "در حال ثبت نظر…" : "ثبت نظر"}
+              </button>
+            ) : (
+              <button type="button" className="tk-submit" onClick={() => setStep(step + 1)} disabled={!ratings[q?.id]}>بعدی</button>
+            )}
+            {step > 0 && <button type="button" className="tk-back" onClick={() => setStep(step - 1)} disabled={busy}>بازگشت</button>}
             <p className="tk-privacy">پاسخ‌های شما فقط برای بهتر شدن خدمات این تعمیرگاه استفاده می‌شود.</p>
           </div>
         </section>
@@ -504,7 +514,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           onDone={load} onBack={() => go("tracking")} />
       )}
 
-      <div className="tk-content" hidden={!!t.survey && view === "survey"}>
+      <div className="tk-content tk-wide" hidden={!!t.survey && view === "survey"}>
         <section className="tk-hero">
           <div className="tk-hero-main">
             <div className="tk-vehicle-icon"><Icon name={vehicleIcon} /></div>
@@ -536,21 +546,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </button>
         )}
 
-        {(problems.length > 0 || services.length > 0) && (
-          <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">
-            <div className="tk-requests">
-              {problems.length > 0 && <ChangeList label="ایرادهای گزارش‌شده" items={problems} open={requestsOpen} />}
-              {services.length > 0 && <ChangeList label="خدمات درخواستی" items={services} open={requestsOpen} rows />}
-            </div>
-            {tooLong && (
-              <button className="tk-expand" type="button" onClick={() => setRequestsOpen(!requestsOpen)} aria-expanded={requestsOpen}>
-                {requestsOpen ? "نمایش کمتر" : "نمایش همه"}
-              </button>
-            
-            )}
-          </Section>
-        )}
-
+        <div className="tk-grid">
         <Section icon="wrench" eyebrow="وضعیت لحظه‌ای" title="مسیر کار">
           <div className="tk-note">
             <span className="tk-dot" aria-hidden="true" />
@@ -588,46 +584,69 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </Section>
         )}
 
+        {(problems.length > 0 || services.length > 0) && (
+          <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">
+            <div className="tk-requests">
+              {problems.length > 0 && <ChangeList label="ایرادهای گزارش‌شده" items={problems} open={requestsOpen} />}
+              {services.length > 0 && <ChangeList label="خدمات درخواستی" items={services} open={requestsOpen} rows />}
+            </div>
+            {tooLong && (
+              <button className="tk-expand" type="button" onClick={() => setRequestsOpen(!requestsOpen)} aria-expanded={requestsOpen}>
+                {requestsOpen ? "نمایش کمتر" : "نمایش همه"}
+              </button>
+            
+            )}
+          </Section>
+        )}
+
         {(t.items || t.money) && (
           <Section icon="wallet" eyebrow="صورت‌حساب" title="کالا، کارها و هزینه">
             {t.items && t.items.length > 0 ? (
-              <table className="tk-invoice">
-                <thead>
-                  <tr><th scope="col">ردیف</th><th scope="col">شرح</th><th scope="col">تعداد</th><th scope="col">مبلغ (تومان)</th></tr>
-                </thead>
-                <tbody>
-                  {t.items.map((i, k) => (
-                    <tr key={k}>
-                      <td className="num font-num">{formatNumber(k + 1)}</td>
-                      <td>
-                        <span className="inv-title">{i.title}</span>
-                        <span className="inv-sub">
-                          {KIND[i.kind] ?? i.kind}
-                          {i.supplier === "customer" && " · کالای خودتان"}
-                          {i.status === "needed" && " · در انتظار تهیه"}
-                        </span>
-                        {i.discountRials != null && i.discountRials > 0 && <span className="inv-discount">تخفیف <span dir="ltr" className="neg">−{formatNumber(Math.round(i.discountRials / 10))}</span></span>}
-                      </td>
-                      <td className="num font-num">{formatNumber(i.quantity)}</td>
-                      <td className="num font-num">{i.lineTotalRials != null && i.lineTotalRials > 0 ? formatNumber(Math.round(i.lineTotalRials / 10)) : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ul className="inv-list">
+                {t.items.map((i, k) => (
+                  <li className="inv-row" key={k}>
+                    <span className={`inv-thumb ${i.kind === "part" ? "part" : "labor"}`}>
+                      {i.image ? <img src={i.image} alt="" loading="lazy" /> : <Icon name={i.kind === "part" ? "box" : "wrench"} />}
+                    </span>
+                    <span className="inv-body">
+                      <span className="inv-title">{i.title}</span>
+                      <span className="inv-sub">
+                        {KIND[i.kind] ?? i.kind}
+                        {i.supplier === "customer" && " · کالای خودتان"}
+                        {i.status === "needed" && " · در انتظار تهیه"}
+                      </span>
+                      {i.discountRials != null && i.discountRials > 0 && <span className="inv-discount">تخفیف <span dir="ltr" className="neg font-num">−{formatNumber(Math.round(i.discountRials / 10))}</span></span>}
+                    </span>
+                    <span className="inv-qty font-num">× {formatNumber(i.quantity)}</span>
+                    <span className="inv-amount font-num">{i.lineTotalRials != null && i.lineTotalRials > 0 ? formatNumber(Math.round(i.lineTotalRials / 10)) : "—"}</span>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <div className="tk-empty-bill"><strong>هنوز کالا یا کاری ثبت نشده</strong><p>بعد از ثبت کالا و اجرت، این‌جا نشان داده می‌شود.</p></div>
             )}
             {t.money && t.money.totalRials > 0 && (
-              <div className="tk-money">
+              <div className="inv-sum">
                 {(t.money.discountRials ?? 0) > 0 && (
                   <>
                     <p><span>جمع قبل از تخفیف</span><strong className="font-num">{toman(t.money.subtotalRials ?? t.money.totalRials)}</strong></p>
-                    <p className="saved"><span>تخفیف شما</span><strong className="font-num neg" dir="ltr">−{toman(t.money.discountRials ?? 0)}</strong></p>
+                    <p className="discount"><span>تخفیف</span><strong className="font-num" dir="ltr">−{toman(t.money.discountRials ?? 0)}</strong></p>
                   </>
                 )}
-                <p><span>{(t.money.discountRials ?? 0) > 0 ? "جمع پس از تخفیف" : "جمع"}</span><strong className="font-num">{toman(t.money.totalRials)}</strong></p>
-                <p><span>پرداخت‌شده</span><strong className="font-num">{toman(t.money.paidRials)}</strong></p>
-                <p className={t.money.balanceRials > 0 ? "owe" : ""}><span>مانده</span><strong className="font-num">{toman(t.money.balanceRials)}</strong></p>
+                <p className="total"><span>{(t.money.discountRials ?? 0) > 0 ? "جمع پس از تخفیف" : "جمع کل"}</span><strong className="font-num">{toman(t.money.totalRials)}</strong></p>
+                {(t.money.payments?.length ?? 0) > 0 ? (
+                  <>
+                    {t.money.payments!.map((p, k) => (
+                      <p className="paid" key={k}><span>پرداخت {k + 1}: {PAY_METHOD[p.method] ?? p.method} · {shortDay.format(new Date(p.paidAt))}</span><strong className="font-num">{toman(p.amountRials)}</strong></p>
+                    ))}
+                  </>
+                ) : (
+                  t.money.paidRials > 0 && <p className="paid"><span>پرداخت‌شده</span><strong className="font-num">{toman(t.money.paidRials)}</strong></p>
+                )}
+                <div className={`inv-due${t.money.balanceRials > 0 ? " owe" : " clear"}`}>
+                  <span>{t.money.balanceRials > 0 ? "مبلغ قابل پرداخت" : "تسویه شده"}</span>
+                  <strong className="font-num">{toman(t.money.balanceRials)}</strong>
+                </div>
               </div>
             )}
           </Section>
@@ -662,6 +681,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
             )}
           </section>
         )}
+        </div>
       </div>
 
       {photo !== null && (
