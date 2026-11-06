@@ -6,7 +6,7 @@ import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./
 import { resetWorkflow } from "./workflow";
 import { SMS_PATTERNS, fillSms, type SmsKey } from "./smsTexts";
 
-export type SettingsPage = "account" | "business" | "intake" | "vehicles" | "workshop" | "videotrash" | "finance" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
+export type SettingsPage = "account" | "business" | "intake" | "workshop" | "videotrash" | "finance" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
 
 export { ROLE_NAMES } from "./labels";
 import { ROLE_NAMES } from "./labels";
@@ -75,7 +75,6 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
         <Group title="کسب‌وکار">
           <Row icon="shop" title="اطلاعات کسب‌وکار" sub="نام، تلفن، نشانی" onClick={() => onOpen("business")} />
           <Row icon="license" title="اشتراک" sub={licenseText} onClick={() => onOpen("license")} />
-          <Row icon="vehicle" title="نوع کسب‌وکار و وسایل نقلیه" sub="کدام وسایل در پذیرش نشان داده شوند" onClick={() => onOpen("vehicles")} />
           <Row icon="credit" title="مالی: کارتخوان و کارت‌ها" sub="انتخاب کارتخوان در پرداخت، کارت نمایشی برای مشتری" onClick={() => onOpen("finance")} />
           <Row icon="rules" title="فهرست‌ها و چک‌لیست" sub="ایراد، خدمات و چک‌لیست بازدید موتور" onClick={() => onOpen("workshop")} />
           <Row icon="rules" title="فیلم‌های حذف‌شده" sub="تا ۳ روز قابل دیدن و بازگردانی" onClick={() => onOpen("videotrash")} />
@@ -383,52 +382,6 @@ export function IntakeRulesPage({ onBack, onSaved }: { onBack: () => void; onSav
           <Switch title="رسید کارت به کارت لازم باشد" sub="با هر پرداخت کارت به کارت باید عکس رسید بارگذاری شود؛ برای بقیه‌ی روش‌ها اختیاری است."
             checked={s.requireTransferReceipt} disabled={false} onChange={(v) => save({ requireTransferReceipt: v })} />
         </div>
-      )}
-    </SubPage>
-  );
-}
-
-const KIND_NAMES: Record<string, string> = { car: "سواری", suv: "شاسی‌بلند", van: "ون", pickup: "وانت", motorcycle: "موتورسیکلت" };
-
-export function VehiclesPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
-  const { s, save } = useBusinessSettings(onSaved);
-  return (
-    <SubPage title="نوع کسب‌وکار و وسایل نقلیه" onBack={onBack}>
-      {!s ? <div className="splash" aria-busy="true" /> : (
-        <>
-          <h3>نوع کسب‌وکار</h3>
-          <div className="choice-list" role="radiogroup" aria-label="نوع کسب‌وکار">
-            {BUSINESS_TYPES.map((b) => (
-              <button type="button" key={b.key} role="radio" aria-checked={s.businessType === b.key}
-                className={`choice${s.businessType === b.key ? " on" : ""}`}
-                onClick={() => { if (s.businessType !== b.key) save({ businessType: b.key }); }}>
-                <span>{b.label}</span><span className="muted small">{b.hint}</span>
-              </button>
-            ))}
-          </div>
-          {(() => {
-            // Changing the type never touches the vehicle list; the defaults are only offered.
-            const type = BUSINESS_TYPES.find((b) => b.key === s.businessType);
-            const same = type && type.kinds.length === s.vehicleKinds.length && type.kinds.every((k) => s.vehicleKinds.includes(k));
-            return type && !same ? (
-              <div className="hint-action">
-                <p className="hint">وسایل پیش‌فرض «{type.label}»: {type.kinds.map((k) => KIND_NAMES[k] ?? k).join("، ")}</p>
-                <button type="button" className="secondary" onClick={() => save({ vehicleKinds: type.kinds })}>همین وسایل را انتخاب کن</button>
-              </div>
-            ) : <p className="hint">عوض کردن نوع، وسایل انتخاب‌شده را تغییر نمی‌دهد؛ پایین‌تر هر وسیله را روشن یا خاموش کنید.</p>;
-          })()}
-          <h3>وسایلی که می‌پذیرید</h3>
-          <div className="settings-list">
-            {Object.entries(KIND_NAMES).map(([k, label]) => {
-              const on = s.vehicleKinds.includes(k);
-              return (
-                <Switch key={k} title={label} sub={on ? "در پذیرش نشان داده می‌شود" : "در پذیرش نشان داده نمی‌شود"} checked={on}
-                  disabled={on && s.vehicleKinds.length === 1}
-                  onChange={(v) => save({ vehicleKinds: v ? [...s.vehicleKinds, k] : s.vehicleKinds.filter((x) => x !== k) })} />
-              );
-            })}
-          </div>
-        </>
       )}
     </SubPage>
   );

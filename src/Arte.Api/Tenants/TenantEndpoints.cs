@@ -131,6 +131,9 @@ public static class TenantEndpoints
 
         app.MapPut("/api/v1/settings/business", async (BusinessSettings req, RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
         {
+            // The business type and the vehicles it accepts are set by the platform admin only.
+            if (req.BusinessType is not null || req.VehicleKinds is not null)
+                return Results.Problem(statusCode: 403, title: "نوع کسب‌وکار و وسایل قابل پذیرش فقط توسط مدیر سامانه تغییر می‌کند.");
             var errors = new Dictionary<string, string[]>();
             if (req.Name is not null && (string.IsNullOrWhiteSpace(req.Name) || req.Name.Length > 120)) errors["name"] = ["نام ۱ تا ۱۲۰ حرف."];
             if (req.Phone is { Length: > 20 }) errors["phone"] = ["حداکثر ۲۰ کاراکتر."];

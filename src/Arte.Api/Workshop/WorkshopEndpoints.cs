@@ -85,10 +85,28 @@ public static class WorkshopEndpoints
             var errors = ValidateOption(req, isNew: false);
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
+            var oldTitle = option.Title;
             if (req.Title is not null) option.Title = req.Title.Trim();
             if (req.Group is not null) option.Group = NullIfEmpty(req.Group);
             if (req.SortOrder is { } order) option.SortOrder = order;
             if (req.IsActive is { } active) option.IsActive = active;
+            // A renamed category follows through to the checklist rows that use it.
+            if (option.Kind == IntakeOptionKinds.Category && option.Title != oldTitle)
+                foreach (var row in await db.ChecklistTemplateItems.Where(t => t.Group == oldTitle).ToListAsync(ct)) row.Group = option.Title;
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.SettingsManage);
+
+        // The new order of one kind of list, top to bottom (drag and drop in Settings).
+        g.MapPut("/order", async (OrderInput req, ArteDbContext db, CancellationToken ct) =>
+        {
+            var ids = req.Ids ?? [];
+            if (ids.Length is 0 or > 300 || ids.Distinct().Count() != ids.Length)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["ids"] = ["فهرست ترتیب نامعتبر است."] });
+            var rows = await db.IntakeOptions.Where(o => ids.Contains(o.Id)).ToListAsync(ct);
+            if (rows.Count != ids.Length || rows.Select(r => r.Kind).Distinct().Count() != 1) return Results.NotFound();
+            var position = 0;
+            foreach (var id in ids) rows.Single(r => r.Id == id).SortOrder = (position += 10);
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         }).RequirePermission(Permissions.SettingsManage);
