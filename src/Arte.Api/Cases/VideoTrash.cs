@@ -35,30 +35,38 @@ public sealed class VideoTrash(IServiceScopeFactory scopes, IClock clock, IConfi
     public async Task<int> RunOnceAsync(CancellationToken ct, DateTimeOffset? at = null)
     {
         var cutoff = (at ?? clock.UtcNow) - Retention(config);
-        await using var scope = scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
-        var expired = await db.CaseAttachments.IgnoreQueryFilters([ArteDbContext.TenantFilter, ArteDbContext.SoftDeleteFilter])
-            .Where(a => a.DeletedAt != null && a.DeletedAt < cutoff && a.ContentType.StartsWith("video/")).OrderBy(a => a.DeletedAt).Take(50).ToListAsync(ct);
+        List<(Guid Id, Guid TenantId)> expired;
+        await using (var scope = scopes.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+            expired = (await db.CaseAttachments.IgnoreQueryFilters([ArteDbContext.TenantFilter, ArteDbContext.SoftDeleteFilter]).AsNoTracking()
+                .Where(a => a.DeletedAt != null && a.DeletedAt < cutoff && a.ContentType.StartsWith("video/"))
+                .OrderBy(a => a.DeletedAt).Take(50).Select(a => new { a.Id, a.TenantId }).ToListAsync(ct)).Select(a => (a.Id, a.TenantId)).ToList();
+        }
 
         var root = AttachmentEndpoints.Root(config, env);
-        foreach (var a in expired)
+        foreach (var (id, tenantId) in expired)
         {
             try
             {
+                // One scope per video, bound to its business, like every other background job.
+                await using var scope = scopes.CreateAsyncScope();
+                scope.ServiceProvider.GetRequiredService<TenantContext>().Set(tenantId);
+                var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+                var a = await db.CaseAttachments.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).SingleAsync(x => x.Id == id, ct);
                 var full = Path.GetFullPath(Path.Combine(root, a.StoragePath));
                 if (full.StartsWith(root, StringComparison.Ordinal) && File.Exists(full)) File.Delete(full);
                 db.CaseEvents.Add(new CaseEvent
                 {
-                    TenantId = a.TenantId, CaseId = a.CaseId, Type = CaseEventTypes.VideoPurged, OccurredAt = at ?? clock.UtcNow,
-                    Data = JsonSerializer.SerializeToDocument(new { sizeBytes = a.SizeBytes }, Json),
+                    TenantId = tenantId, CaseId = a.CaseId, Type = CaseEventTypes.VideoPurged, OccurredAt = at ?? clock.UtcNow,
+                    Data = JsonSerializer.SerializeToDocument(new { sizeBytes = a.SizeBytes }, JsonSerializerOptions.Web),
                 });
                 db.CaseAttachments.Remove(a);
                 await db.SaveChangesAsync(ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Removing video {AttachmentId} failed", a.Id);
-                db.ChangeTracker.Clear();
+                logger.LogError(ex, "Removing video {AttachmentId} failed", id);
             }
         }
         return expired.Count;
