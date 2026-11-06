@@ -194,6 +194,49 @@ namespace Arte.Core.Data.Migrations
                     b.ToTable("CatalogItems");
                 });
 
+            modelBuilder.Entity("Arte.Core.Billing.CatalogPriceLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CatalogItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("CostRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("PriceRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(12, 3)
+                        .HasColumnType("numeric(12,3)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecordedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CatalogItemId", "RecordedAt");
+
+                    b.ToTable("CatalogPriceLogs");
+                });
+
             modelBuilder.Entity("Arte.Core.Billing.CustomerReceipt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3328,6 +3371,15 @@ namespace Arte.Core.Data.Migrations
                         .WithMany()
                         .HasForeignKey("StandardItemId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.CatalogPriceLog", b =>
+                {
+                    b.HasOne("Arte.Core.Billing.CatalogItem", null)
+                        .WithMany()
+                        .HasForeignKey("CatalogItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Arte.Core.Billing.Payment", b =>
