@@ -2859,6 +2859,10 @@ namespace Arte.Core.Data.Migrations
                     b.Property<long>("LastCaseNumber")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("LogoPath")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("MapBaladUrl")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
