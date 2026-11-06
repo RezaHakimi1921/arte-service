@@ -8,6 +8,20 @@ export type CasePhoto = { id: string; stageKey: string; caption: string | null; 
 
 const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
 
+/** True when this browser can decode the clip (phone clips in H.265 often cannot be played by other browsers). */
+function playable(file: File): Promise<boolean> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    const done = (ok: boolean) => { URL.revokeObjectURL(url); resolve(ok); };
+    v.preload = "metadata"; v.muted = true;
+    v.onloadedmetadata = () => done(v.videoWidth > 0);
+    v.onerror = () => done(false);
+    setTimeout(() => done(false), 6000);
+    v.src = url;
+  });
+}
+
 const STAGE_HINT: Record<string, string> = {
   received: "پذیرش", diagnosing: "عیب‌یابی", awaiting_approval: "تأیید", awaiting_parts: "انتظار قطعه",
   repairing: "حین تعمیر", review: "بازبینی", ready: "آماده تحویل", delivered: "تحویل",
@@ -63,6 +77,9 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
   const [viewing, setViewing] = useState<{ photo: CasePhoto; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [videoFailed, setVideoFailed] = useState(false);
+  useEffect(() => setVideoFailed(false), [viewing]);
+
   async function upload(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploading(true);
@@ -72,6 +89,7 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
         if (file.type.startsWith("video/")) {
           // Videos go as recorded: keep clips short (about 30 seconds); the server refuses anything over 30 MB.
           if (file.size > MAX_VIDEO_BYTES) { notify("فیلم بزرگ‌تر از ۳۰ مگابایت است؛ کوتاه‌تر ضبط کنید.", "error"); continue; }
+          if (!(await playable(file))) notify("این فیلم در همه‌ی مرورگرها پخش نمی‌شود (احتمالاً فرمت H.265). در تنظیمات دوربین حالت «سازگارترین» را انتخاب کنید.", "error");
           form.append("file", file, file.name || "video.mp4");
         } else form.append("file", await compress(file), "photo.jpg");
         form.append("visibleToCustomer", share ? "true" : "false");
@@ -147,7 +165,10 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
         {viewing && (
           <>
             {viewing.photo.isVideo
-              ? <video className="photo-full" src={viewing.url} controls playsInline />
+              ? <>
+                <video className="photo-full" src={viewing.url} controls playsInline onError={() => setVideoFailed(true)} />
+                {videoFailed && <p className="error" role="alert">این فیلم در این مرورگر پخش نمی‌شود. <a href={viewing.url} download>دانلود فیلم</a></p>}
+              </>
               : <img className="photo-full" src={viewing.url} alt={viewing.photo.caption ?? ""} />}
             <p className="muted small">{new Intl.DateTimeFormat("fa-IR-u-ca-persian", { dateStyle: "medium", timeStyle: "short" }).format(new Date(viewing.photo.createdAt))}</p>
             <label className="setting-row">
