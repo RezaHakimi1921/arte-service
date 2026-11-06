@@ -52,12 +52,13 @@ public sealed class WorkshopVideoTests(ArteApiFactory api)
         var download = await owner.GetAsync($"/api/v1/attachments/{fileId}");
         Assert.Equal("video/mp4", download.Content.Headers.ContentType?.MediaType);
 
-        // Videos cannot be deleted for now.
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.DeleteAsync($"/api/v1/attachments/{fileId}")).StatusCode);
-
         var track = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
         Assert.Empty(track.GetProperty("photos").EnumerateArray());
         Assert.Equal(HttpStatusCode.NotFound, (await api.Client().GetAsync($"/api/v1/track/{code}/photos/{fileId}")).StatusCode);
+
+        // A wrongly uploaded video can be deleted by hand.
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/api/v1/attachments/{fileId}")).StatusCode);
+        Assert.Empty((await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("photos").EnumerateArray());
     }
 
     [Fact]

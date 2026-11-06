@@ -155,7 +155,7 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
               <input type="checkbox" role="switch" className="switch" checked={viewing.photo.visibleToCustomer} disabled={busy}
                 onChange={(e) => toggleShare(viewing.photo, e.target.checked)} />
             </label>}
-            {!viewing.photo.isVideo && <SheetOption label="حذف عکس" tone="danger" disabled={busy} onClick={() => remove(viewing.photo)} />}
+            <SheetOption label={viewing.photo.isVideo ? "حذف فیلم" : "حذف عکس"} tone="danger" disabled={busy} onClick={() => remove(viewing.photo)} />
           </>
         )}
       </BottomSheet>
