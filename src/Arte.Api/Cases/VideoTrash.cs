@@ -111,7 +111,7 @@ public static class VideoTrashEndpoints
             db.CaseEvents.Add(new CaseEvent
             {
                 TenantId = a.TenantId, CaseId = a.CaseId, Type = CaseEventTypes.VideoRestored, ActorUserId = me.RequiredUserId, OccurredAt = clock.UtcNow,
-                Data = JsonSerializer.SerializeToDocument(new { }, Json),
+                Data = JsonSerializer.SerializeToDocument(new { }, JsonSerializerOptions.Web),
             });
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
