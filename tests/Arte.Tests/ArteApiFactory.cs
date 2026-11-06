@@ -56,6 +56,7 @@ public class ArteApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Otp:MaxPerIpPerHour", "100000");
         // The survey sender runs on a timer in production; tests run it by hand with a chosen time.
         builder.UseSetting("Surveys:SenderEnabled", "false");
+        builder.UseSetting("Storage:VideoTrashEnabled", "false");
         Configure(builder);
     }
 

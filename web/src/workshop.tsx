@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { api, ApiError } from "./api";
+import { api, apiBlob, ApiError } from "./api";
 import { useFeedback } from "./feedback";
 import { SubPage } from "./settings";
 import { formatNumber } from "./ui";
@@ -274,6 +274,62 @@ export function WorkshopListsPage({ onBack }: { onBack: () => void }) {
       <OptionsEditor kind="problem" label="ایرادهای اعلامی مشتری" defaults={problemDefaults} />
       <OptionsEditor kind="service" label="خدمات درخواستی" defaults={serviceDefaults} />
       {MOTOR_TYPES.map((t) => <TemplateEditor key={t.key} motorType={t.key} label={t.label} />)}
+    </SubPage>
+  );
+}
+
+type TrashVideo = { id: string; caseId: string; number: number; sizeBytes: number; deletedAt: string; purgeAt: string; deletedByName: string | null };
+
+function TrashVideoCard({ v, busy, onRestore }: { v: TrashVideo; busy: boolean; onRestore: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  const fmt = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const msLeft = new Date(v.purgeAt).getTime() - Date.now();
+  const daysLeft = Math.max(0, Math.ceil(msLeft / 86_400_000));
+  async function watch() {
+    setLoading(true);
+    try { setUrl(URL.createObjectURL(await apiBlob(`/api/v1/trash/videos/${v.id}/file`))); }
+    finally { setLoading(false); }
+  }
+  return (
+    <li className="card stack">
+      <strong>CASE-{v.number}</strong>
+      <span className="muted small">
+        حذف‌شده در {fmt.format(new Date(v.deletedAt))}{v.deletedByName ? ` توسط ${v.deletedByName}` : ""} · {formatNumber(Math.round(v.sizeBytes / 1024 / 1024 * 10) / 10)} مگابایت
+      </span>
+      <span className={daysLeft <= 1 ? "warn small" : "small"}>
+        {daysLeft === 0 ? "امروز برای همیشه پاک می‌شود" : `${formatNumber(daysLeft)} روز دیگر برای همیشه پاک می‌شود`}
+      </span>
+      {url && <video src={url} controls playsInline preload="metadata" style={{ width: "100%", borderRadius: 8 }} />}
+      <div className="row">
+        {!url && <button type="button" onClick={watch} disabled={loading} aria-busy={loading}>{loading ? "در حال بارگذاری…" : "دیدن فیلم"}</button>}
+        <button type="button" className="primary" onClick={onRestore} disabled={busy} aria-busy={busy}>{busy ? "در حال بازگردانی…" : "بازگردانی"}</button>
+      </div>
+    </li>
+  );
+}
+
+export function VideoTrashPage({ onBack }: { onBack: () => void }) {
+  const { notify } = useFeedback();
+  const [rows, setRows] = useState<TrashVideo[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const load = () => api<TrashVideo[]>("/api/v1/trash/videos").then(setRows).catch(() => notify("خطا در ارتباط با سرور", "error"));
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  async function restore(id: string) {
+    setBusyId(id);
+    try { await api(`/api/v1/trash/videos/${id}/restore`, { method: "POST" }); notify("فیلم به پرونده برگشت"); await load(); }
+    catch (e) { notify(e instanceof ApiError ? e.message : "خطا در ارتباط با سرور", "error"); }
+    finally { setBusyId(null); }
+  }
+  return (
+    <SubPage title="فیلم‌های حذف‌شده" onBack={onBack}>
+      <p className="hint">فیلمی که حذف شود ۳ روز اینجا می‌ماند و بعد برای همیشه از سیستم پاک می‌شود. تا آن موقع می‌توانید آن را ببینید یا به پرونده برگردانید.</p>
+      {!rows ? <div className="splash" aria-busy="true" /> : rows.length === 0 ? (
+        <div className="empty"><strong>فیلم حذف‌شده‌ای نیست</strong><span className="muted">وقتی فیلمی را از یک پرونده حذف کنند، تا ۳ روز اینجا دیده می‌شود.</span></div>
+      ) : (
+        <ul className="stack list-plain">{rows.map((v) => <TrashVideoCard key={v.id} v={v} busy={busyId === v.id} onRestore={() => restore(v.id)} />)}</ul>
+      )}
     </SubPage>
   );
 }

@@ -143,5 +143,7 @@ public static class CaseEventTypes
     public const string FindingRemoved = "case.finding_removed";
     public const string FindingRestored = "case.finding_restored";
     public const string ReceiptUploaded = "case.receipt_uploaded";
+    public const string VideoPurged = "case.video_purged";
+    public const string VideoRestored = "case.video_restored";
     public const string ReceiptReviewed = "case.receipt_reviewed";
 }
