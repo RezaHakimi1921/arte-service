@@ -59,7 +59,7 @@ function Icon({ name }: { name: IconName }) {
 const cardGroups = (n: string) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
 
 /** Pay by card: the shop's card with a copy button, and a way to send the bank receipt. */
-function PaySection({ code, pay, onSent }: { code: string; pay: NonNullable<Track["pay"]>; onSent: () => void }) {
+function PaySection({ code, pay, owe, onSent }: { code: string; pay: NonNullable<Track["pay"]>; owe: boolean; onSent: () => void }) {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [amount, setAmount] = useState("");
@@ -100,14 +100,18 @@ function PaySection({ code, pay, onSent }: { code: string; pay: NonNullable<Trac
           <button type="button" className="secondary" onClick={copy}>{copied ? "کپی شد ✓" : "کپی شماره کارت"}</button>
         </div>
       )}
-      <label className="field">
-        <span>مبلغ واریزی (تومان، اختیاری)</span>
-        <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} maxLength={14} />
-      </label>
-      <label className={`button receipt-button${busy ? " busy" : ""}`} aria-busy={busy}>
-        <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { void send(e.target.files); e.target.value = ""; }} />
-        {busy ? "در حال ارسال…" : "ارسال عکس رسید واریز"}
-      </label>
+      {owe && (
+        <>
+          <label className="field">
+            <span>مبلغ واریزی (تومان، اختیاری)</span>
+            <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} maxLength={14} />
+          </label>
+          <label className={`button receipt-button${busy ? " busy" : ""}`} aria-busy={busy}>
+            <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { void send(e.target.files); e.target.value = ""; }} />
+            {busy ? "در حال ارسال…" : "ارسال عکس رسید واریز"}
+          </label>
+        </>
+      )}
       {msg && <p className={msg.ok ? "hint" : "error"} role="status">{msg.text}</p>}
       {pay.receipts.length > 0 && (
         <ul className="plain-list">
@@ -118,6 +122,49 @@ function PaySection({ code, pay, onSent }: { code: string; pay: NonNullable<Trac
       )}
     </section>
   );
+}
+
+/** The mark of each navigation app, so customers recognise it without reading. */
+function MapIcon({ name }: { name: string }) {
+  const common = { viewBox: "0 0 48 48", width: 36, height: 36, "aria-hidden": true } as const;
+  switch (name) {
+    case "google":
+      return (
+        <svg {...common}>
+          <path d="M24 4a14 14 0 0 0-14 14c0 10 14 26 14 26s14-16 14-26A14 14 0 0 0 24 4Z" fill="#34a853" />
+          <path d="M24 4a14 14 0 0 0-11.6 6.2L24 24Z" fill="#ea4335" />
+          <path d="M12.4 10.2A14 14 0 0 0 10 18c0 3.2 1.4 7 3.4 10.6L24 24Z" fill="#fbbc04" />
+          <path d="M24 4a14 14 0 0 1 14 14c0 3.2-1.4 7-3.4 10.6L24 24Z" fill="#4285f4" />
+          <circle cx="24" cy="18" r="5.5" fill="#fff" />
+        </svg>
+      );
+    case "waze":
+      return (
+        <svg {...common}>
+          <path d="M24 6c-9 0-16 6.5-16 14.5 0 3 1 5.8 2.700 8.100-.4 2.600-1.800 4.600-3.200 5.700 3.200.300 6-.800 7.900-2.400 2.400 1.200 5 1.800 8.600 1.800 9 0 16-6.500 16-14.500S33 6 24 6Z" fill="#33ccff" stroke="#0a2540" strokeWidth="2.200" strokeLinejoin="round" />
+          <circle cx="18.500" cy="19" r="2.200" fill="#0a2540" /><circle cx="29.500" cy="19" r="2.200" fill="#0a2540" />
+          <path d="M18 25c2 2.500 10 2.500 12 0" fill="none" stroke="#0a2540" strokeWidth="2.200" strokeLinecap="round" />
+          <circle cx="16" cy="38" r="3.500" fill="#0a2540" /><circle cx="32" cy="38" r="3.500" fill="#0a2540" />
+        </svg>
+      );
+    case "neshan":
+      return (
+        <svg {...common}>
+          <rect x="4" y="4" width="40" height="40" rx="11" fill="#1f6feb" />
+          <path d="M24 10 33 36l-9-4.500L15 36Z" fill="#fff" />
+        </svg>
+      );
+    case "balad":
+      return (
+        <svg {...common}>
+          <rect x="4" y="4" width="40" height="40" rx="11" fill="#1aa86c" />
+          <path d="M24 11a9 9 0 0 0-9 9c0 7 9 17 9 17s9-10 9-17a9 9 0 0 0-9-9Z" fill="#fff" />
+          <circle cx="24" cy="20" r="3.500" fill="#1aa86c" />
+        </svg>
+      );
+    default:
+      return <svg {...common}><circle cx="24" cy="24" r="16" fill="var(--accent)" /></svg>;
+  }
 }
 
 function Section({ icon, eyebrow, title, action, children }: { icon: IconName; eyebrow: string; title: string; action?: ReactNode; children: ReactNode }) {
@@ -531,7 +578,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                       {i.supplier === "customer" && <span className="tk-muted"> (کالای خودتان)</span>}
                       {i.status === "needed" && <span className="tk-muted"> (در انتظار تهیه)</span>}
                     </span>
-                    {i.discountRials != null && i.discountRials > 0 && <span className="tk-muted tk-discount">تخفیف {toman(i.discountRials)}</span>}
+                    {i.discountRials != null && i.discountRials > 0 && <span className="tk-discount">تخفیف <span dir="ltr" className="neg">−{toman(i.discountRials)}</span></span>}
                     {i.lineTotalRials != null && i.lineTotalRials > 0 && <strong className="font-num">{toman(i.lineTotalRials)}</strong>}
                   </li>
                 ))}
@@ -544,7 +591,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                 {(t.money.discountRials ?? 0) > 0 && (
                   <>
                     <p><span>جمع قبل از تخفیف</span><strong className="font-num">{toman(t.money.subtotalRials ?? t.money.totalRials)}</strong></p>
-                    <p className="saved"><span>تخفیف شما</span><strong className="font-num">− {toman(t.money.discountRials ?? 0)}</strong></p>
+                    <p className="saved"><span>تخفیف شما</span><strong className="font-num neg" dir="ltr">−{toman(t.money.discountRials ?? 0)}</strong></p>
                   </>
                 )}
                 <p><span>{(t.money.discountRials ?? 0) > 0 ? "جمع پس از تخفیف" : "جمع"}</span><strong className="font-num">{toman(t.money.totalRials)}</strong></p>
@@ -555,8 +602,8 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </Section>
         )}
 
-        {t.pay && (t.pay.card || t.pay.receipts.length > 0 || (t.money && t.money.balanceRials > 0)) && (
-          <PaySection code={code} pay={t.pay} onSent={() => api<Track>(`/api/v1/track/${code}`).then((d) => setT(withoutInternalSteps(d))).catch(() => {})} />
+        {t.pay && ((t.money?.balanceRials ?? 0) > 0 || t.pay.receipts.length > 0) && (
+          <PaySection code={code} pay={(t.money?.balanceRials ?? 0) > 0 ? t.pay : { ...t.pay, card: null }} owe={(t.money?.balanceRials ?? 0) > 0} onSent={() => api<Track>(`/api/v1/track/${code}`).then((d) => setT(withoutInternalSteps(d))).catch(() => {})} />
         )}
 
         {t.shop.phone && (
@@ -574,7 +621,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           <section className="tk-links" aria-label="نشانی و شبکه‌های اجتماعی">
             {(t.shop.maps?.length ?? 0) > 0 && (
               <div className="tk-maps" role="group" aria-label="مسیریابی">
-                {t.shop.maps!.map((m) => <a key={m.key} href={m.url} target="_blank" rel="noopener noreferrer">{m.name}</a>)}
+                {t.shop.maps!.map((m) => <a key={m.key} href={m.url} target="_blank" rel="noopener noreferrer" aria-label={`مسیریابی با ${m.name}`} title={m.name}><MapIcon name={m.key} /></a>)}
               </div>
             )}
             {t.shop.instagram && (

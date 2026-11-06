@@ -5,6 +5,10 @@ import {
   VEHICLE_CATALOG, VEHICLE_KINDS, formatMotoPlate, formatPlate, modelYears, parseMotoPlate, parsePlate, type VehicleKind,
 } from "./vehicles";
 
+/** The vehicle kinds this business takes in; set once /me is loaded so every vehicle form can hide a pointless choice. */
+let businessKinds: string[] | null = null;
+export function setBusinessKinds(kinds: string[] | null) { businessKinds = kinds; }
+
 export type VehicleValue = { kind: string | null; title: string; identifier: string | null; attributes: Record<string, string> | null };
 
 const faYear = new Intl.NumberFormat("fa-IR", { useGrouping: false });
@@ -25,7 +29,8 @@ export function VehicleForm({ value, busy, error, onSave, onCancel }: {
   value?: VehicleValue; busy?: boolean; error?: string | null;
   onSave: (v: { kind: string; title: string; identifier: string | null; attributes: Record<string, string> }) => void; onCancel: () => void;
 }) {
-  const startKind = (VEHICLE_KINDS.some((k) => k.key === value?.kind) ? value!.kind : null) as VehicleKind | null;
+  const allowed = VEHICLE_KINDS.filter((k) => !businessKinds || businessKinds.includes(k.key) || k.key === value?.kind);
+  const startKind = (VEHICLE_KINDS.some((k) => k.key === value?.kind) ? value!.kind : allowed.length === 1 ? allowed[0].key : null) as VehicleKind | null;
   const [startBrand, startModel] = splitTitle(startKind, value?.title ?? "");
   const [kind, setKind] = useState<VehicleKind | null>(startKind);
   const [brand, setBrand] = useState(startBrand);
@@ -66,17 +71,17 @@ export function VehicleForm({ value, busy, error, onSave, onCancel }: {
 
   return (
     <form className="card vehicle-form" onSubmit={submit} noValidate>
-      <div className="field">
+      {allowed.length > 1 && <div className="field">
         <span className="label">نوع وسیله</span>
         <div className="kinds" role="radiogroup" aria-label="نوع وسیله">
-          {VEHICLE_KINDS.map((k) => (
+          {allowed.map((k) => (
             <button type="button" key={k.key} role="radio" aria-checked={kind === k.key} className={`kind${kind === k.key ? " on" : ""}`} onClick={() => pickKind(k.key)}>
               <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d={k.icon} /></svg>
               <span>{k.label}</span>
             </button>
           ))}
         </div>
-      </div>
+      </div>}
       {kind && (
         <div className="grid-2">
           <Field label="برند">

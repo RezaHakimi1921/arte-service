@@ -15,7 +15,7 @@ namespace Arte.Api.Licensing;
 public static class LicenseEndpoints
 {
     public sealed record GrantLicense(string? Kind, Guid? PlanId, int? Months, int? Days, long? PriceRials, string? Note);
-    public sealed record UpdateBusiness(bool? IsActive, string? Reason, bool? SurveyEnabled = null);
+    public sealed record UpdateBusiness(bool? IsActive, string? Reason, bool? SurveyEnabled = null, string[]? VehicleKinds = null);
     public sealed record PlanInput(string? Name, int? Months, long? PriceRials, bool? IsActive, int? SortOrder);
 
     public static void MapLicensing(this IEndpointRouteBuilder app)
@@ -97,7 +97,7 @@ public static class LicenseEndpoints
                 .Select(m => new { m.Role, m.IsActive, m.DisplayName, m.User!.Mobile, m.User.LastLoginAt }).ToListAsync(ct);
             return Results.Ok(new
             {
-                t.Id, t.Name, t.Phone, t.Address, t.CreatedAt, t.IsActive, t.DeactivatedReason, t.SurveyEnabled,
+                t.Id, t.Name, t.Phone, t.Address, t.CreatedAt, t.IsActive, t.DeactivatedReason, t.SurveyEnabled, t.BusinessType, t.VehicleKinds,
                 BrandId = t.OrganizationId,
                 Mine = await db.Memberships.IgnoreQueryFilters([ArteDbContext.TenantFilter])
                     .AnyAsync(m => m.TenantId == id && m.UserId == me.UserId && m.IsActive, ct),
@@ -191,6 +191,13 @@ public static class LicenseEndpoints
             {
                 t.SurveyEnabled = survey;
                 audit.Record(survey ? "admin.survey_enabled" : "admin.survey_disabled", id, me.RequiredUserId, null);
+            }
+            if (req.VehicleKinds is { } kinds)
+            {
+                if (kinds.Length == 0 || kinds.Length > 10 || kinds.Any(k => !Arte.Core.Customers.AssetKinds.All.Contains(k)))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["vehicleKinds"] = ["حداقل یک نوع وسیله انتخاب کنید."] });
+                t.VehicleKinds = kinds.Distinct().ToArray();
+                audit.Record("admin.vehicle_kinds_changed", id, me.RequiredUserId, string.Join(",", t.VehicleKinds));
             }
             await db.SaveChangesAsync(ct);
             return Results.NoContent();

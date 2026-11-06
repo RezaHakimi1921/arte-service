@@ -196,4 +196,29 @@ public sealed class BranchTests(ArteApiFactory api)
         Assert.Single(others);
         Assert.DoesNotContain(others, r => r.GetProperty("id").GetGuid() == first);
     }
+
+    [Fact]
+    public async Task The_platform_admin_chooses_which_vehicle_kinds_a_business_takes_in()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var admin = await AdminAsync();
+
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{tenantId}", new { vehicleKinds = new[] { "motorcycle" } })).StatusCode);
+        var detail = await Json(await admin.GetAsync($"/api/v1/admin/businesses/{tenantId}"));
+        Assert.Equal(["motorcycle"], detail.GetProperty("vehicleKinds").EnumerateArray().Select(x => x.GetString()).ToArray());
+        var me = await Json(await owner.GetAsync("/api/v1/me"));
+        Assert.Equal(["motorcycle"], me.GetProperty("business").GetProperty("vehicleKinds").EnumerateArray().Select(x => x.GetString()).ToArray());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{tenantId}", new { vehicleKinds = Array.Empty<string>() })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{tenantId}", new { vehicleKinds = new[] { "boat" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.PatchAsJsonAsync($"/api/v1/admin/businesses/{tenantId}", new { vehicleKinds = new[] { "car" } })).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_short_neshan_link_is_accepted()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        Assert.True((await owner.PutAsJsonAsync("/api/v1/settings/business", new { mapNeshanUrl = "https://nshn.ir/7bvo2IyxRuFA" })).IsSuccessStatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsJsonAsync("/api/v1/settings/business", new { mapNeshanUrl = "https://evil.example/7bvo" })).StatusCode);
+    }
 }

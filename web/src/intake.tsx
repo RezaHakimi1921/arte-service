@@ -423,7 +423,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
         {newVehicle && (
           <>
-            <div className="field">
+            {kinds.length > 1 && <div className="field">
               <span className="label">نوع وسیله</span>
               <div className="kinds" role="radiogroup" aria-label="نوع وسیله">
                 {kinds.map((k) => (
@@ -435,7 +435,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
                 ))}
               </div>
               {errors.vehicle && <span className="error">{errors.vehicle}</span>}
-            </div>
+            </div>}
 
             {kind && (
               <div className="grid-2">

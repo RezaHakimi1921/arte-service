@@ -15,6 +15,7 @@ import { TrackPage } from "./track";
 import { BranchBlocked, LicenseBanner, LicensePage, type LicenseStatus } from "./license";
 import { AdminPanel } from "./admin";
 import { useFeedback } from "./feedback";
+import { setBusinessKinds } from "./vehicleForm";
 import { VideoTrashPage, WorkshopListsPage } from "./workshop";
 import { FinancePage } from "./finance";
 import { AccountPage, AppearancePage, BusinessPage, CustomerPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, VehiclesPage, type SettingsPage } from "./settings";
@@ -68,6 +69,7 @@ export default function App() {
 function AdminRoot() {
   const [state, setState] = useState<"boot" | "login" | "denied" | "ok">("boot");
   const [me, setMe] = useState<Me | null>(null);
+  useEffect(() => { setBusinessKinds(me?.business?.vehicleKinds ?? null); }, [me]);
 
   const signIn = useCallback(async (s: Session | null) => {
     applySession(s);

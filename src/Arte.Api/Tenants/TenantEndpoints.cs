@@ -95,7 +95,7 @@ public static class TenantEndpoints
                 errors["instagramId"] = ["آیدی اینستاگرام فقط حرف انگلیسی، عدد، نقطه و _ دارد."];
             foreach (var (field, url, hosts) in new (string, string?, string[])[]
             {
-                ("mapNeshanUrl", req.MapNeshanUrl, ["neshan.org"]), ("mapGoogleUrl", req.MapGoogleUrl, ["google.com", "goo.gl", "maps.app.goo.gl", "g.co"]),
+                ("mapNeshanUrl", req.MapNeshanUrl, ["neshan.org", "nshn.ir"]), ("mapGoogleUrl", req.MapGoogleUrl, ["google.com", "goo.gl", "maps.app.goo.gl", "g.co"]),
                 ("mapWazeUrl", req.MapWazeUrl, ["waze.com"]), ("mapBaladUrl", req.MapBaladUrl, ["balad.ir"]),
             })
                 if (!string.IsNullOrWhiteSpace(url) && !ValidMapUrl(url.Trim(), hosts)) errors[field] = ["لینک معتبر (https) از همین برنامه وارد کنید."];

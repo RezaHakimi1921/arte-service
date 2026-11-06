@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, api } from "./api";
 import { useFeedback } from "./feedback";
+import { VEHICLE_KINDS } from "./vehicles";
 import { KIND_NAMES, jalaliDate, licenseHeadline, type LicenseStatus } from "./license";
 import { ROLE_NAMES } from "./labels";
 import { BottomSheet, SelectField, SelectSheet, SheetOption } from "./sheet";
@@ -14,7 +15,7 @@ type BusinessRow = {
 };
 type BusinessDetail = {
   id: string; name: string; phone: string | null; address: string | null; createdAt: string; isActive: boolean;
-  deactivatedReason: string | null; status: LicenseStatus; surveyEnabled: boolean; brandId: string | null; brand: string | null; mine: boolean;
+  deactivatedReason: string | null; status: LicenseStatus; surveyEnabled: boolean; businessType: string; vehicleKinds: string[]; brandId: string | null; brand: string | null; mine: boolean;
   licenses: { id: string; kind: string; startsAt: string; endsAt: string; priceRials: number; note: string | null; createdAt: string; revoked: boolean; plan: string | null }[];
   members: { role: string; isActive: boolean; displayName: string | null; mobile: string; lastLoginAt: string | null }[];
 };
@@ -222,6 +223,22 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
               ? run(() => api(`/api/v1/admin/businesses/${id}`, { method: "PATCH", body: { isActive: true } }), "شعبه فعال شد")
               : (setReason(""), setSheet("deactivate"))} />
         </label>
+      </div>
+
+      <h3>وسایل قابل پذیرش</h3>
+      <div className="card admin-facts">
+        <p className="muted small">چند نوع را می‌شود انتخاب کرد. اگر فقط یک نوع باشد (مثلاً موتورسیکلت)، در پذیرش دیگر انتخاب نوع وسیله نشان داده نمی‌شود.</p>
+        <div className="chips" role="group" aria-label="وسایل قابل پذیرش">
+          {VEHICLE_KINDS.map((k) => {
+            const on = b.vehicleKinds.includes(k.key);
+            return (
+              <button type="button" key={k.key} className={`chip-button${on ? " active" : ""}`} aria-pressed={on} disabled={busy || (on && b.vehicleKinds.length === 1)}
+                onClick={() => run(() => api(`/api/v1/admin/businesses/${id}`, { method: "PATCH", body: { vehicleKinds: on ? b.vehicleKinds.filter((x) => x !== k.key) : [...b.vehicleKinds, k.key] } }), "وسایل ذخیره شد")}>
+                {k.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <h3>برند</h3>

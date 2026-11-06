@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { api, apiBlob, ApiError } from "./api";
 import { useFeedback } from "./feedback";
+import { BottomSheet } from "./sheet";
 import { SubPage } from "./settings";
 import { formatNumber } from "./ui";
 import { MOTO_PROBLEMS, MOTO_SERVICE_CATEGORIES } from "./vehicles";
@@ -161,11 +162,66 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
   return <section className="stack"><h3>{title}</h3>{children}</section>;
 }
 
+
+type EditTarget = { id: string; title: string; group: string | null; isRequired?: boolean; isActive: boolean };
+
+/** One settings row: the title big, small badges under it, edit and on/off at the end. */
+function ListRow({ title, group, badges, inactive, busy, extra, onEdit, onToggle, active }: {
+  title: string; group: string | null; badges: string[]; inactive: boolean; busy: boolean; extra?: ReactNode; onEdit: () => void; onToggle: () => void; active: boolean;
+}) {
+  return (
+    <li className={`opt-row${inactive ? " off" : ""}`}>
+      <div className="opt-main">
+        <strong>{title}</strong>
+        {(group || badges.length > 0) && (
+          <span className="opt-badges">
+            {group && <span className="badge">{group}</span>}
+            {badges.map((b) => <span key={b} className="badge subtle">{b}</span>)}
+          </span>
+        )}
+      </div>
+      <div className="opt-actions">
+        {extra}
+        <button type="button" className="icon-btn" aria-label={`ویرایش ${title}`} disabled={busy} onClick={onEdit}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Zm9.5-13.5 3 3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <input type="checkbox" role="switch" className="switch" aria-label={active ? `غیرفعال کردن ${title}` : `فعال کردن ${title}`} checked={active} disabled={busy} onChange={onToggle} />
+      </div>
+    </li>
+  );
+}
+
+function EditSheet({ target, withRequired, busy, onClose, onSave }: {
+  target: EditTarget | null; withRequired: boolean; busy: boolean; onClose: () => void;
+  onSave: (v: { title: string; group: string; isRequired?: boolean }) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [group, setGroup] = useState("");
+  const [req, setReq] = useState(true);
+  useEffect(() => { if (target) { setTitle(target.title); setGroup(target.group ?? ""); setReq(target.isRequired ?? true); } }, [target]);
+  return (
+    <BottomSheet open={target !== null} title="ویرایش" onClose={onClose}>
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); if (title.trim()) onSave({ title: title.trim(), group: group.trim(), isRequired: withRequired ? req : undefined }); }}>
+        <label className="field"><span>عنوان</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} autoFocus /></label>
+        <label className="field"><span>دسته (اختیاری)</span><input value={group} onChange={(e) => setGroup(e.target.value)} maxLength={40} /></label>
+        {withRequired && (
+          <label className="setting-row">
+            <span><strong>الزامی</strong><span className="muted small">پذیرش بدون تیک‌زدن این ردیف ثبت نمی‌شود.</span></span>
+            <input type="checkbox" role="switch" className="switch" checked={req} onChange={(e) => setReq(e.target.checked)} />
+          </label>
+        )}
+        <button type="submit" className="primary" disabled={busy || !title.trim()} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+      </form>
+    </BottomSheet>
+  );
+}
+
 function OptionsEditor({ kind, label, defaults }: { kind: "problem" | "service"; label: string; defaults: { group: string; title: string }[] }) {
   const { notify } = useFeedback();
   const [rows, setRows] = useState<IntakeOption[] | null>(null);
   const [title, setTitle] = useState("");
   const [group, setGroup] = useState("");
+  const [edit, setEdit] = useState<EditTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const load = () => api<IntakeOption[]>(`/api/v1/intake-options?kind=${kind}&includeInactive=true`).then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, [kind]);
@@ -190,15 +246,15 @@ function OptionsEditor({ kind, label, defaults }: { kind: "problem" | "service";
           </button>
         </div>
       )}
-      <ul className="plain-list">
+      <ul className="opt-list">
         {rows.map((r) => (
-          <li key={r.id} className="row-between">
-            <span className={r.isActive ? "" : "muted"}>{r.title}{r.group && <span className="muted small"> · {r.group}</span>}{!r.isActive && " (غیرفعال)"}</span>
-            <button type="button" className="link-button" disabled={busy}
-              onClick={() => act(() => api(`/api/v1/intake-options/${r.id}`, { method: "PATCH", body: { isActive: !r.isActive } }))}>{r.isActive ? "غیرفعال" : "فعال"}</button>
-          </li>
+          <ListRow key={r.id} title={r.title} group={r.group} badges={[]} inactive={!r.isActive} active={r.isActive} busy={busy}
+            onEdit={() => setEdit({ id: r.id, title: r.title, group: r.group, isActive: r.isActive })}
+            onToggle={() => act(() => api(`/api/v1/intake-options/${r.id}`, { method: "PATCH", body: { isActive: !r.isActive } }))} />
         ))}
       </ul>
+      <EditSheet target={edit} withRequired={false} busy={busy} onClose={() => setEdit(null)}
+        onSave={(v) => act(async () => { await api(`/api/v1/intake-options/${edit!.id}`, { method: "PATCH", body: { title: v.title, group: v.group } }); setEdit(null); }, "ذخیره شد")} />
       <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!title.trim()) return;
         act(async () => { await api("/api/v1/intake-options", { body: { kind, title: title.trim(), group: group.trim() || undefined } }); setTitle(""); }, "اضافه شد"); }}>
         <label className="field"><span>عنوان جدید</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></label>
@@ -213,6 +269,7 @@ function TemplateEditor({ motorType, label }: { motorType: string; label: string
   const { notify } = useFeedback();
   const [rows, setRows] = useState<TemplateRow[] | null>(null);
   const [title, setTitle] = useState("");
+  const [edit, setEdit] = useState<EditTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const load = () => api<TemplateRow[]>(`/api/v1/checklist-templates/${motorType}?includeInactive=true`).then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, [motorType]);
@@ -241,21 +298,19 @@ function TemplateEditor({ motorType, label }: { motorType: string; label: string
             onClick={() => act(() => api(`/api/v1/checklist-templates/${motorType}/defaults`, { body: {} }), "فهرست آماده اضافه شد")}>شروع از فهرست آماده</button>
         </div>
       )}
-      <ul className="plain-list">
+      <ul className="opt-list">
         {rows.map((r, i) => (
-          <li key={r.id} className="row-between">
-            <span className={r.isActive ? "" : "muted"}>{r.title}{r.group && <span className="muted small"> · {r.group}</span>}{!r.isRequired && " (اختیاری)"}{!r.isActive && " (غیرفعال)"}</span>
-            <span className="row-actions">
-              <button type="button" className="link-button" aria-label="بالا" disabled={busy || i === 0} onClick={() => move(i, -1)}>▲</button>
-              <button type="button" className="link-button" aria-label="پایین" disabled={busy || i === rows.length - 1} onClick={() => move(i, 1)}>▼</button>
-              <button type="button" className="link-button" disabled={busy}
-                onClick={() => act(() => api(`/api/v1/checklist-templates/items/${r.id}`, { method: "PATCH", body: { isRequired: !r.isRequired } }))}>{r.isRequired ? "اختیاری کن" : "الزامی کن"}</button>
-              <button type="button" className="link-button" disabled={busy}
-                onClick={() => act(() => api(`/api/v1/checklist-templates/items/${r.id}`, { method: "PATCH", body: { isActive: !r.isActive } }))}>{r.isActive ? "غیرفعال" : "فعال"}</button>
-            </span>
-          </li>
+          <ListRow key={r.id} title={r.title} group={r.group} badges={r.isRequired ? ["الزامی"] : ["اختیاری"]} inactive={!r.isActive} active={r.isActive} busy={busy}
+            extra={<span className="opt-move">
+              <button type="button" className="icon-btn" aria-label="بالا" disabled={busy || i === 0} onClick={() => move(i, -1)}>▲</button>
+              <button type="button" className="icon-btn" aria-label="پایین" disabled={busy || i === rows.length - 1} onClick={() => move(i, 1)}>▼</button>
+            </span>}
+            onEdit={() => setEdit({ id: r.id, title: r.title, group: r.group, isRequired: r.isRequired, isActive: r.isActive })}
+            onToggle={() => act(() => api(`/api/v1/checklist-templates/items/${r.id}`, { method: "PATCH", body: { isActive: !r.isActive } }))} />
         ))}
       </ul>
+      <EditSheet target={edit} withRequired busy={busy} onClose={() => setEdit(null)}
+        onSave={(v) => act(async () => { await api(`/api/v1/checklist-templates/items/${edit!.id}`, { method: "PATCH", body: { title: v.title, group: v.group, isRequired: v.isRequired } }); setEdit(null); }, "ذخیره شد")} />
       <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!title.trim()) return;
         act(async () => { await api(`/api/v1/checklist-templates/${motorType}/items`, { body: { title: title.trim() } }); setTitle(""); }, "اضافه شد"); }}>
         <label className="field"><span>ردیف جدید</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} /></label>
