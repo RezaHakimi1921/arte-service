@@ -137,6 +137,8 @@ public static class AttachmentEndpoints
         var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == a.CaseId, ct);
         var m = me.RequiredMembership;
         if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
+        // Videos are kept for now; the retention policy is decided later.
+        if (a.ContentType.StartsWith("video/")) return Results.Problem(statusCode: 409, title: "فیلم‌ها فعلاً نگهداری می‌شوند و حذف نمی‌شوند.");
         if (a.CreatedBy != me.RequiredUserId && !m.Has(Arte.Core.Identity.Permissions.CasesCreate))
             return Results.Problem(statusCode: 403, title: "فقط فرستنده عکس یا مدیر می‌تواند آن را تغییر دهد.");
         if (req.Caption is { Length: > 200 }) return Results.ValidationProblem(new Dictionary<string, string[]> { ["caption"] = ["حداکثر ۲۰۰ حرف."] });
