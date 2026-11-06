@@ -217,6 +217,20 @@ if (config.GetValue("Database:MigrateOnStartup", false))
     await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Database.MigrateAsync();
 }
 
+// One-time data fixes (each runs once; a marker row remembers it so later manual changes are never undone).
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+    await db.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS \"DataFixes\" (\"Key\" text PRIMARY KEY, \"AppliedAt\" timestamptz NOT NULL DEFAULT now())");
+    // Roles v2: existing senior mechanics get the reports permission; existing mechanics may take cars in (cases.intake).
+    if (await db.Database.ExecuteSqlRawAsync("INSERT INTO \"DataFixes\" (\"Key\") VALUES ('roles-v2') ON CONFLICT DO NOTHING") > 0)
+    {
+        await db.Database.ExecuteSqlRawAsync("UPDATE \"Memberships\" SET \"Permissions\" = array_append(\"Permissions\", 'reports.view') WHERE \"Role\" = 'supervisor' AND NOT ('reports.view' = ANY(\"Permissions\"))");
+        await db.Database.ExecuteSqlRawAsync("UPDATE \"Memberships\" SET \"Permissions\" = array_append(\"Permissions\", 'cases.intake') WHERE \"Role\" = 'technician' AND NOT ('cases.intake' = ANY(\"Permissions\")) AND NOT ('cases.create' = ANY(\"Permissions\"))");
+        app.Logger.LogInformation("Applied data fix roles-v2");
+    }
+}
+
 // Keep every business on the current workflow template (idempotent).
 {
     await using var scope = app.Services.CreateAsyncScope();

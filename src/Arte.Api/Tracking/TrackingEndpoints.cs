@@ -119,7 +119,12 @@ public static class TrackingEndpoints
                     var payments = await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct);
                     var m = CaseMoney.Of(all, payments);
                     // The discount is shown on its own line so the customer sees what they saved.
-                    money = new { m.TotalRials, m.PaidRials, m.BalanceRials, m.SubtotalRials, m.DiscountRials };
+                    money = new
+                    {
+                        m.TotalRials, m.PaidRials, m.BalanceRials, m.SubtotalRials, m.DiscountRials,
+                        // Every payment step, oldest first, so a part-paid invoice shows how it was settled.
+                        Payments = payments.OrderBy(p => p.PaidAt).Select(p => new { p.AmountRials, p.Method, p.PaidAt }).ToList(),
+                    };
                 }
             }
 
