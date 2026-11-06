@@ -204,7 +204,12 @@ public static class FinanceEndpoints
             if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
             if (!m.Has(Permissions.PaymentsRecord)) return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
             return Results.Ok(await db.CustomerReceipts.AsNoTracking().Where(x => x.CaseId == id).OrderByDescending(x => x.CreatedAt)
-                .Select(x => new { x.Id, x.AttachmentId, x.ClaimedRials, x.Status, x.CreatedAt, x.ReviewedAt, x.ReviewNote }).ToListAsync(ct));
+                .Select(x => new
+                {
+                    x.Id, x.AttachmentId, x.ClaimedRials, x.Status, x.CreatedAt, x.ReviewedAt, x.ReviewNote,
+                    // What the shop recorded from this receipt (it may be only part of the invoice).
+                    PaidRials = db.Payments.Where(p => p.Id == x.PaymentId).Select(p => (long?)p.AmountRials).FirstOrDefault(),
+                }).ToListAsync(ct));
         }).RequireTenant();
 
         app.MapPost("/api/v1/customer-receipts/{id:guid}/approve", async (Guid id, ApproveInput req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct) =>

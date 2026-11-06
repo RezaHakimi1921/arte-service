@@ -413,7 +413,14 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
           </div>
         )}
         <Field label={kind === "part" ? "نام کالا" : "شرح کار یا خدمت"} error={error}>
-          <input value={title} onChange={(e) => { setTitle(e.target.value); setCatalogId(null); setStandardId(null); }} maxLength={120} autoComplete="off" />
+          <div className="input-clear">
+            <input value={title} onChange={(e) => { setTitle(e.target.value); setCatalogId(null); setStandardId(null); }} maxLength={120} autoComplete="off" />
+            {!item && title && (
+              <button type="button" className="clear-x" aria-label="پاک کردن انتخاب" onClick={() => {
+                setTitle(""); setCatalogId(null); setStandardId(null); setPrice(""); setCost(""); setWarranty(0); setSuggestions([]);
+              }}>×</button>
+            )}
+          </div>
         </Field>
         {(() => {
           if (item || catalogId || standardId) return null;

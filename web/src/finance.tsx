@@ -7,7 +7,7 @@ import { Field, NumberInput, formatNumber } from "./ui";
 
 export type Terminal = { id: string; name: string; bank: string | null; isActive: boolean };
 export type BankCard = { id: string; cardNumber: string; holderName: string; bank: string | null; isActive: boolean; showOnTracking: boolean };
-export type CustomerReceipt = { id: string; attachmentId: string; claimedRials: number | null; status: string; createdAt: string; reviewNote: string | null };
+export type CustomerReceipt = { id: string; attachmentId: string; claimedRials: number | null; status: string; createdAt: string; reviewNote: string | null; paidRials?: number | null };
 
 /** 6037 9971 1234 5678, always left-to-right so the groups do not flip in an RTL page. */
 export function cardText(n: string) { return n.replace(/(\d{4})(?=\d)/g, "$1 "); }
@@ -194,19 +194,25 @@ export function CustomerReceipts({ caseId, onChange }: { caseId: string; onChang
             <div className="row-between">
               <span>{date.format(new Date(r.createdAt))}{r.claimedRials ? ` · ${formatNumber(Math.round(r.claimedRials / 10))} تومان` : ""}
                 <span className="muted small"> · {r.status === "pending" ? "در انتظار بررسی" : r.status === "approved" ? "تأیید شد" : "رد شد"}</span></span>
-              {r.status === "pending" && <button type="button" className="link-button" onClick={() => show(r)}>{open === r.id ? "بستن" : "بررسی"}</button>}
+              <button type="button" className="link-button" onClick={() => show(r)}>{open === r.id ? "بستن" : r.status === "pending" ? "بررسی" : "دیدن رسید"}</button>
             </div>
             {open === r.id && (
               <div className="stack">
                 {img ? <img className="receipt-image" src={img} alt="رسید مشتری" /> : <div className="splash" aria-busy="true" />}
-                <Field label="مبلغ واریزی (تومان)"><NumberInput value={amount} onChange={setAmount} max={11} suffix="تومان" /></Field>
-                <Field label="دلیل رد (فقط اگر رد می‌کنید)"><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} /></Field>
-                <div className="row-actions">
+                {r.status === "pending" && (
+                  <>
+                    <Field label="مبلغ واریزی طبق رسید (تومان)"><NumberInput value={amount} onChange={setAmount} max={11} suffix="تومان" /></Field>
+                    <p className="muted small">اگر مشتری فقط بخشی از مبلغ را واریز کرده، همان مقدار را بنویسید؛ باقی‌مانده همچنان روی پرونده می‌ماند.</p>
+                    <Field label="دلیل رد (فقط اگر رد می‌کنید)"><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} /></Field>
+                  </>
+                )}
+                {r.status === "rejected" && r.reviewNote && <p className="muted small">دلیل رد: {r.reviewNote}</p>}
+                {r.status === "pending" && <div className="row-actions">
                   <button type="button" className="primary" disabled={busy || !amount} aria-busy={busy}
                     onClick={() => act(() => api(`/api/v1/customer-receipts/${r.id}/approve`, { body: { amountRials: Number(amount) * 10 } }), "پرداخت ثبت شد")}>تأیید و ثبت پرداخت</button>
                   <button type="button" disabled={busy}
                     onClick={() => act(() => api(`/api/v1/customer-receipts/${r.id}/reject`, { body: { note: note.trim() || undefined } }), "رد شد")}>رد رسید</button>
-                </div>
+                </div>}
               </div>
             )}
           </li>

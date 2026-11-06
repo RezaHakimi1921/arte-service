@@ -87,7 +87,8 @@ public static class AttachmentEndpoints
         if (image is null && video is null) return Results.Problem(statusCode: 400, title: "فقط عکس JPG، PNG یا WebP (یا فیلم کوتاه MP4/MOV/WebM) قابل بارگذاری است.");
         if (image is not null && bytes.Length > MaxBytes) return Results.Problem(statusCode: 400, title: "حجم عکس حداکثر ۶ مگابایت است.");
         var kind = image ?? video!.Value;
-        if (video is not null) visible = false;
+        // A video reaches the customer only when the shop shares it on purpose, never by the business default.
+        if (video is not null && !(bool.TryParse(form["visibleToCustomer"].ToString(), out var shareVideo) && shareVideo)) visible = false;
 
         var stageKey = await db.Stages.Where(s => s.Id == c.StageId).Select(s => s.Key).SingleAsync(ct);
         var id = Guid.CreateVersion7();
