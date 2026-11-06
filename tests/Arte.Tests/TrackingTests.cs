@@ -185,14 +185,8 @@ public sealed class TrackingTests(ArteApiFactory api)
         Assert.Equal("car_repair", me.GetProperty("business").GetProperty("businessType").GetString());
         Assert.DoesNotContain("motorcycle", me.GetProperty("business").GetProperty("vehicleKinds").EnumerateArray().Select(k => k.GetString()));
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync("/api/v1/settings/business", new { vehicleKinds = Array.Empty<string>() })).StatusCode);
-        var updated = await Json(await client.PutAsJsonAsync("/api/v1/settings/business", new { vehicleKinds = new[] { "car", "motorcycle" } }));
-        Assert.Equal(2, updated.GetProperty("vehicleKinds").GetArrayLength());
-        // Saved for real: read back, and visible in /me for intake.
-        var reread = await client.GetFromJsonAsync<JsonElement>("/api/v1/settings/business");
-        Assert.Equal(["car", "motorcycle"], reread.GetProperty("vehicleKinds").EnumerateArray().Select(k => k.GetString()!).ToArray());
-        me = await client.GetFromJsonAsync<JsonElement>("/api/v1/me");
-        Assert.Contains("motorcycle", me.GetProperty("business").GetProperty("vehicleKinds").EnumerateArray().Select(k => k.GetString()));
+        // The vehicles a business accepts are the platform admin's to change, not the owner's.
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/v1/settings/business", new { vehicleKinds = new[] { "car", "motorcycle" } })).StatusCode);
     }
 
     private static readonly byte[] TinyPng = Convert.FromBase64String(
