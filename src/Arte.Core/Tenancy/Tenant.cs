@@ -76,6 +76,8 @@ public sealed class Tenant
     /// <summary>Tracking page: show the shop's phone number with a call button.</summary>
     public bool TrackShowPhone { get; set; } = true;
     public string? InstagramId { get; set; }
+    /// <summary>The shop's logo: a file under the storage root (relative path). Shown on the customer page where the generic wrench icon would be.</summary>
+    public string? LogoPath { get; set; }
     public string? MapNeshanUrl { get; set; }
     public string? MapGoogleUrl { get; set; }
     public string? MapWazeUrl { get; set; }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { api, ApiError } from "./api";
+import { api, apiBlob, ApiError } from "./api";
 import { useFeedback } from "./feedback";
 import { BottomSheet, SheetOption } from "./sheet";
 import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
@@ -217,7 +217,7 @@ type BusinessSettings = {
   customerSmsEnabled: boolean; smsOnOpened: boolean; smsOnReady: boolean; smsOnDelivered: boolean;
   trackShowStages: boolean; trackShowItems: boolean; trackShowAmounts: boolean; photosVisibleByDefault: boolean;
   surveyEnabled: boolean; surveySendOn: boolean; surveyDelayMinutes: number; surveyAlertBelow: number; requireTransferReceipt: boolean;
-  requirePaymentBeforeWork: boolean; trackShowPhone: boolean; instagramId: string | null;
+  requirePaymentBeforeWork: boolean; trackShowPhone: boolean; instagramId: string | null; hasLogo?: boolean;
   mapNeshanUrl: string | null; mapGoogleUrl: string | null; mapWazeUrl: string | null; mapBaladUrl: string | null;
   smsOnWaitingPart: boolean; smsToMasterOnFinished: boolean;
 };
@@ -270,6 +270,60 @@ function useBusinessSettings(onSaved: () => void) {
   return { s, setS, save, busy };
 }
 
+/** The shop logo: shown on the customer page in place of the generic wrench icon. Resized on the phone to 512px (PNG keeps transparency). */
+function LogoField({ has, onChange }: { has: boolean; onChange: (v: boolean) => void }) {
+  const { notify } = useFeedback();
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true, made: string | null = null;
+    setUrl(null);
+    if (has) apiBlob("/api/v1/settings/business/logo").then((b) => { if (alive) { made = URL.createObjectURL(b); setUrl(made); } }).catch(() => {});
+    return () => { alive = false; if (made) URL.revokeObjectURL(made); };
+  }, [has]);
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const bmp = await createImageBitmap(file);
+      const scale = Math.min(1, 512 / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+      canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("x"))), "image/png"));
+      const form = new FormData();
+      form.append("file", blob, "logo.png");
+      await api("/api/v1/settings/business/logo", { body: form });
+      onChange(true); notify("لوگو ذخیره شد");
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : "لوگو بارگذاری نشد؛ عکس دیگری امتحان کنید.", "error");
+    } finally { setBusy(false); }
+  }
+
+  async function remove() {
+    setBusy(true);
+    try { await api("/api/v1/settings/business/logo", { method: "DELETE" }); onChange(false); notify("لوگو برداشته شد"); }
+    catch { notify("برداشتن لوگو انجام نشد", "error"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="field">
+      <span className="label">لوگو</span>
+      <div className="logo-row">
+        <span className="logo-preview">{url ? <img src={url} alt="لوگوی کسب‌وکار" /> : <span className="muted small">بدون لوگو</span>}</span>
+        <label className={`button secondary${busy ? " busy" : ""}`} aria-busy={busy}>
+          <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={busy} onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
+          {busy ? "در حال ذخیره…" : has ? "تغییر لوگو" : "انتخاب لوگو"}
+        </label>
+        {has && <button type="button" className="link danger" disabled={busy} onClick={remove}>برداشتن</button>}
+      </div>
+      <p className="hint">در لینک مشتری به‌جای آیکن آچار نشان داده می‌شود.</p>
+    </div>
+  );
+}
+
 export function BusinessPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
   const { s, setS, save, busy } = useBusinessSettings(onSaved);
   return (
@@ -277,6 +331,7 @@ export function BusinessPage({ onBack, onSaved }: { onBack: () => void; onSaved:
       {!s ? <div className="splash" aria-busy="true" /> : (
         <form className="plain-form" onSubmit={(e) => { e.preventDefault(); save({ name: s.name, phone: s.phone ?? "", address: s.address ?? "", instagramId: s.instagramId ?? "", mapNeshanUrl: s.mapNeshanUrl ?? "", mapGoogleUrl: s.mapGoogleUrl ?? "", mapWazeUrl: s.mapWazeUrl ?? "", mapBaladUrl: s.mapBaladUrl ?? "" }); }}>
           <Field label="نام کسب‌وکار"><input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} maxLength={120} /></Field>
+          <LogoField has={!!s.hasLogo} onChange={(v) => setS({ ...s, hasLogo: v })} />
           <Field label="تلفن"><input type="tel" inputMode="tel" dir="ltr" value={s.phone ?? ""} onChange={(e) => setS({ ...s, phone: e.target.value })} maxLength={20} /></Field>
           <Field label="نشانی"><textarea rows={2} value={s.address ?? ""} onChange={(e) => setS({ ...s, address: e.target.value })} maxLength={300} /></Field>
           <Switch title="نمایش شماره‌ی تلفن در لینک مشتری" sub="با دکمه‌ی تماس پایین صفحه‌ی پیگیری نشان داده می‌شود." checked={s.trackShowPhone} disabled={busy}

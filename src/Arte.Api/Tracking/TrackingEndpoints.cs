@@ -155,6 +155,7 @@ public static class TrackingEndpoints
                 {
                     t.Name, Phone = t.TrackShowPhone ? t.Phone : null, t.Address,
                     Instagram = t.InstagramId,
+                    HasLogo = t.LogoPath != null,
                     Maps = new[]
                     {
                         new { Key = "neshan", Name = "نشان", Url = t.MapNeshanUrl },
@@ -183,6 +184,19 @@ public static class TrackingEndpoints
                 Items = items,
                 Money = money,
             });
+        }).AllowAnonymous().RequireRateLimiting("session");
+
+        // The shop's logo for the customer page.
+        app.MapGet("/api/v1/track/{code}/logo", async (string code, IServiceScopeFactory scopes, IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
+        {
+            if (!ValidCode(code)) return Results.NotFound();
+            await using var scope = scopes.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+            var tenantId = await db.Cases.IgnoreQueryFilters([ArteDbContext.TenantFilter]).AsNoTracking()
+                .Where(c => c.TrackingCode == code && !c.IsSample && c.DeletedAt == null).Select(c => (Guid?)c.TenantId).SingleOrDefaultAsync(ct);
+            if (tenantId is null) return Results.NotFound();
+            var path = await db.Tenants.AsNoTracking().Where(t => t.Id == tenantId && t.IsActive).Select(t => t.LogoPath).SingleOrDefaultAsync(ct);
+            return Arte.Api.Tenants.TenantEndpoints.LogoFile(path, config, env);
         }).AllowAnonymous().RequireRateLimiting("session");
 
         // A photo the shop shared, served only through its case's tracking code.

@@ -367,6 +367,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         b.Entity<Tenant>().Property(x => x.TrackShowPhone).HasDefaultValue(true);
         foreach (var f in new[] { nameof(Tenant.InstagramId), nameof(Tenant.MapNeshanUrl), nameof(Tenant.MapGoogleUrl), nameof(Tenant.MapWazeUrl), nameof(Tenant.MapBaladUrl) })
             b.Entity<Tenant>().Property<string?>(f).HasMaxLength(f == nameof(Tenant.InstagramId) ? 60 : 300);
+        b.Entity<Tenant>().Property(t => t.LogoPath).HasMaxLength(200);
         b.Entity<Payment>().HasIndex(x => x.TerminalId);
         b.Entity<PaymentTerminal>(e =>
         {
