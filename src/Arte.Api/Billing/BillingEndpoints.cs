@@ -41,6 +41,7 @@ public static class BillingEndpoints
         catalog.MapGet("/", ListCatalogAsync);
         catalog.MapPost("/", CreateCatalogAsync).RequirePermission(Permissions.CasesCreate);
         catalog.MapPatch("/{id:guid}", UpdateCatalogAsync).RequirePermission(Permissions.CasesCreate);
+        catalog.MapGet("/{id:guid}/history", CatalogHistoryAsync);
 
         app.MapGet("/api/v1/receivables", ReceivablesAsync).RequireTenant();
     }
@@ -134,6 +135,7 @@ public static class BillingEndpoints
             if (memory is null) continue;
             memory.DefaultPriceRials = item.UnitPriceRials;
             if (m.Has(Permissions.ReportsView) && item.UnitCostRials is { } cost) memory.DefaultCostRials = cost;
+            LogPrice(db, memory.Id, "sale", item, me.RequiredUserId, now);
         }
 
         await db.SaveChangesAsync(ct);
@@ -153,6 +155,7 @@ public static class BillingEndpoints
         var errors = Validate(req, isNew: false, m);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
+        var (oldPrice, oldCost) = (item.UnitPriceRials, item.UnitCostRials);
         if (req.Title is not null) item.Title = req.Title.Trim();
         if (req.Quantity is not null) item.Quantity = req.Quantity.Value;
         if (req.UnitPriceRials is not null) item.UnitPriceRials = req.UnitPriceRials.Value;
@@ -164,6 +167,8 @@ public static class BillingEndpoints
         if (req.WarrantyDays is not null) item.WarrantyDays = req.WarrantyDays == 0 ? null : req.WarrantyDays;
         item.UpdatedAt = clock.UtcNow;
         if (PriceError(item) is { } priceError) return priceError;
+        if (item.CatalogItemId is { } logged && item.Supplier == Suppliers.Shop && (item.UnitPriceRials != oldPrice || item.UnitCostRials != oldCost))
+            LogPrice(db, logged, "sale_edit", item, me.RequiredUserId, item.UpdatedAt);
 
         AddEvent(db, c, CaseEventTypes.ItemUpdated, me.RequiredUserId, item.UpdatedAt,
             new { item.Title, item.Quantity, item.Status, item.Supplier, Total = item.LineTotalRials });
@@ -294,20 +299,47 @@ public static class BillingEndpoints
             DefaultWarrantyDays = req.DefaultWarrantyDays, CreatedAt = clock.UtcNow,
         };
         db.CatalogItems.Add(item);
+        db.CatalogPriceLogs.Add(new CatalogPriceLog { CatalogItemId = item.Id, Source = "catalog", PriceRials = item.DefaultPriceRials, CostRials = item.DefaultCostRials, RecordedBy = me.RequiredUserId, RecordedAt = clock.UtcNow });
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/catalog/{item.Id}", new { item.Id });
     }
 
-    private static async Task<IResult> UpdateCatalogAsync(Guid id, CatalogInput req, RequestUser me, ArteDbContext db, CancellationToken ct)
+    private static void LogPrice(ArteDbContext db, Guid catalogItemId, string source, CaseItem item, Guid by, DateTimeOffset at) =>
+        db.CatalogPriceLogs.Add(new CatalogPriceLog
+        {
+            CatalogItemId = catalogItemId, Source = source, Quantity = item.Quantity, PriceRials = item.UnitPriceRials, CostRials = item.UnitCostRials,
+            CaseId = item.CaseId, RecordedBy = by, RecordedAt = at,
+        });
+
+    /// <summary>The full buy and sell record of one catalog item, newest first. Purchase prices (and so profit) are the owner's alone.</summary>
+    private static async Task<IResult> CatalogHistoryAsync(Guid id, RequestUser me, ArteDbContext db, CancellationToken ct)
+    {
+        if (!await db.CatalogItems.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+        var showCost = me.RequiredMembership.Role == Roles.Owner;
+        var rows = await db.CatalogPriceLogs.AsNoTracking().Where(x => x.CatalogItemId == id)
+            .OrderByDescending(x => x.RecordedAt).ThenByDescending(x => x.Id).Take(300).ToListAsync(ct);
+        var caseIds = rows.Where(r => r.CaseId != null).Select(r => r.CaseId!.Value).Distinct().ToList();
+        var numbers = await db.Cases.AsNoTracking().Where(c => caseIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Number, ct);
+        return Results.Ok(rows.Select(r => new
+        {
+            r.Id, r.Source, r.Quantity, r.PriceRials, CostRials = showCost ? r.CostRials : null, r.RecordedAt,
+            CaseId = r.CaseId, CaseNumber = r.CaseId is { } cid && numbers.TryGetValue(cid, out var n) ? (long?)n : null,
+        }));
+    }
+
+    private static async Task<IResult> UpdateCatalogAsync(Guid id, CatalogInput req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
     {
         var errors = ValidateCatalog(req, isNew: false);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
         var item = await db.CatalogItems.SingleOrDefaultAsync(x => x.Id == id, ct);
         if (item is null) return Results.NotFound();
+        var (oldPrice, oldCost) = (item.DefaultPriceRials, item.DefaultCostRials);
         if (req.Title is not null) item.Title = req.Title.Trim();
         if (req.Kind is not null) item.Kind = req.Kind;
         if (req.DefaultPriceRials is not null) item.DefaultPriceRials = req.DefaultPriceRials.Value;
         if (req.DefaultCostRials is not null && me.RequiredMembership.Has(Permissions.ReportsView)) item.DefaultCostRials = req.DefaultCostRials;
+        if (item.DefaultPriceRials != oldPrice || item.DefaultCostRials != oldCost)
+            db.CatalogPriceLogs.Add(new CatalogPriceLog { CatalogItemId = item.Id, Source = "catalog", PriceRials = item.DefaultPriceRials, CostRials = item.DefaultCostRials, RecordedBy = me.RequiredUserId, RecordedAt = clock.UtcNow });
         if (req.DefaultWarrantyDays is not null) item.DefaultWarrantyDays = req.DefaultWarrantyDays == 0 ? null : req.DefaultWarrantyDays;
         if (req.IsActive is not null) item.IsActive = req.IsActive.Value;
         await db.SaveChangesAsync(ct);

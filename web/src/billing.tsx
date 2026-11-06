@@ -721,17 +721,25 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
   const [rows, setRows] = useState<CatalogRow[]>([]);
   const [editing, setEditing] = useState<CatalogRow | "new" | null>(null);
   const [kind, setKind] = useState("part");
+  const [tab, setTab] = useState<"part" | "labor">("part");
+  const [history, setHistory] = useState<{ title: string; rows: PriceLogRow[] | null } | null>(null);
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
   const [warranty, setWarranty] = useState(0);
+
+  async function showHistory(row: CatalogRow) {
+    setHistory({ title: row.title, rows: null });
+    try { setHistory({ title: row.title, rows: await api<PriceLogRow[]>(`/api/v1/catalog/${row.id}/history`) }); }
+    catch { setHistory({ title: row.title, rows: [] }); }
+  }
 
   const load = () => api<CatalogRow[]>("/api/v1/catalog?all=true").then(setRows).catch(() => {});
   useEffect(() => { load(); }, []);
 
   function open(row: CatalogRow | "new") {
     setEditing(row);
-    setKind(row === "new" ? "part" : row.kind === "service" ? "labor" : row.kind);
+    setKind(row === "new" ? tab : row.kind === "service" ? "labor" : row.kind);
     setTitle(row === "new" ? "" : row.title);
     setPrice(row === "new" ? "" : toTomanDigits(row.defaultPriceRials));
     setCost(row === "new" ? "" : toTomanDigits(row.defaultCostRials));
@@ -766,14 +774,22 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
     <section>
       <button className="link back" onClick={onBack}>→ تنظیمات</button>
       <div className="toolbar"><h2 style={{ margin: 0, flex: 1 }}>فهرست قیمت</h2><button className="primary" onClick={() => open("new")}>+ افزودن</button></div>
-      {rows.length === 0 && <p className="empty muted">کالاها و اجرت‌ها و خدمات پرتکرار را با قیمت این‌جا ثبت کنید تا هنگام ثبت در پرونده با چند حرف پیدا شوند.</p>}
+      <div className="segmented wide" role="tablist" aria-label="نوع قلم">
+        {OFFERED_KINDS.map(([k, label]) => (
+          <button type="button" key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k as "part" | "labor")}>{label}</button>
+        ))}
+      </div>
+      {rows.filter((r) => (r.kind === "service" ? "labor" : r.kind) === tab).length === 0 && (
+        <p className="empty muted">{tab === "part" ? "کالاهای پرتکرار را با قیمت خرید و فروش این‌جا ثبت کنید تا هنگام ثبت در پرونده با چند حرف پیدا شوند." : "اجرت‌ها و خدمات پرتکرار را با قیمت این‌جا ثبت کنید تا هنگام ثبت در پرونده با چند حرف پیدا شوند."}</p>
+      )}
       <ul className="list">
-        {rows.map((r) => (
+        {rows.filter((r) => (r.kind === "service" ? "labor" : r.kind) === tab).map((r) => (
           <li key={r.id} className={`row-static${r.isActive ? "" : " inactive"}`}>
             <button className="link" onClick={() => open(r)} style={{ textAlign: "start" }}>
-              <span className={`kind-badge ${r.kind}`}>{KIND_LABELS[r.kind]}</span> {r.title}
+              {r.title}
               <span className="muted small font-num"> · {toman(r.defaultPriceRials)}</span>
             </button>
+            <button type="button" onClick={() => showHistory(r)}>تاریخچه</button>
             <button onClick={() => toggle(r)}>{r.isActive ? "غیرفعال" : "فعال"}</button>
           </li>
         ))}
@@ -798,6 +814,37 @@ export function CatalogView({ onBack, canSeeCost }: { onBack: () => void; canSee
           <button className="primary block">ذخیره</button>
         </form>
       </BottomSheet>
+      <BottomSheet open={!!history} title={history ? `تاریخچه‌ی ${history.title}` : "تاریخچه"} onClose={() => setHistory(null)}>
+        {history && (!history.rows ? <div className="splash" aria-busy="true" /> : <PriceHistory rows={history.rows} canSeeCost={canSeeCost} />)}
+      </BottomSheet>
     </section>
+  );
+}
+
+type PriceLogRow = { id: string; source: string; quantity: number | null; priceRials: number; costRials: number | null; recordedAt: string; caseId: string | null; caseNumber: number | null };
+const PRICE_SOURCE: Record<string, string> = { sale: "فروش در پرونده", sale_edit: "اصلاح قیمت در پرونده", catalog: "ثبت یا ویرایش قیمت" };
+const logDate = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+/** Every time this item was bought and sold, newest first; nothing in it is ever removed. Purchase price and profit are the owner's alone. */
+function PriceHistory({ rows, canSeeCost }: { rows: PriceLogRow[]; canSeeCost: boolean }) {
+  if (rows.length === 0) return <p className="muted small">هنوز خرید یا فروشی برای این قلم ثبت نشده است.</p>;
+  return (
+    <>
+      <p className="muted small">این فهرست دائمی است؛ با تغییر قیمت‌ها چیزی از آن پاک نمی‌شود.</p>
+      <ul className="plain-list price-history">
+        {rows.map((r) => (
+          <li key={r.id} className="stack">
+            <div className="row-between"><strong>{PRICE_SOURCE[r.source] ?? r.source}</strong><span className="muted small">{logDate.format(new Date(r.recordedAt))}</span></div>
+            <div className="row-between small">
+              <span>{r.caseNumber != null && <bdi dir="ltr" className="font-num">CASE-{r.caseNumber}</bdi>}{r.quantity != null && <span className="font-num"> · تعداد {formatNumber(r.quantity)}</span>}</span>
+              <span className="font-num">
+                {canSeeCost && r.costRials != null && <>خرید {formatNumber(Math.round(r.costRials / 10))} · </>}فروش {formatNumber(Math.round(r.priceRials / 10))} تومان
+                {canSeeCost && r.costRials != null && <> · سود {formatNumber(Math.round((r.priceRials - r.costRials) / 10))}</>}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

@@ -41,6 +41,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<CaseItem> CaseItems => Set<CaseItem>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<CatalogItem> CatalogItems => Set<CatalogItem>();
+    public DbSet<CatalogPriceLog> CatalogPriceLogs => Set<CatalogPriceLog>();
     public DbSet<CaseAttachment> CaseAttachments => Set<CaseAttachment>();
     public DbSet<StandardItem> StandardItems => Set<StandardItem>();
     public DbSet<ServicePackage> ServicePackages => Set<ServicePackage>();
@@ -355,6 +356,13 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        b.Entity<CatalogPriceLog>(e =>
+        {
+            e.Property(x => x.Source).HasMaxLength(12);
+            e.Property(x => x.Quantity).HasPrecision(12, 3);
+            e.HasIndex(x => new { x.CatalogItemId, x.RecordedAt });
+            e.HasOne<CatalogItem>().WithMany().HasForeignKey(x => x.CatalogItemId).OnDelete(DeleteBehavior.Restrict);
+        });
         b.Entity<CatalogItem>(e =>
         {
             e.Property(x => x.Kind).HasMaxLength(20);

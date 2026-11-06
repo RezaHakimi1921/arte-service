@@ -17,8 +17,9 @@ public static class IntakeOptionKinds
     public const string Problem = "problem";   // ایراد اعلامی
     public const string Service = "service";   // خدمات درخواستی
     public const string Category = "category"; // دسته‌بندی اصلی ردیف‌های چک‌لیست
+    public const string ServiceCategory = "service_category"; // دسته‌بندی خدمات درخواستی
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string> { Problem, Service, Category };
+    public static readonly IReadOnlySet<string> All = new HashSet<string> { Problem, Service, Category, ServiceCategory };
 }
 
 /// <summary>

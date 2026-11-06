@@ -61,4 +61,20 @@ public sealed class WorkshopCategoryTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.Forbidden, (await owner.PutAsJsonAsync("/api/v1/settings/business", new { vehicleKinds = new[] { "car" } })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync("/api/v1/settings/business", new { instagramId = "my_shop" })).StatusCode);
     }
+
+    [Fact]
+    public async Task Service_categories_are_their_own_list_and_a_rename_follows_the_services()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var cat = (await Json(await owner.PostAsJsonAsync("/api/v1/intake-options", new { kind = "service_category", title = "ترمز" }))).GetProperty("id").GetGuid();
+        await Json(await owner.PostAsJsonAsync("/api/v1/intake-options", new { kind = "category", title = "فقط چک‌لیست" }));
+        await Json(await owner.PostAsJsonAsync("/api/v1/intake-options", new { kind = "service", title = "تعویض لنت", group = "ترمز" }));
+
+        var cats = (await Json(await owner.GetAsync("/api/v1/intake-options?kind=service_category"))).EnumerateArray().Select(x => x.GetProperty("title").GetString()).ToArray();
+        Assert.Equal(["ترمز"], cats);
+
+        (await owner.PatchAsJsonAsync($"/api/v1/intake-options/{cat}", new { title = "ترمز و چرخ" })).EnsureSuccessStatusCode();
+        var services = (await Json(await owner.GetAsync("/api/v1/intake-options?kind=service"))).EnumerateArray().ToList();
+        Assert.Equal("ترمز و چرخ", services.Single().GetProperty("group").GetString());
+    }
 }
