@@ -27,6 +27,7 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 - **Numbers are grouped by three** everywhere they are a quantity or amount (prices, km, counts, totals):
   show `۲۳٬۴۰۰`, never `23400`. Inputs use `NumberInput` (stores raw digits, shows grouped); display uses
   `formatNumber`. **Identifiers are never grouped**: mobile, plate, year, case number, VIN, codes.
+- **Grouping applies on every surface, the customer link included** (any amount a person types or reads: `NumberInput` / `formatNumber`, never a bare `<input>` for money). On the customer link the customer types **no amount**: they only upload the receipt photo; the shop reads the amount off the receipt (it may be partial) and records it, and can open the receipt again later.
 - Amounts and counts: `inputMode="numeric"`. Inputs ≥ 16px font (iOS zoom).
 - Vehicle intake order: type (سواری / شاسی‌بلند / ون / وانت / موتورسیکلت) → brand → model → model year
   (from `web/src/vehicles.ts`; "سایر" allows free text). Production years there are approximate.

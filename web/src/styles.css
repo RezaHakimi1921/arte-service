@@ -1653,7 +1653,7 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 }
 @starting-style { .tk-lightbox { opacity: 0; } }
 .tk-lightbox-content { position: relative; width: min(820px, 100%); overflow: hidden; border-radius: 18px; background: #101218; }
-.tk-lightbox-content > img { display: block; width: 100%; max-height: 72dvh; object-fit: contain; }
+.tk-lightbox-content > img, .tk-lightbox-content > video { display: block; width: 100%; max-height: 72dvh; object-fit: contain; }
 .tk-lightbox-content > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; color: #ffffff; }
 .tk-lightbox-content > div span { color: rgba(255, 255, 255, 0.6); font-size: 0.8rem; }
 .tk-lightbox-close { position: absolute; z-index: 1; top: 10px; inset-inline-end: 10px; display: grid; width: 44px; height: 44px; padding: 0; place-items: center; color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; background: rgba(5, 8, 15, 0.65); }
@@ -2406,3 +2406,50 @@ button.danger-outline { color: var(--danger); background: transparent; border: 1
 .tk-scale button.on span { color: var(--star); font-weight: 700; }
 .tk-back { min-height: 48px; border: 0; background: none; color: var(--accent); font-weight: 700; }
 .tk-back:disabled { opacity: 0.5; }
+
+/* ───────── customer page: connect card and its sheets (pay by card, directions) ───────── */
+.tk-connect-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.tk-connect-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 12px; text-align: start; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 16px; background: var(--surface-2); }
+.tk-connect-icon { display: grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center; border-radius: 13px; }
+.tk-connect-icon svg { width: 22px; height: 22px; }
+.tk-connect-icon.blue { color: var(--accent); background: var(--accent-soft); }
+.tk-connect-icon.green { color: var(--success); background: var(--good-bg); }
+.tk-connect-icon.pink { background: color-mix(in srgb, #d62976 12%, var(--surface)); }
+.tk-connect-icon.orange { color: #c2610c; background: color-mix(in srgb, #f59e0b 16%, var(--surface)); }
+.tk-connect-icon.plain { background: var(--surface); border: 1px solid var(--border); }
+.tk-connect-text { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.tk-connect-text strong { font-size: 0.95rem; }
+.tk-connect-text span { color: var(--muted); font-size: 0.78rem; text-align: start; overflow: hidden; text-overflow: ellipsis; }
+.tk-connect-go { color: var(--soft-text, var(--muted)); }
+.tk-connect-go svg { width: 18px; height: 18px; }
+
+.tk-sheet-body { display: flex; flex-direction: column; gap: 14px; padding-bottom: 8px; }
+.tk-sheet-note { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.9; }
+.tk-sheet-ok { margin: 0; color: var(--success); font-size: 0.88rem; line-height: 1.8; }
+.tk-bankcard { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; min-height: 176px; padding: 20px; overflow: hidden; color: #fff; border-radius: 22px;
+  background: radial-gradient(circle at 85% 0%, rgba(138, 177, 255, 0.35), transparent 40%), linear-gradient(135deg, #2c4fa8, #183579 55%, #10285f); box-shadow: 0 16px 36px rgba(18, 43, 103, 0.28); }
+.tk-bankcard strong { font-size: 1.35rem; font-weight: 800; letter-spacing: 0; text-align: center; word-spacing: 0.25em; }
+.tk-bankcard-bank { font-size: 0.85rem; opacity: 0.85; }
+.tk-bankcard-holder { font-size: 0.85rem; opacity: 0.9; }
+.tk-copy, .tk-upload { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; border-radius: 16px; font-size: 0.95rem; font-weight: 800; cursor: pointer; }
+.tk-copy svg, .tk-upload svg { width: 20px; height: 20px; }
+.tk-copy { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+.tk-copy.done { border-color: var(--success); background: var(--success); color: #fff; }
+.tk-upload { border: 1.5px dashed var(--accent); background: var(--accent-soft); color: var(--accent); }
+.tk-upload.busy { opacity: 0.6; pointer-events: none; }
+.tk-receipts { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tk-receipts li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 0.85rem; }
+.tk-receipts b { font-size: 0.8rem; }
+.tk-receipts .st-pending { color: #c2610c; }
+.tk-receipts .st-approved { color: var(--success); }
+.tk-receipts .st-rejected { color: var(--danger); }
+.tk-receipts small { flex-basis: 100%; color: var(--muted); }
+.tk-photo video { width: 100%; height: 100%; object-fit: cover; }
+.tk-play { position: absolute; inset: 0; display: grid; place-items: center; }
+.tk-play svg { width: 44px; height: 44px; padding: 12px; color: #fff; border-radius: 50%; background: rgba(5, 9, 18, 0.55); fill: currentColor; }
+
+/* a text field with a × that wipes a wrongly picked catalog item */
+.input-clear { position: relative; }
+.input-clear input { width: 100%; padding-inline-end: 48px; }
+.clear-x { position: absolute; inset-block: 0; inset-inline-end: 0; display: grid; width: 48px; place-items: center; padding: 0; border: 0; background: none; color: var(--muted); font-size: 1.6rem; line-height: 1; }
+.clear-x:active { color: var(--danger); }

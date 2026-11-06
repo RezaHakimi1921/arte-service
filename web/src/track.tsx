@@ -4,6 +4,7 @@ import { applyTheme } from "./App";
 import { WAIT_REASONS } from "./labels";
 import { formatNumber } from "./ui";
 import { compress } from "./photos";
+import { BottomSheet } from "./sheet";
 
 type Change = { title: string; state: "kept" | "removed" | "added" };
 
@@ -13,7 +14,7 @@ type Track = {
   shop: { name: string; phone: string | null; address: string | null; instagram?: string | null; maps?: { key: string; name: string; url: string }[] };
   pay?: { card: { cardNumber: string; holderName: string; bank: string | null } | null; receipts: { status: string; claimedRials: number | null; createdAt: string; note: string | null }[] };
   survey: Survey | null;
-  photos: { id: string; stageKey: string; caption: string | null; createdAt: string }[];
+  photos: { id: string; stageKey: string; caption: string | null; createdAt: string; isVideo?: boolean }[];
   case: {
     customer: string | null; openedAt: string; promisedAt: string | null; closedAt: string | null; warrantyUntil: string | null;
     vehicle: { title: string; kind: string; identifier: string | null } | null; reportedProblems: string[]; requestedServices: string[];
@@ -28,7 +29,7 @@ type Track = {
   money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number; payments?: { amountRials: number; method: string; paidAt: string }[] } | null;
 };
 
-type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "plus" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet" | "box" | "chevron";
+type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "plus" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet" | "box" | "chevron" | "back" | "copy" | "pin" | "play";
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -49,6 +50,10 @@ function Icon({ name }: { name: IconName }) {
     wrench: <path d="M14.7 6.3a4.5 4.5 0 0 0-5.6 5.6L3 18l3 3 6.1-6.1a4.5 4.5 0 0 0 5.6-5.6L15 12l-3-3 2.7-2.7Z" />,
     box: <><path d="M21 8 12 3 3 8v8l9 5 9-5Z" /><path d="m3 8 9 5 9-5M12 13v8" /></>,
     chevron: <path d="m6 9 6 6 6-6" />,
+    back: <path d="m15 6-6 6 6 6" />,
+    copy: <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h8" /></>,
+    pin: <><path d="M12 21s7-6.100 7-11a7 7 0 0 0-14 0c0 4.900 7 11 7 11Z" /><circle cx="12" cy="10" r="2.500" /></>,
+    play: <path d="m8 5 11 7-11 7Z" />,
     wallet: <><rect x="3" y="6" width="18" height="14" rx="3" /><path d="M3 10h18M16 15h2" /></>,
   };
   return (
@@ -60,13 +65,14 @@ function Icon({ name }: { name: IconName }) {
 
 const cardGroups = (n: string) => n.replace(/(\d{4})(?=\d)/g, "$1 ");
 
-/** Pay by card: the shop's card with a copy button, and a way to send the bank receipt. */
-function PaySection({ code, pay, owe, onSent }: { code: string; pay: NonNullable<Track["pay"]>; owe: boolean; onSent: () => void }) {
+/**
+ * Pay by card, in a sheet: the shop's card to copy, then the bank receipt as a photo. The customer never types an
+ * amount: the shop reads it off the receipt and records what was really paid (possibly only part of the invoice).
+ */
+function PaySheet({ open, onClose, code, pay, owe, onSent }: { open: boolean; onClose: () => void; code: string; pay: NonNullable<Track["pay"]>; owe: boolean; onSent: () => void }) {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [amount, setAmount] = useState("");
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
-  const digits = (s: string) => s.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/\D/g, "");
 
   async function copy() {
     try { await navigator.clipboard.writeText(pay.card!.cardNumber); setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -81,9 +87,7 @@ function PaySection({ code, pay, owe, onSent }: { code: string; pay: NonNullable
       const blob = await compress(file);
       const form = new FormData();
       form.append("file", blob, "receipt.jpg");
-      if (digits(amount)) form.append("amountRials", String(Number(digits(amount)) * 10));
       await api(`/api/v1/track/${code}/receipts`, { body: form });
-      setAmount("");
       setMsg({ text: "رسید ارسال شد؛ بعد از بررسی تعمیرگاه، پرداخت شما ثبت می‌شود.", ok: true });
       onSent();
     } catch (err) {
@@ -93,36 +97,37 @@ function PaySection({ code, pay, owe, onSent }: { code: string; pay: NonNullable
 
   const label: Record<string, string> = { pending: "در انتظار بررسی", approved: "تأیید شد", rejected: "رد شد" };
   return (
-    <section className="tk-card tk-pay">
-      <h3>پرداخت</h3>
-      {pay.card && (
-        <div className="tk-card-number">
-          <span>کارت به کارت · {pay.card.holderName}{pay.card.bank ? ` · ${pay.card.bank}` : ""}</span>
-          <strong dir="ltr" className="font-num">{cardGroups(pay.card.cardNumber)}</strong>
-          <button type="button" className="secondary" onClick={copy}>{copied ? "کپی شد ✓" : "کپی شماره کارت"}</button>
-        </div>
-      )}
-      {owe && (
-        <>
-          <label className="field">
-            <span>مبلغ واریزی (تومان، اختیاری)</span>
-            <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} maxLength={14} />
-          </label>
-          <label className={`button receipt-button${busy ? " busy" : ""}`} aria-busy={busy}>
+    <BottomSheet open={open} title="کارت به کارت" onClose={onClose}>
+      <div className="tk-sheet-body">
+        {pay.card && (
+          <>
+            <p className="tk-sheet-note">مبلغ را به این کارت واریز کنید، سپس عکس رسید را بفرستید.</p>
+            <div className="tk-bankcard">
+              <span className="tk-bankcard-bank">{pay.card.bank ?? "کارت بانکی"}</span>
+              <strong dir="ltr" className="font-num">{cardGroups(pay.card.cardNumber)}</strong>
+              <span className="tk-bankcard-holder">به نام {pay.card.holderName}</span>
+            </div>
+            <button type="button" className={`tk-copy${copied ? " done" : ""}`} onClick={copy}>
+              <Icon name={copied ? "check" : "copy"} />{copied ? "شماره کارت کپی شد" : "کپی شماره کارت"}
+            </button>
+          </>
+        )}
+        {owe && (
+          <label className={`tk-upload${busy ? " busy" : ""}`} aria-busy={busy}>
             <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { void send(e.target.files); e.target.value = ""; }} />
-            {busy ? "در حال ارسال…" : "ارسال عکس رسید واریز"}
+            <Icon name="camera" />{busy ? "در حال ارسال رسید…" : "ارسال عکس رسید واریز"}
           </label>
-        </>
-      )}
-      {msg && <p className={msg.ok ? "hint" : "error"} role="status">{msg.text}</p>}
-      {pay.receipts.length > 0 && (
-        <ul className="plain-list">
-          {pay.receipts.map((r, i) => (
-            <li key={i}>{when(r.createdAt)} · {label[r.status] ?? r.status}{r.status === "rejected" && r.note ? ` (${r.note})` : ""}</li>
-          ))}
-        </ul>
-      )}
-    </section>
+        )}
+        {msg && <p className={msg.ok ? "tk-sheet-ok" : "tk-error"} role="status">{msg.text}</p>}
+        {pay.receipts.length > 0 && (
+          <ul className="tk-receipts">
+            {pay.receipts.map((r, i) => (
+              <li key={i}><span>{when(r.createdAt)}</span><b className={`st-${r.status}`}>{label[r.status] ?? r.status}</b>{r.status === "rejected" && r.note && <small>{r.note}</small>}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -445,6 +450,68 @@ function Tabs({ view, onChange, className }: { view: "tracking" | "survey"; onCh
   );
 }
 
+const instagramUrl = (h: string) => `https://instagram.com/${encodeURIComponent(h)}`;
+
+/** «تعمیرگاه در دسترس شما»: pay, call, Instagram and directions as one list; pay and directions open sheets. */
+function ConnectCard({ t, code, onSent }: { t: Track; code: string; onSent: () => void }) {
+  const [sheet, setSheet] = useState<"pay" | "maps" | null>(null);
+  const owe = (t.money?.balanceRials ?? 0) > 0;
+  const showPay = !!t.pay && (owe || t.pay.receipts.length > 0);
+  const maps = t.shop.maps ?? [];
+  const mask = t.pay?.card ? cardGroups(t.pay.card.cardNumber) : null;
+  const rows: { key: string; icon: ReactNode; tone: string; title: string; sub?: string; ltr?: boolean; onClick?: () => void; href?: string }[] = [];
+  if (showPay) rows.push({ key: "pay", icon: <Icon name="wallet" />, tone: "blue", title: owe ? "پرداخت کارت‌به‌کارت" : "رسیدهای پرداخت", sub: owe && mask ? mask : undefined, ltr: true, onClick: () => setSheet("pay") });
+  if (t.shop.phone) rows.push({ key: "call", icon: <Icon name="phone" />, tone: "green", title: "تماس با تعمیرگاه", sub: t.shop.phone, ltr: true, href: `tel:${t.shop.phone}` });
+  if (t.shop.instagram) rows.push({ key: "ig", icon: <InstagramIcon size={22} />, tone: "pink", title: "اینستاگرام", sub: `@${t.shop.instagram}`, ltr: true, href: instagramUrl(t.shop.instagram) });
+  if (maps.length > 0) rows.push({ key: "maps", icon: <Icon name="pin" />, tone: "orange", title: "مسیریابی تعمیرگاه", sub: "باز کردن در برنامه‌ی نقشه", onClick: () => setSheet("maps") });
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <section className="tk-card tk-connect" aria-label="ارتباط با تعمیرگاه">
+        <div className="tk-section-title">
+          <span className="tk-section-icon"><Icon name="phone" /></span>
+          <div><span>ارتباط سریع</span><h2>تعمیرگاه در دسترس شما</h2></div>
+        </div>
+        <ul className="tk-connect-list">
+          {rows.map((r) => {
+            const body = (
+              <>
+                <span className={`tk-connect-icon ${r.tone}`}>{r.icon}</span>
+                <span className="tk-connect-text"><strong>{r.title}</strong>{r.sub && <span dir={r.ltr ? "ltr" : undefined} className={r.ltr ? "font-num" : undefined}>{r.sub}</span>}</span>
+                <span className="tk-connect-go" aria-hidden="true"><Icon name="back" /></span>
+              </>
+            );
+            return (
+              <li key={r.key}>
+                {r.href
+                  ? <a className="tk-connect-row" href={r.href} {...(r.href.startsWith("http") ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{body}</a>
+                  : <button type="button" className="tk-connect-row" onClick={r.onClick}>{body}</button>}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+      {t.pay && <PaySheet open={sheet === "pay"} onClose={() => setSheet(null)} code={code} pay={owe ? t.pay : { ...t.pay, card: null }} owe={owe} onSent={onSent} />}
+      <BottomSheet open={sheet === "maps"} title="مسیریابی" onClose={() => setSheet(null)}>
+        <div className="tk-sheet-body">
+          <p className="tk-sheet-note">با کدام برنامه مسیر را باز کنیم؟</p>
+          <ul className="tk-connect-list">
+            {maps.map((m) => (
+              <li key={m.key}>
+                <a className="tk-connect-row" href={m.url} target="_blank" rel="noopener noreferrer" onClick={() => setSheet(null)}>
+                  <span className="tk-connect-icon plain"><MapIcon name={m.key} /></span>
+                  <span className="tk-connect-text"><strong>{m.name}</strong><span>باز کردن مسیر</span></span>
+                  <span className="tk-connect-go" aria-hidden="true"><Icon name="back" /></span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </BottomSheet>
+    </>
+  );
+}
+
 /**
  * The customer's page (/t/{code}): no sign-in, read-only, only what the shop chose to share. After delivery it
  * carries the satisfaction survey; the survey SMS links to /s/{code}, which opens the same page at the survey.
@@ -547,6 +614,21 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         )}
 
         <div className="tk-grid">
+        {(problems.length > 0 || services.length > 0) && (
+          <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">
+            <div className="tk-requests">
+              {problems.length > 0 && <ChangeList label="ایرادهای گزارش‌شده" items={problems} open={requestsOpen} />}
+              {services.length > 0 && <ChangeList label="خدمات درخواستی" items={services} open={requestsOpen} rows />}
+            </div>
+            {tooLong && (
+              <button className="tk-expand" type="button" onClick={() => setRequestsOpen(!requestsOpen)} aria-expanded={requestsOpen}>
+                {requestsOpen ? "نمایش کمتر" : "نمایش همه"}
+              </button>
+            
+            )}
+          </Section>
+        )}
+
         <Section icon="wrench" eyebrow="وضعیت لحظه‌ای" title="مسیر کار">
           <div className="tk-note">
             <span className="tk-dot" aria-hidden="true" />
@@ -572,30 +654,17 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         </Section>
 
         {t.photos.length > 0 && (
-          <Section icon="camera" eyebrow="گزارش تصویری" title="تصاویر کار" action={<span className="tk-count">{formatNumber(t.photos.length)} تصویر</span>}>
+          <Section icon="camera" eyebrow="گزارش تصویری" title="تصاویر و فیلم کار" action={<span className="tk-count">{formatNumber(t.photos.length)} مورد</span>}>
             <div className="tk-photos">
               {t.photos.map((p, i) => (
                 <button className="tk-photo" type="button" key={p.id} onClick={() => setPhoto(i)}>
-                  <img src={photoUrl(p.id)} alt={p.caption ?? `تصویر مرحله‌ی ${STAGE_NAMES[p.stageKey] ?? ""}`} loading="lazy" />
+                  {p.isVideo
+                    ? <><video src={photoUrl(p.id)} muted playsInline preload="metadata" /><span className="tk-play" aria-hidden="true"><Icon name="play" /></span></>
+                    : <img src={photoUrl(p.id)} alt={p.caption ?? `تصویر مرحله‌ی ${STAGE_NAMES[p.stageKey] ?? ""}`} loading="lazy" />}
                   <span className="tk-photo-label">{p.caption ?? `مرحله‌ی ${STAGE_NAMES[p.stageKey] ?? ""}`}</span>
                 </button>
               ))}
             </div>
-          </Section>
-        )}
-
-        {(problems.length > 0 || services.length > 0) && (
-          <Section icon="document" eyebrow="شرح پذیرش" title="درخواست شما">
-            <div className="tk-requests">
-              {problems.length > 0 && <ChangeList label="ایرادهای گزارش‌شده" items={problems} open={requestsOpen} />}
-              {services.length > 0 && <ChangeList label="خدمات درخواستی" items={services} open={requestsOpen} rows />}
-            </div>
-            {tooLong && (
-              <button className="tk-expand" type="button" onClick={() => setRequestsOpen(!requestsOpen)} aria-expanded={requestsOpen}>
-                {requestsOpen ? "نمایش کمتر" : "نمایش همه"}
-              </button>
-            
-            )}
           </Section>
         )}
 
@@ -652,35 +721,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </Section>
         )}
 
-        {t.pay && ((t.money?.balanceRials ?? 0) > 0 || t.pay.receipts.length > 0) && (
-          <PaySection code={code} pay={(t.money?.balanceRials ?? 0) > 0 ? t.pay : { ...t.pay, card: null }} owe={(t.money?.balanceRials ?? 0) > 0} onSent={() => api<Track>(`/api/v1/track/${code}`).then((d) => setT(withoutInternalSteps(d))).catch(() => {})} />
-        )}
-
-        {t.shop.phone && (
-          <section className="tk-help">
-            <div className="tk-help-icon"><Icon name="phone" /></div>
-            <div>
-              <strong>سؤالی دارید؟</strong>
-              <span>با تعمیرگاه تماس بگیرید.</span>
-            </div>
-            <a className="tk-call" href={`tel:${t.shop.phone}`}>تماس</a>
-          </section>
-        )}
-
-        {((t.shop.maps?.length ?? 0) > 0 || t.shop.instagram) && (
-          <section className="tk-links" aria-label="نشانی و شبکه‌های اجتماعی">
-            {(t.shop.maps?.length ?? 0) > 0 && (
-              <div className="tk-maps" role="group" aria-label="مسیریابی">
-                {t.shop.maps!.map((m) => <a key={m.key} href={m.url} target="_blank" rel="noopener noreferrer" aria-label={`مسیریابی با ${m.name}`} title={m.name}><MapIcon name={m.key} /><span>{m.name}</span></a>)}
-              </div>
-            )}
-            {t.shop.instagram && (
-              <a className="tk-insta" href={`https://instagram.com/${encodeURIComponent(t.shop.instagram)}`} target="_blank" rel="noopener noreferrer" dir="ltr">
-                <InstagramIcon /> <span>@{t.shop.instagram}</span>
-              </a>
-            )}
-          </section>
-        )}
+        <ConnectCard t={t} code={code} onSent={() => api<Track>(`/api/v1/track/${code}`).then((d) => setT(withoutInternalSteps(d))).catch(() => {})} />
         </div>
       </div>
 
@@ -688,7 +729,9 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         <div className="tk-lightbox" role="dialog" aria-modal="true" aria-label="نمایش تصویر" onClick={() => setPhoto(null)}>
           <div className="tk-lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button className="tk-lightbox-close" type="button" onClick={() => setPhoto(null)} aria-label="بستن تصویر"><Icon name="close" /></button>
-            <img src={photoUrl(t.photos[photo].id)} alt={t.photos[photo].caption ?? ""} />
+            {t.photos[photo].isVideo
+              ? <video src={photoUrl(t.photos[photo].id)} controls autoPlay playsInline />
+              : <img src={photoUrl(t.photos[photo].id)} alt={t.photos[photo].caption ?? ""} />}
             <div>
               <span>مرحله‌ی {STAGE_NAMES[t.photos[photo].stageKey] ?? ""}</span>
               <strong>{t.photos[photo].caption ?? when(t.photos[photo].createdAt)}</strong>

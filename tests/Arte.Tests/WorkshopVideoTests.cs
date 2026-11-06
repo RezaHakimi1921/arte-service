@@ -33,7 +33,7 @@ public sealed class WorkshopVideoTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task A_short_video_is_saved_with_the_case_and_never_shown_to_the_customer()
+    public async Task A_short_video_is_saved_with_the_case_and_shown_to_the_customer_only_when_shared()
     {
         var (owner, _) = await api.NewBusinessAsync();
         var id = (await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
@@ -43,7 +43,7 @@ public sealed class WorkshopVideoTests(ArteApiFactory api)
         }))).GetProperty("id").GetGuid();
         var code = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("trackingCode").GetString()!;
 
-        var created = await Json(await owner.PostAsync($"/api/v1/cases/{id}/attachments", File(Mp4(), "video/mp4", "v.mp4")));
+        var created = await Json(await owner.PostAsync($"/api/v1/cases/{id}/attachments", File(Mp4(), "video/mp4", "v.mp4", visible: false)));
         var fileId = created.GetProperty("id").GetGuid();
         Assert.False(created.GetProperty("visibleToCustomer").GetBoolean());
 
@@ -55,6 +55,12 @@ public sealed class WorkshopVideoTests(ArteApiFactory api)
         var track = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
         Assert.Empty(track.GetProperty("photos").EnumerateArray());
         Assert.Equal(HttpStatusCode.NotFound, (await api.Client().GetAsync($"/api/v1/track/{code}/photos/{fileId}")).StatusCode);
+
+        // Shared on purpose, the customer sees it and can play it.
+        Assert.Equal(HttpStatusCode.OK, (await owner.PatchAsJsonAsync($"/api/v1/attachments/{fileId}", new { visibleToCustomer = true })).StatusCode);
+        track = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        Assert.True(track.GetProperty("photos").EnumerateArray().Single().GetProperty("isVideo").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await api.Client().GetAsync($"/api/v1/track/{code}/photos/{fileId}")).StatusCode);
 
         // A wrongly uploaded video can be deleted by hand.
         Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/api/v1/attachments/{fileId}")).StatusCode);

@@ -150,11 +150,11 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
               ? <video className="photo-full" src={viewing.url} controls playsInline />
               : <img className="photo-full" src={viewing.url} alt={viewing.photo.caption ?? ""} />}
             <p className="muted small">{new Intl.DateTimeFormat("fa-IR-u-ca-persian", { dateStyle: "medium", timeStyle: "short" }).format(new Date(viewing.photo.createdAt))}</p>
-            {!viewing.photo.isVideo && <label className="setting-row">
-              <span><strong>مشتری این عکس را ببیند</strong><span className="muted small">در صفحه‌ی پیگیری مشتری نشان داده می‌شود.</span></span>
+            <label className="setting-row">
+              <span><strong>مشتری این {viewing.photo.isVideo ? "فیلم" : "عکس"} را ببیند</strong><span className="muted small">در صفحه‌ی پیگیری مشتری نشان داده می‌شود.</span></span>
               <input type="checkbox" role="switch" className="switch" checked={viewing.photo.visibleToCustomer} disabled={busy}
                 onChange={(e) => toggleShare(viewing.photo, e.target.checked)} />
-            </label>}
+            </label>
             <SheetOption label={viewing.photo.isVideo ? "حذف فیلم" : "حذف عکس"} tone="danger" disabled={busy} onClick={() => remove(viewing.photo)} />
           </>
         )}
