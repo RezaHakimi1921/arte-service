@@ -28,6 +28,9 @@ public sealed class RolesTests(ArteApiFactory api)
             newAsset = new { title = "هوندا CG 125", kind = "motorcycle" },
         }))).GetProperty("id").GetGuid();
 
+    private static string Report =>
+        $"/api/v1/reports/summary?from={Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(-7).ToString("O"))}&to={Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(1).ToString("O"))}";
+
     private static string[] Perms(JsonElement me) =>
         me.GetProperty("business").GetProperty("permissions").EnumerateArray().Select(x => x.GetString()!).ToArray();
 
@@ -54,7 +57,7 @@ public sealed class RolesTests(ArteApiFactory api)
         var (owner, _) = await api.NewBusinessAsync();
         var mechanic = await MemberAsync(owner, "technician");
         Assert.Equal(HttpStatusCode.Created, (await mechanic.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), request = "x" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await mechanic.GetAsync("/api/v1/reports/summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await mechanic.GetAsync(Report)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await mechanic.GetAsync("/api/v1/staff")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await mechanic.PutAsJsonAsync("/api/v1/settings/business", new { name = "x" })).StatusCode);
     }
@@ -64,7 +67,7 @@ public sealed class RolesTests(ArteApiFactory api)
     {
         var (owner, _) = await api.NewBusinessAsync();
         var senior = await MemberAsync(owner, "supervisor");
-        Assert.Equal(HttpStatusCode.OK, (await senior.GetAsync("/api/v1/reports/summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await senior.GetAsync(Report)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await senior.PutAsJsonAsync("/api/v1/settings/business", new { name = "x" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await senior.GetAsync("/api/v1/trash/videos")).StatusCode);
     }
@@ -90,7 +93,7 @@ public sealed class RolesTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.Forbidden, (await apprentice.PostAsJsonAsync($"/api/v1/cases/{caseId}/assign", new { assigneeId = (Guid?)null })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await apprentice.PutAsJsonAsync("/api/v1/settings/business", new { name = "x" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await apprentice.PostAsJsonAsync("/api/v1/staff", new { mobile = ArteApiFactory.NewMobile(), role = "technician" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await apprentice.GetAsync("/api/v1/reports/summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await apprentice.GetAsync(Report)).StatusCode);
     }
 
     [Fact]
