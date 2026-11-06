@@ -43,7 +43,7 @@ public sealed class WorkshopVideoTests(ArteApiFactory api)
         }))).GetProperty("id").GetGuid();
         var code = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("trackingCode").GetString()!;
 
-        var created = await Json(await owner.PostAsync($"/api/v1/cases/{id}/attachments", File(Mp4(), "video/mp4", "v.mp4")));
+        var created = await Json(await owner.PostAsync($"/api/v1/cases/{id}/attachments", File(Mp4(), "video/mp4", "v.mp4", visible: false)));
         var fileId = created.GetProperty("id").GetGuid();
         Assert.False(created.GetProperty("visibleToCustomer").GetBoolean());
 
