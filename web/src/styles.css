@@ -2453,3 +2453,10 @@ button.danger-outline { color: var(--danger); background: transparent; border: 1
 .input-clear input { width: 100%; padding-inline-end: 48px; }
 .clear-x { position: absolute; inset-block: 0; inset-inline-end: 0; display: grid; width: 48px; place-items: center; padding: 0; border: 0; background: none; color: var(--muted); font-size: 1.6rem; line-height: 1; }
 .clear-x:active { color: var(--danger); }
+
+.logo-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.logo-preview { display: grid; width: 72px; height: 72px; place-items: center; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--surface-2); }
+.logo-preview img { width: 100%; height: 100%; object-fit: contain; }
+.tk-mark.logo { background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+.tk-mark.logo img { width: 100%; height: 100%; object-fit: contain; }
+.inv-thumb img { width: 100%; height: 100%; object-fit: contain; }

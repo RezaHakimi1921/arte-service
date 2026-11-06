@@ -5,13 +5,14 @@ import { WAIT_REASONS } from "./labels";
 import { formatNumber } from "./ui";
 import { compress } from "./photos";
 import { BottomSheet } from "./sheet";
+import { ItemIcon, matchesIcon } from "./itemIcons";
 
 type Change = { title: string; state: "kept" | "removed" | "added" };
 
 type Survey = { state: "open" | "answered" | "expired"; questions: { id: string; text: string }[] | null; score: number | null };
 
 type Track = {
-  shop: { name: string; phone: string | null; address: string | null; instagram?: string | null; maps?: { key: string; name: string; url: string }[] };
+  shop: { name: string; phone: string | null; address: string | null; instagram?: string | null; hasLogo?: boolean; maps?: { key: string; name: string; url: string }[] };
   pay?: { card: { cardNumber: string; holderName: string; bank: string | null } | null; receipts: { status: string; claimedRials: number | null; createdAt: string; note: string | null }[] };
   survey: Survey | null;
   photos: { id: string; stageKey: string; caption: string | null; createdAt: string; isVideo?: boolean }[];
@@ -251,6 +252,7 @@ const dayTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "long",
 const time = new Intl.DateTimeFormat("fa-IR", { hour: "2-digit", minute: "2-digit" });
 const shortDay = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
+const hasWords = (title: string) => matchesIcon(title);
 const PAY_METHOD: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
 const KIND: Record<string, string> = { part: "کالا", labor: "اجرت", service: "اجرت" };
 const STAGE_NAMES: Record<string, string> = {
@@ -566,7 +568,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
       <header className="tk-top">
         <div className="tk-top-inner">
           <div className="tk-brand">
-            <span className="tk-mark" aria-hidden="true"><Icon name="wrench" /></span>
+            <span className={`tk-mark${t.shop.hasLogo ? " logo" : ""}`} aria-hidden="true">{t.shop.hasLogo ? <img src={`/api/v1/track/${code}/logo`} alt="" /> : <Icon name="wrench" />}</span>
             <div><strong>{t.shop.name}</strong>{t.shop.address && <span>{t.shop.address}</span>}</div>
           </div>
           {t.survey && <Tabs view={view} onChange={go} className="tk-tabs top" />}
@@ -675,7 +677,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                 {t.items.map((i, k) => (
                   <li className="inv-row" key={k}>
                     <span className={`inv-thumb ${i.kind === "part" ? "part" : "labor"}`}>
-                      {i.image ? <img src={i.image} alt="" loading="lazy" /> : <Icon name={i.kind === "part" ? "box" : "wrench"} />}
+                      {i.image ? <img src={i.image} alt="" loading="lazy" /> : t.shop.hasLogo && i.kind !== "part" && !hasWords(i.title) ? <img src={`/api/v1/track/${code}/logo`} alt="" /> : <ItemIcon title={i.title} kind={i.kind} />}
                     </span>
                     <span className="inv-body">
                       <span className="inv-title">{i.title}</span>

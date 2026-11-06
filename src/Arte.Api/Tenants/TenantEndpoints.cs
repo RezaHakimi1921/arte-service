@@ -28,6 +28,18 @@ public static class TenantEndpoints
         url.Length <= 300 && Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
         && hosts.Any(h => u.Host.Equals(h, StringComparison.OrdinalIgnoreCase) || u.Host.EndsWith("." + h, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The logo file for a stored relative path, or 404 when none is set or the file is missing.</summary>
+    internal static IResult LogoFile(string? relative, IConfiguration config, IHostEnvironment env)
+    {
+        if (string.IsNullOrEmpty(relative)) return Results.NotFound();
+        var root = Arte.Api.Cases.AttachmentEndpoints.Root(config, env);
+        var rootWithSeparator = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        var full = Path.GetFullPath(Path.Combine(root, relative));
+        if (!full.StartsWith(rootWithSeparator, StringComparison.Ordinal) || !File.Exists(full)) return Results.NotFound();
+        var type = Path.GetExtension(full).ToLowerInvariant() switch { ".png" => "image/png", ".webp" => "image/webp", _ => "image/jpeg" };
+        return Results.File(full, type);
+    }
+
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/v1/me", async (RequestUser me, ArteDbContext db, IConfiguration config, IClock clock, CancellationToken ct) =>
@@ -73,9 +85,49 @@ public static class TenantEndpoints
                     t.Name, t.Phone, t.Address, t.RequireAssigneeOnIntake, t.RequireCustomerApproval, t.RequireFinalReview,
                     t.BusinessType, t.VehicleKinds, t.CustomerSmsEnabled, t.SmsOnOpened, t.SmsOnReady, t.SmsOnDelivered,
                     t.TrackShowStages, t.TrackShowItems, t.TrackShowAmounts, t.PhotosVisibleByDefault,
-                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt, t.RequirePaymentBeforeWork, t.TrackShowPhone, t.InstagramId, t.MapNeshanUrl, t.MapGoogleUrl, t.MapWazeUrl, t.MapBaladUrl, t.SmsOnWaitingPart, t.SmsToMasterOnFinished,
+                    t.SurveyEnabled, t.SurveySendOn, t.SurveyDelayMinutes, t.SurveyAlertBelow, t.RequireTransferReceipt, t.RequirePaymentBeforeWork, t.TrackShowPhone, t.InstagramId, t.MapNeshanUrl, t.MapGoogleUrl, t.MapWazeUrl, t.MapBaladUrl, t.SmsOnWaitingPart, t.SmsToMasterOnFinished, HasLogo = t.LogoPath != null,
                 }).SingleAsync(ct)))
             .RequirePermission(Permissions.SettingsManage);
+
+        // The shop's logo: one small image, replaced or removed (the old file stays on disk, only the link is cleared).
+        app.MapPost("/api/v1/settings/business/logo", async (HttpRequest request, RequestUser me, ArteDbContext db, Audit audit,
+            IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
+        {
+            if (!request.HasFormContentType) return Results.Problem(statusCode: 400, title: "فایلی ارسال نشده است.");
+            var file = (await request.ReadFormAsync(ct)).Files.GetFile("file");
+            if (file is null || file.Length == 0) return Results.Problem(statusCode: 400, title: "فایلی ارسال نشده است.");
+            if (file.Length > 1_000_000) return Results.Problem(statusCode: 400, title: "حجم لوگو حداکثر ۱ مگابایت است.");
+            await using var buffer = new MemoryStream();
+            await file.CopyToAsync(buffer, ct);
+            var bytes = buffer.ToArray();
+            if (Arte.Api.Cases.AttachmentEndpoints.Sniff(bytes) is not { } kind)
+                return Results.Problem(statusCode: 400, title: "لوگو باید عکس JPG، PNG یا WebP باشد.");
+            var tenantId = me.RequiredMembership.TenantId;
+            var relative = Path.Combine(tenantId.ToString("N"), $"logo-{Guid.CreateVersion7():N}.{kind.Ext}");
+            var full = Path.Combine(Arte.Api.Cases.AttachmentEndpoints.Root(config, env), relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            await File.WriteAllBytesAsync(full, bytes, ct);
+            var t = await db.Tenants.SingleAsync(x => x.Id == tenantId, ct);
+            t.LogoPath = relative.Replace('\\', '/');
+            audit.Record("settings.logo_changed", t.Id, me.RequiredUserId);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.SettingsManage);
+
+        app.MapDelete("/api/v1/settings/business/logo", async (RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
+        {
+            var t = await db.Tenants.SingleAsync(x => x.Id == me.RequiredMembership.TenantId, ct);
+            t.LogoPath = null;
+            audit.Record("settings.logo_removed", t.Id, me.RequiredUserId);
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.SettingsManage);
+
+        app.MapGet("/api/v1/settings/business/logo", async (RequestUser me, ArteDbContext db, IConfiguration config, IHostEnvironment env, CancellationToken ct) =>
+        {
+            var path = await db.Tenants.AsNoTracking().Where(t => t.Id == me.RequiredMembership.TenantId).Select(t => t.LogoPath).SingleAsync(ct);
+            return LogoFile(path, config, env);
+        }).RequireAuthorization();
 
         app.MapPut("/api/v1/settings/business", async (BusinessSettings req, RequestUser me, ArteDbContext db, Audit audit, CancellationToken ct) =>
         {
