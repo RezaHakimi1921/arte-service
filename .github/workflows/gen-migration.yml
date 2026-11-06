@@ -1,0 +1,45 @@
+# TEMPORARY: generates an EF Core migration on a throwaway branch and uploads it as an artifact. Never merged.
+name: gen-migration-3
+on:
+  push:
+    branches: [tmp/gen-migration-3]
+permissions:
+  contents: read
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: arte
+          POSTGRES_PASSWORD: arte_dev_only
+          POSTGRES_DB: arte
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U arte" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet tool restore
+      - run: dotnet restore Arte.slnx
+      - run: dotnet build Arte.slnx -c Debug --no-restore 2>&1 | grep -E 'error|Warn|Error' | head -40 || true
+      - env:
+          ASPNETCORE_ENVIRONMENT: Development
+        run: |
+          dotnet ef migrations add CatalogPriceLog -p src/Arte.Core -s src/Arte.Api -o Data/Migrations
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migration
+          path: src/Arte.Core/Data/Migrations
+      - run: |
+          cd src/Arte.Core/Data/Migrations
+          git status --short . | cat
+          tar czf /tmp/m.tgz $(git status --short . | awk '{print $2}')
+          echo "B64START"; base64 -w0 /tmp/m.tgz; echo; echo "B64END"
