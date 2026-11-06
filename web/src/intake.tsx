@@ -120,20 +120,27 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const [busy, setBusy] = useState(false);
   const { notify } = useFeedback();
   // Photos taken at intake stay on the phone (already compressed) until the case exists, then are uploaded.
-  const [shots, setShots] = useState<{ blob: Blob; url: string }[]>([]);
+  const [shots, setShots] = useState<{ blob: Blob; url: string; video?: boolean }[]>([]);
   const [shotBusy, setShotBusy] = useState(false);
   const shotInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
   useEffect(() => () => shots.forEach((x) => URL.revokeObjectURL(x.url)), []); // eslint-disable-line react-hooks/exhaustive-deps
   async function addShots(files: FileList | null) {
     if (!files || files.length === 0) return;
     setShotBusy(true);
     try {
-      const made: { blob: Blob; url: string }[] = [];
-      for (const f of Array.from(files).slice(0, 6)) { const blob = await compress(f); made.push({ blob, url: URL.createObjectURL(blob) }); }
+      const made: { blob: Blob; url: string; video?: boolean }[] = [];
+      for (const f of Array.from(files).slice(0, 6)) {
+        if (f.type.startsWith("video/")) {
+          if (f.size > 30 * 1024 * 1024) { notify("فیلم بزرگ‌تر از ۳۰ مگابایت است؛ کوتاه‌تر ضبط کنید.", "error"); continue; }
+          made.push({ blob: f, url: URL.createObjectURL(f), video: true });
+        } else { const blob = await compress(f); made.push({ blob, url: URL.createObjectURL(blob) }); }
+      }
       setShots((cur) => cur.concat(made).slice(0, 6));
     } finally {
       setShotBusy(false);
       if (shotInput.current) shotInput.current.value = "";
+      if (videoInput.current) videoInput.current.value = "";
     }
   }
   function dropShot(i: number) {
@@ -312,7 +319,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       for (const shot of shots) {
         try {
           const form = new FormData();
-          form.append("file", shot.blob, "photo.jpg");
+          form.append("file", shot.blob, shot.video ? "video.mp4" : "photo.jpg");
           await api(`/api/v1/cases/${created.id}/attachments`, { body: form });
         } catch { failed++; }
       }
@@ -562,24 +569,30 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
       {requireAssignee && assigneeSection}
 
-      <Section icon="camera" title="عکس وسیله (اختیاری)" badge={shots.length > 0 && <span className="badge good">{formatNumber(shots.length)} عکس</span>}>
+      <Section icon="camera" title="عکس و فیلم وسیله" badge={shots.length > 0 && <span className="badge good">{formatNumber(shots.length)} مورد</span>}>
         <input ref={shotInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => addShots(e.target.files)} />
+        <input ref={videoInput} type="file" accept="video/*" capture="environment" hidden onChange={(e) => addShots(e.target.files)} />
         {shots.length > 0 && (
           <div className="photo-grid">
             {shots.map((x, i) => (
               <div className="photo-thumb" key={x.url}>
-                <img src={x.url} alt={`عکس ${formatNumber(i + 1)}`} />
+                {x.video ? <video src={x.url} muted playsInline preload="metadata" /> : <img src={x.url} alt={`عکس ${formatNumber(i + 1)}`} />}
                 <button type="button" className="photo-remove" aria-label="حذف این عکس" onClick={() => dropShot(i)}>×</button>
               </div>
             ))}
           </div>
         )}
         {shots.length < 6 && (
-          <button type="button" className="block secondary" onClick={() => shotInput.current?.click()} disabled={shotBusy || busy} aria-busy={shotBusy}>
-            {shotBusy ? "در حال آماده‌سازی عکس…" : shots.length > 0 ? "📷 افزودن عکس دیگر" : "📷 گرفتن عکس از وسیله"}
-          </button>
+          <div className="grid-2">
+            <button type="button" className="block secondary" onClick={() => shotInput.current?.click()} disabled={shotBusy || busy} aria-busy={shotBusy}>
+              {shotBusy ? "در حال آماده‌سازی…" : "📷 عکس"}
+            </button>
+            <button type="button" className="block secondary" onClick={() => videoInput.current?.click()} disabled={shotBusy || busy} aria-busy={shotBusy}>
+              {shotBusy ? "در حال آماده‌سازی…" : "🎥 فیلم"}
+            </button>
+          </div>
         )}
-        <p className="hint">وضعیت ظاهری وسیله هنگام تحویل؛ بعد از ثبت پذیرش در پرونده می‌ماند.</p>
+        <p className="hint">وضعیت ظاهری وسیله هنگام تحویل؛ بعد از ثبت پذیرش در پرونده می‌ماند. فیلم فقط برای کارگاه است (تا ۳۰ مگابایت).</p>
       </Section>
 
       {full && (

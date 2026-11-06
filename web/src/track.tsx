@@ -124,6 +124,23 @@ function PaySection({ code, pay, owe, onSent }: { code: string; pay: NonNullable
   );
 }
 
+/** Instagram's camera-in-a-rounded-square mark, so the handle is recognised at a glance. */
+function InstagramIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+      <defs>
+        <linearGradient id="ig-grad" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stopColor="#feda75" /><stop offset="0.35" stopColor="#fa7e1e" /><stop offset="0.6" stopColor="#d62976" /><stop offset="1" stopColor="#4f5bd5" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig-grad)" />
+      <rect x="6.500" y="6.500" width="11" height="11" rx="3.500" fill="none" stroke="#fff" strokeWidth="1.600" />
+      <circle cx="12" cy="12" r="2.700" fill="none" stroke="#fff" strokeWidth="1.600" />
+      <circle cx="16" cy="8" r="0.900" fill="#fff" />
+    </svg>
+  );
+}
+
 /** The mark of each navigation app, so customers recognise it without reading. */
 function MapIcon({ name }: { name: string }) {
   const common = { viewBox: "0 0 48 48", width: 36, height: 36, "aria-hidden": true } as const;
@@ -287,8 +304,8 @@ function Stars({ id, value, onChange }: { id: string; value: number; onChange: (
  * The survey tab: a navy header with the customer's name, a progress line, numbered questions, an optional note,
  * then a thank-you page with the overall score. One answer per case.
  */
-function SurveyView({ code, survey, customer, vehicle, shop, onDone, onBack }: {
-  code: string; survey: Survey; customer: string | null; vehicle: string | null; shop: string; onDone: () => void; onBack: () => void;
+function SurveyView({ code, survey, customer, vehicle, shop, instagram, onDone, onBack }: {
+  code: string; survey: Survey; customer: string | null; vehicle: string | null; shop: string; instagram?: string | null; onDone: () => void; onBack: () => void;
 }) {
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comment, setComment] = useState("");
@@ -307,6 +324,12 @@ function SurveyView({ code, survey, customer, vehicle, shop, onDone, onBack }: {
               <p className="tk-thanks-eyebrow">نظر شما ثبت شد</p>
               <h1>ممنون که کمک می‌کنید بهتر شویم</h1>
               <p className="tk-thanks-note">پاسخ شما مستقیم به مدیریت {shop} رسید.</p>
+              {instagram && (
+                <a className="tk-follow" href={`https://instagram.com/${encodeURIComponent(instagram)}`} target="_blank" rel="noopener noreferrer">
+                  <InstagramIcon size={32} />
+                  <span><strong>ما را در اینستاگرام دنبال کنید</strong><span dir="ltr" className="font-num">@{instagram}</span></span>
+                </a>
+              )}
               {score > 0 && (
                 <div className="tk-thanks-score">
                   <span>امتیاز کلی شما</span>
@@ -477,7 +500,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
       </header>
 
       {t.survey && view === "survey" && (
-        <SurveyView code={code} survey={t.survey} customer={t.case.customer} vehicle={t.case.vehicle?.title ?? null} shop={t.shop.name}
+        <SurveyView code={code} survey={t.survey} customer={t.case.customer} vehicle={t.case.vehicle?.title ?? null} shop={t.shop.name} instagram={t.shop.instagram}
           onDone={load} onBack={() => go("tracking")} />
       )}
 
@@ -568,21 +591,29 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         {(t.items || t.money) && (
           <Section icon="wallet" eyebrow="صورت‌حساب" title="کالا، کارها و هزینه">
             {t.items && t.items.length > 0 ? (
-              <ul className="tk-items">
-                {t.items.map((i, k) => (
-                  <li key={k}>
-                    <span className="tk-kind">{KIND[i.kind] ?? i.kind}</span>
-                    <span className="tk-item-title">
-                      {i.title}
-                      {i.quantity !== 1 && <span className="tk-muted"> × {formatNumber(i.quantity)}</span>}
-                      {i.supplier === "customer" && <span className="tk-muted"> (کالای خودتان)</span>}
-                      {i.status === "needed" && <span className="tk-muted"> (در انتظار تهیه)</span>}
-                    </span>
-                    {i.discountRials != null && i.discountRials > 0 && <span className="tk-discount">تخفیف <span dir="ltr" className="neg">−{toman(i.discountRials)}</span></span>}
-                    {i.lineTotalRials != null && i.lineTotalRials > 0 && <strong className="font-num">{toman(i.lineTotalRials)}</strong>}
-                  </li>
-                ))}
-              </ul>
+              <table className="tk-invoice">
+                <thead>
+                  <tr><th scope="col">ردیف</th><th scope="col">شرح</th><th scope="col">تعداد</th><th scope="col">مبلغ (تومان)</th></tr>
+                </thead>
+                <tbody>
+                  {t.items.map((i, k) => (
+                    <tr key={k}>
+                      <td className="num font-num">{formatNumber(k + 1)}</td>
+                      <td>
+                        <span className="inv-title">{i.title}</span>
+                        <span className="inv-sub">
+                          {KIND[i.kind] ?? i.kind}
+                          {i.supplier === "customer" && " · کالای خودتان"}
+                          {i.status === "needed" && " · در انتظار تهیه"}
+                        </span>
+                        {i.discountRials != null && i.discountRials > 0 && <span className="inv-discount">تخفیف <span dir="ltr" className="neg">−{formatNumber(Math.round(i.discountRials / 10))}</span></span>}
+                      </td>
+                      <td className="num font-num">{formatNumber(i.quantity)}</td>
+                      <td className="num font-num">{i.lineTotalRials != null && i.lineTotalRials > 0 ? formatNumber(Math.round(i.lineTotalRials / 10)) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : (
               <div className="tk-empty-bill"><strong>هنوز کالا یا کاری ثبت نشده</strong><p>بعد از ثبت کالا و اجرت، این‌جا نشان داده می‌شود.</p></div>
             )}
@@ -621,12 +652,12 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           <section className="tk-links" aria-label="نشانی و شبکه‌های اجتماعی">
             {(t.shop.maps?.length ?? 0) > 0 && (
               <div className="tk-maps" role="group" aria-label="مسیریابی">
-                {t.shop.maps!.map((m) => <a key={m.key} href={m.url} target="_blank" rel="noopener noreferrer" aria-label={`مسیریابی با ${m.name}`} title={m.name}><MapIcon name={m.key} /></a>)}
+                {t.shop.maps!.map((m) => <a key={m.key} href={m.url} target="_blank" rel="noopener noreferrer" aria-label={`مسیریابی با ${m.name}`} title={m.name}><MapIcon name={m.key} /><span>{m.name}</span></a>)}
               </div>
             )}
             {t.shop.instagram && (
               <a className="tk-insta" href={`https://instagram.com/${encodeURIComponent(t.shop.instagram)}`} target="_blank" rel="noopener noreferrer" dir="ltr">
-                <span aria-hidden="true">◎</span> @{t.shop.instagram}
+                <InstagramIcon /> <span>@{t.shop.instagram}</span>
               </a>
             )}
           </section>
