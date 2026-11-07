@@ -569,7 +569,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
         <div className="tk-top-inner">
           <div className="tk-brand">
             <span className={`tk-mark${t.shop.hasLogo ? " logo" : ""}`} aria-hidden="true">{t.shop.hasLogo ? <img src={`/api/v1/track/${code}/logo`} alt="" /> : <Icon name="wrench" />}</span>
-            <div><strong>{t.shop.name}</strong>{t.shop.address && <span>{t.shop.address}</span>}</div>
+            <div><strong>{t.shop.name}</strong></div>
           </div>
           {t.survey && <Tabs view={view} onChange={go} className="tk-tabs top" />}
           <button className="tk-icon-button" type="button" onClick={toggleTheme} aria-label={theme === "light" ? "حالت تاریک" : "حالت روشن"}>
