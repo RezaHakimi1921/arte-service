@@ -23,11 +23,11 @@ public static class SmsWalletCommand
                     var rows = await db.SmsWallets.AsNoTracking().Join(db.Tenants, w => w.TenantId, t => t.Id, (w, t) => new { t.Name, w.TenantId, w.BalanceParts }).ToListAsync();
                     foreach (var r in rows) Console.WriteLine($"  {r.Name} ({r.TenantId}): {r.BalanceParts:N0} parts");
                     return 0;
-                case "central-sync" when args.Length == 3 && long.TryParse(args[2], out var set):
+                case "central-sync" when args.Length == 3 && long.TryParse(args[2], out var newBalance):
                     await wallet.SyncCentralAsync(newBalance, "console", null, default);
                     Print(await wallet.StatusAsync(default));
                     return 0;
-                case "central-topup" when args.Length == 3 && long.TryParse(args[2], out var add):
+                case "central-topup" when args.Length == 3 && long.TryParse(args[2], out var added):
                     await wallet.TopUpCentralAsync(added, null, "console", null, default);
                     Print(await wallet.StatusAsync(default));
                     return 0;
