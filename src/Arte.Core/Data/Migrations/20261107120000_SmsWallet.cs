@@ -102,6 +102,7 @@ namespace Arte.Core.Data.Migrations
             migrationBuilder.InsertData(
                 table: "SmsSettings",
                 columns: new[] { "Id", "CentralBalanceParts", "LowCentralParts", "PurchasePricePerPartRial", "SalePricePerPartRial", "UpdatedAt" },
+                columnTypes: new[] { "integer", "bigint", "bigint", "bigint", "bigint", "timestamp with time zone" },
                 values: new object[] { 1, 0L, 50L, 1000L, 2190L, new DateTimeOffset(new DateTime(2026, 11, 7, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)) });
 
             migrationBuilder.CreateIndex(
