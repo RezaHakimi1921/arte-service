@@ -113,7 +113,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         var st = await rig.Wallet.StatusAsync(default);
         var current = await rig.Wallet.BranchBalanceAsync(tenantId, default);
         await rig.Wallet.SyncCentralAsync(st.CommittedParts + branchParts - current + free, "test", null, default);
-        await rig.Wallet.CreditBranchAsync(tenantId, branchParts - current, null, "test", null, default);
+        if (branchParts != current) await rig.Wallet.CreditBranchAsync(tenantId, branchParts - current, null, "test", null, default);
         return tenantId;
     }
 
