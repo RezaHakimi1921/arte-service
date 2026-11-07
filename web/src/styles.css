@@ -2481,3 +2481,7 @@ button.danger-outline { color: var(--danger); background: transparent; border: 1
 .sortable .opt-row { align-items: center; }
 .opt-main.off { opacity: 0.5; }
 .sortable .opt-main { flex: 1; }
+
+/* SMS texts (admin): ≥16px so iOS does not zoom */
+.sms-text { width: 100%; min-height: 9rem; font-size: 1rem; line-height: 1.8; font-family: inherit; resize: vertical; }
+.sms-preview { white-space: pre-line; margin: 0; line-height: 1.9; }

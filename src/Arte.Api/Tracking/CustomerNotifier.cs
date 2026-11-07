@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Arte.Api.Sms;
+using Arte.Api.Sms.SmartX;
 using Arte.Core.Cases;
 using Arte.Core.Common;
 using Arte.Core.Data;
@@ -46,6 +48,9 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
         return result switch
         {
             { Accepted: true } => null,
+            { Error: SmsWalletService.InsufficientCredit } => "شارژ پیامک این شعبه تمام شده است. برای شارژ با پشتیبانی آرته تماس بگیرید.",
+            { Error: SmartXSmsProvider.OutsideHours } => "پیامک فقط از ساعت ۸ تا ۲۳ فرستاده می‌شود؛ صبح دوباره امتحان کنید.",
+            { Error: SmartXSmsProvider.NotApproved } => "متن این پیامک هنوز توسط مدیریت آرته تأیید نشده است.",
             { Error: "template_not_configured" } => "پیامک لینک هنوز فعال نشده است؛ فعلاً لینک را با «اشتراک‌گذاری» بفرستید.",
             _ => "ارسال پیامک انجام نشد. کمی بعد دوباره تلاش کنید.",
         };
@@ -97,7 +102,7 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
             };
             foreach (var mobile in mobiles)
             {
-                var result = await sms.SendTemplateAsync(mobile, MessageKeys.StaffWorkFinished, tokens, ct);
+                var result = await sms.SendAsync(new SmsRequest(mobile, MessageKeys.StaffWorkFinished, tokens, c.TenantId), ct);
                 db.CaseEvents.Add(new CaseEvent
                 {
                     TenantId = c.TenantId, CaseId = c.Id, Type = "staff.sms", OccurredAt = clock.UtcNow,
@@ -127,7 +132,8 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
             ["vehicle"] = Cut(vehicle, SmsLimits.Vehicle),
             ["code"] = c.TrackingCode!,
         };
-        var result = await sms.SendTemplateAsync(customer.Mobile, messageKey, tokens, ct);
+        var result = await sms.SendAsync(new SmsRequest(customer.Mobile, messageKey, tokens, c.TenantId,
+            new Dictionary<string, string> { ["CaseCode"] = $"CASE-{c.Number}" }), ct);
         db.CaseEvents.Add(new CaseEvent
         {
             TenantId = c.TenantId, CaseId = c.Id, Type = "customer.sms", OccurredAt = clock.UtcNow,

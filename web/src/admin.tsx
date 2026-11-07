@@ -5,6 +5,7 @@ import { VEHICLE_KINDS } from "./vehicles";
 import { KIND_NAMES, jalaliDate, licenseHeadline, type LicenseStatus } from "./license";
 import { ROLE_NAMES } from "./labels";
 import { BottomSheet, SelectField, SelectSheet, SheetOption } from "./sheet";
+import { AdminSmsPage, BranchSms } from "./smsAdmin";
 import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 
 type Plan = { id: string; name: string; months: number; priceRials: number; isActive: boolean; sortOrder: number };
@@ -77,11 +78,12 @@ function AdminPage({ title, back, onBack, children }: { title: string; back: str
 
 /** Platform admin panel: every business (branch), its subscription and switch, and the price list. */
 export function AdminPanel({ onBack }: { onBack?: () => void }) {
-  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" } | { page: "survey" } | { page: "catalog" } | { page: "brands" }>({ page: "list" });
+  const [view, setView] = useState<{ page: "list" } | { page: "business"; id: string } | { page: "plans" } | { page: "survey" } | { page: "catalog" } | { page: "brands" } | { page: "sms" }>({ page: "list" });
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
   if (view.page === "business") return <AdminBusiness id={view.id} onBack={() => setView({ page: "list" })} />;
   if (view.page === "plans") return <AdminPlans onBack={() => setView({ page: "list" })} />;
   if (view.page === "brands") return <AdminBrands onBack={() => setView({ page: "list" })} onOpen={(id) => setView({ page: "business", id })} />;
+  if (view.page === "sms") return <AdminSmsPage onBack={() => setView({ page: "list" })} onOpen={(id) => setView({ page: "business", id })} />;
   if (view.page === "catalog") return <AdminStandardCatalog onBack={() => setView({ page: "list" })} />;
   if (view.page === "survey")
     return (
@@ -90,11 +92,11 @@ export function AdminPanel({ onBack }: { onBack?: () => void }) {
         <SurveyQuestions />
       </AdminPage>
     );
-  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} onSurvey={() => setView({ page: "survey" })} onCatalog={() => setView({ page: "catalog" })} onBrands={() => setView({ page: "brands" })} />;
+  return <AdminList onBack={onBack} onOpen={(id) => setView({ page: "business", id })} onPlans={() => setView({ page: "plans" })} onSurvey={() => setView({ page: "survey" })} onCatalog={() => setView({ page: "catalog" })} onSms={() => setView({ page: "sms" })} onBrands={() => setView({ page: "brands" })} />;
 }
 
-function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onBrands }: {
-  onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void; onSurvey: () => void; onCatalog: () => void; onBrands: () => void;
+function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onSms, onBrands }: {
+  onBack?: () => void; onOpen: (id: string) => void; onPlans: () => void; onSurvey: () => void; onCatalog: () => void; onSms: () => void; onBrands: () => void;
 }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -124,6 +126,7 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onBrands }: {
         <button onClick={onPlans}>پلن‌ها و قیمت‌ها</button>
         <button onClick={onSurvey}>سؤال‌های نظرسنجی</button>
         <button onClick={onCatalog}>کالا و خدمات پرمصرف</button>
+        <button onClick={onSms}>پیامک و شارژ</button>
       </div>
       <div className="chips" role="tablist" aria-label="وضعیت">
         {FILTERS.map((f) => (
@@ -277,6 +280,8 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
       </div>
 
       <h3>همکاران</h3>
+      <BranchSms id={id} />
+
       <div className="settings-list">
         {b.members.map((m) => (
           <div key={m.mobile} className={`settings-row static${m.isActive ? "" : " inactive"}`}>

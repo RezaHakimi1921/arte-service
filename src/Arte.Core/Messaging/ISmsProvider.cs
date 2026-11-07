@@ -10,7 +10,17 @@ public interface ISmsProvider
 
     Task<SmsSendResult> SendTemplateAsync(string mobile, string messageKey,
         IReadOnlyDictionary<string, string> tokens, CancellationToken ct);
+
+    /// <summary>
+    /// The same send, told which business it is for (null: Arte itself, e.g. a login code) and extra tag values.
+    /// Providers that know nothing about businesses keep the default.
+    /// </summary>
+    Task<SmsSendResult> SendAsync(SmsRequest request, CancellationToken ct) =>
+        SendTemplateAsync(request.Mobile, request.MessageKey, request.Tokens, ct);
 }
+
+public sealed record SmsRequest(string Mobile, string MessageKey, IReadOnlyDictionary<string, string> Tokens,
+    Guid? TenantId = null, IReadOnlyDictionary<string, string>? Extra = null);
 
 public sealed record SmsSendResult(bool Accepted, string? ProviderMessageId, string? Error);
 

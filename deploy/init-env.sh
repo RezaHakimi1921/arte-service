@@ -17,6 +17,14 @@ SMS_FAKE_MOBILE_2=
 SMSIR_API_KEY=
 SMSIR_OTP_TEMPLATE_ID=
 SMSIR_OTP_PARAM=CODE
+# SmartX SMS (docs/15). Secrets come from the SmartX back office; never paste them into chat or git.
+# Send everything through SmartX: SMS_PROVIDER=smartx. Move single keys first: SMARTX_KEYS=case.opened,case.ready
+SMARTX_BASE_URL=https://staging-api.smartx.ir
+SMARTX_CLIENT_ID=
+SMARTX_CLIENT_SECRET=
+SMARTX_TENANT_ID=
+SMARTX_SENDER_NUMBER=
+SMARTX_KEYS=
 # Bugsink error tracking: log in as admin@artepersia.com with the password after "admin@artepersia.com:".
 BUGSINK_SECRET_KEY=$(openssl rand -hex 40)
 BUGSINK_ADMIN=admin@artepersia.com:$(openssl rand -hex 12)

@@ -4,6 +4,7 @@ using Arte.Core.Cases;
 using Arte.Core.Common;
 using Arte.Core.Customers;
 using Arte.Core.Identity;
+using Arte.Core.Messaging;
 using Arte.Core.Surveys;
 using Arte.Core.Tenancy;
 using Arte.Core.Workflows;
@@ -59,6 +60,10 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<BankCard> BankCards => Set<BankCard>();
     public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<SmsPlatformSettings> SmsSettings => Set<SmsPlatformSettings>();
+    public DbSet<TenantSmsWallet> SmsWallets => Set<TenantSmsWallet>();
+    public DbSet<SmsLedgerEntry> SmsLedger => Set<SmsLedgerEntry>();
+    public DbSet<SmsTemplate> SmsTemplates => Set<SmsTemplate>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -69,6 +74,36 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Phone).HasMaxLength(20);
             e.Property(x => x.Address).HasMaxLength(300);
             e.Property(x => x.RequireFinalReview).HasDefaultValue(true);
+        });
+
+        // SMS credit (platform-managed, not tenant-filtered: every query names its TenantId).
+        b.Entity<SmsPlatformSettings>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.HasData(new SmsPlatformSettings { Id = 1, UpdatedAt = new DateTimeOffset(2026, 11, 7, 0, 0, 0, TimeSpan.Zero) });
+        });
+        b.Entity<TenantSmsWallet>(e =>
+        {
+            e.HasKey(x => x.TenantId);
+            e.Property(x => x.TenantId).ValueGeneratedNever();
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<SmsLedgerEntry>(e =>
+        {
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.MessageKey).HasMaxLength(40);
+            e.Property(x => x.Note).HasMaxLength(300);
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<SmsTemplate>(e =>
+        {
+            e.HasKey(x => new { x.TenantId, x.MessageKey });
+            e.Property(x => x.MessageKey).HasMaxLength(40);
+            e.Property(x => x.DraftText).HasMaxLength(Arte.Core.Messaging.SmsTemplates.MaxLength);
+            e.Property(x => x.ApprovedText).HasMaxLength(Arte.Core.Messaging.SmsTemplates.MaxLength);
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<User>(e =>
