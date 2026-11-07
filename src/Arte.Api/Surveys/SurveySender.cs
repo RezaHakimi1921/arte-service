@@ -112,7 +112,8 @@ public sealed class SurveySender(IServiceScopeFactory scopes, IClock clock, ILog
             ["code"] = c.TrackingCode,
         };
         var sms = sp.GetRequiredService<ISmsProvider>();
-        var result = await sms.SendTemplateAsync(customer.Mobile, MessageKeys.SurveyRequest, tokens, ct);
+        var result = await sms.SendAsync(new SmsRequest(customer.Mobile, MessageKeys.SurveyRequest, tokens, c.TenantId,
+            new Dictionary<string, string> { ["CaseCode"] = $"CASE-{c.Number}" }), ct);
 
         invite.Attempts++;
         invite.ClaimedAt = null;

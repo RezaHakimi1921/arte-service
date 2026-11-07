@@ -2603,6 +2603,136 @@ namespace Arte.Core.Data.Migrations
                     b.ToTable("Plans");
                 });
 
+            modelBuilder.Entity("Arte.Core.Messaging.SmsLedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("AmountRial")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("BalanceAfter")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CentralAfter")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("MessageKey")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<long>("Parts")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.ToTable("SmsLedger");
+                });
+
+            modelBuilder.Entity("Arte.Core.Messaging.SmsPlatformSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("CentralBalanceParts")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("LowCentralParts")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("PurchasePricePerPartRial")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SalePricePerPartRial")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SmsSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CentralBalanceParts = 0L,
+                            LowCentralParts = 50L,
+                            PurchasePricePerPartRial = 1000L,
+                            SalePricePerPartRial = 2190L,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 7, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
+                });
+
+            modelBuilder.Entity("Arte.Core.Messaging.SmsTemplate", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("MessageKey")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ApprovedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ApprovedText")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("DraftText")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("TenantId", "MessageKey");
+
+                    b.ToTable("SmsTemplates");
+                });
+
+            modelBuilder.Entity("Arte.Core.Messaging.TenantSmsWallet", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("BalanceParts")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("SmsWallets");
+                });
+
             modelBuilder.Entity("Arte.Core.Surveys.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3527,6 +3657,30 @@ namespace Arte.Core.Data.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Arte.Core.Messaging.SmsLedgerEntry", b =>
+                {
+                    b.HasOne("Arte.Core.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Arte.Core.Messaging.SmsTemplate", b =>
+                {
+                    b.HasOne("Arte.Core.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+
+            modelBuilder.Entity("Arte.Core.Messaging.TenantSmsWallet", b =>
+                {
+                    b.HasOne("Arte.Core.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
 
             modelBuilder.Entity("Arte.Core.Surveys.NotificationRecipient", b =>

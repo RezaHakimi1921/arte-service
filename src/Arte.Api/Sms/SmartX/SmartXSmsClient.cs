@@ -41,7 +41,7 @@ public sealed class SmartXSmsClient
     /// لیست را به بچ‌های حداکثر ۱۰۰ تایی می‌شکند؛ برای هر بچ یک UUID تازه می‌سازد، آن را قبل از ارسال ذخیره
     /// می‌کند و می‌فرستد. روی timeout/5xx همان UUID دوباره فرستاده می‌شود.
     /// شماره یا متن نامعتبر ارسال نمی‌شود و در Invalid برمی‌گردد.
-    public async Task<SendResult> SendAsync(IEnumerable<SmsRecipient> recipients, CancellationToken ct = default)
+    public async Task<SendResult> SendAsync(IEnumerable<SmsRecipient> recipients, SmsSendOptions? options = null, CancellationToken ct = default)
     {
         _o.Validate();
 
@@ -68,7 +68,7 @@ public sealed class SmartXSmsClient
         // ۲) ارسال
         var results = new List<SendBatchResult>(chunks.Count);
         foreach (var c in chunks)
-            results.Add(await SendBatchAsync(c.BatchId, c.Recipients, ct));
+            results.Add(await SendBatchAsync(c.BatchId, c.Recipients, options, ct));
 
         return new SendResult(results, invalid);
     }
@@ -79,13 +79,13 @@ public sealed class SmartXSmsClient
         _o.Validate();
         var results = new List<SendBatchResult>();
         foreach (var p in await _log.ClaimPendingAsync(max, ct))
-            results.Add(await SendBatchAsync(p.BatchId, p.Recipients, ct));
+            results.Add(await SendBatchAsync(p.BatchId, p.Recipients, null, ct));
         return results;
     }
 
-    private async Task<SendBatchResult> SendBatchAsync(Guid batchId, IReadOnlyList<SmsRecipient> recipients, CancellationToken ct)
+    private async Task<SendBatchResult> SendBatchAsync(Guid batchId, IReadOnlyList<SmsRecipient> recipients, SmsSendOptions? options, CancellationToken ct)
     {
-        var body = BuildRequest(batchId, recipients);   // برای همهٔ تلاش‌ها یکی است (همان UUID)
+        var body = BuildRequest(batchId, recipients, options);   // برای همهٔ تلاش‌ها یکی است (همان UUID)
         var http = _factory.CreateClient(HttpClientName);
         var maxAttempts = Math.Max(1, _o.MaxAttempts);
 
@@ -180,7 +180,7 @@ public sealed class SmartXSmsClient
         }
     }
 
-    private DirectSendRequest BuildRequest(Guid batchId, IReadOnlyList<SmsRecipient> recipients) => new()
+    private DirectSendRequest BuildRequest(Guid batchId, IReadOnlyList<SmsRecipient> recipients, SmsSendOptions? options) => new()
     {
         CorrelationId = batchId.ToString(),
         ChannelName = "Sms",
@@ -189,7 +189,7 @@ public sealed class SmartXSmsClient
         Locale = _o.Locale,
         ShouldCheckQuota = _o.ShouldCheckQuota,
         ShouldCheckConsent = _o.ShouldCheckConsent,
-        ShouldCheckQuietHours = _o.ShouldCheckQuietHours,
+        ShouldCheckQuietHours = options?.CheckQuietHours ?? _o.ShouldCheckQuietHours,
         RecipientInfo = recipients.Select(r => new RecipientDto
         {
             ContactInfo = r.Mobile,

@@ -20,3 +20,6 @@ public sealed record SendResult(IReadOnlyList<SendBatchResult> Batches, IReadOnl
 }
 
 public sealed record PendingBatch(Guid BatchId, IReadOnlyList<SmsRecipient> Recipients);
+
+/// تنظیمات یک درخواست که پیش‌فرض کانفیگ را عوض می‌کند (null: همان کانفیگ).
+public sealed record SmsSendOptions(bool? CheckQuietHours = null);

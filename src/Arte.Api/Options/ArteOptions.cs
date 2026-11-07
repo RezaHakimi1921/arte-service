@@ -46,6 +46,14 @@ public sealed class SmsOptions
     /// </summary>
     public bool AllowFakeInProduction { get; set; }
     public string[] FakeAllowedMobiles { get; set; } = [];
+    /// <summary>
+    /// Message keys (e.g. "case.opened") sent through SmartX while the provider above still carries the others.
+    /// Comma-separated. Leave empty when Provider is "smartx" (then every key goes through SmartX).
+    /// </summary>
+    public string SmartXKeys { get; set; } = "";
+
+    public string[] SmartXKeyList() =>
+        SmartXKeys.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     public SmsIrOptions SmsIr { get; set; } = new();
     public IranPayamakOptions IranPayamak { get; set; } = new();
 }

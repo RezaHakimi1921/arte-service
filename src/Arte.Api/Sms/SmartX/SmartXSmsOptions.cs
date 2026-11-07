@@ -26,6 +26,19 @@ public sealed class SmartXSmsOptions
     public string Locale { get; set; } = "Fa";
 
     /// سقف گیرنده در هر درخواست؛ هیچ‌وقت بیشتر از ۱۰۰ فرستاده نمی‌شود.
+    /// <summary>Host (and path) of the customer pages; {{CustomerLink}} becomes LinkBase + "/t/" or "/s/" + code.</summary>
+    public string LinkBase { get; set; } = "service.artepersia.com";
+    /// <summary>
+    /// Ask SmartX to hold the login code back during its quiet hours. Off: a code the user just asked for must arrive
+    /// at any hour. Turn on only if SmartX requires it.
+    /// </summary>
+    public bool OtpCheckQuietHours { get; set; }
+    /// <summary>Arte's own window for every message except the login code (Tehran time, hours).</summary>
+    public int SendFromHour { get; set; } = 8;
+    public int SendUntilHour { get; set; } = 23;
+    /// <summary>On: a branch's message is sent only with the text the admin approved; off: the system text is used until then.</summary>
+    public bool RequireApprovedTemplate { get; set; }
+
     public int MaxRecipientsPerRequest { get; set; } = 100;
 
     /// تعداد کل تلاش برای هر بچ (تلاش اول + retryها)، با همان UUID
