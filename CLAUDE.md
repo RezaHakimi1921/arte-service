@@ -73,7 +73,7 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 ## Post-change checklist (mandatory before saying "done")
 
 ```text
-build → test → commit → push → deploy → health check → summary
+build → test → commit → branch + pull request → owner approves on GitHub → deploy → health check → summary
 ```
 
 1. `dotnet build` (and `npm run build` in `web/` when the UI changed). Fix all errors and warnings you introduced.
@@ -81,7 +81,10 @@ build → test → commit → push → deploy → health check → summary
    New endpoints/rules ship with tests in the same change: happy path, permission denied, other tenant gets 404.
 3. Schema change → `dotnet ef migrations add <Name> -p src/Arte.Core -s src/Arte.Api -o Data/Migrations`
    (with `ASPNETCORE_ENVIRONMENT=Development`). Migrations apply on startup.
-4. Commit with a clear message; push `main`.
+4. **Never push straight to `main`.** Commit on a feature branch, push it and open a **pull request** (Persian summary of what
+   changed and what to test). The owner reviews and approves/merges on GitHub; only then is it deployed.
+   Every PR ends with a ready-to-run **deploy request** for the server (API rebuild block and/or `/root/deploy-web.sh`,
+   marking which of the two is needed) so the owner can run it right after merging.
 5. Deploy when the user wants it live:
    - `git archive HEAD` + `web/dist` → scp to `~/arte-service` → extract **in place**.
    - `docker compose build api && docker compose up -d && docker compose restart web`
