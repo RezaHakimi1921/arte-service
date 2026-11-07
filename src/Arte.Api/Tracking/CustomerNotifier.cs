@@ -39,11 +39,30 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
     /// <summary>
     /// The link SMS sent by hand from the case page. Returns null when sent, otherwise why not (Persian, for the user).
     /// </summary>
+    /// <summary>Minimum time between two link SMS for the same case.</summary>
+    public static readonly TimeSpan LinkCooldown = TimeSpan.FromMinutes(20);
+
     public async Task<string?> SendLinkAsync(Case c, CancellationToken ct)
     {
         if (c.IsSample || c.TrackingCode is null) return "برای پرونده‌ی نمونه پیامک فرستاده نمی‌شود.";
         var t = await db.Tenants.AsNoTracking().SingleAsync(x => x.Id == c.TenantId, ct);
         if (!t.CustomerSmsEnabled) return "پیامک به مشتری در تنظیمات ← پیامک و پیگیری مشتری خاموش است.";
+
+        // The link may be sent again only after a cool-down (a customer hearing from the shop 4 times is a bad sign
+        // for the shop). A «case opened» SMS carries the same link, so it counts as well; failed sends do not.
+        var since = clock.UtcNow - LinkCooldown;
+        var recent = await db.CaseEvents.AsNoTracking()
+            .Where(e => e.CaseId == c.Id && e.Type == "customer.sms" && e.OccurredAt > since)
+            .OrderByDescending(e => e.OccurredAt).Take(10).ToListAsync(ct);
+        var last = recent.FirstOrDefault(e => e.Data is not null
+            && e.Data.RootElement.TryGetProperty("sent", out var ok) && ok.ValueKind == JsonValueKind.True
+            && e.Data.RootElement.TryGetProperty("kind", out var kind) && kind.GetString() is MessageKeys.CaseLink or MessageKeys.CaseOpened);
+        if (last is not null)
+        {
+            var wait = (int)Math.Ceiling((last.OccurredAt + LinkCooldown - clock.UtcNow).TotalMinutes);
+            return $"لینک همین چند دقیقه پیش برای مشتری پیامک شد. {Math.Max(wait, 1)} دقیقه‌ی دیگر می‌توانید دوباره بفرستید.";
+        }
+
         var result = await SendAsync(c, t, MessageKeys.CaseLink, ct);
         return result switch
         {

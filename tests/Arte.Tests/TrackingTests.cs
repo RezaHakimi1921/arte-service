@@ -241,6 +241,10 @@ public sealed class TrackingTests(ArteApiFactory api)
         await Json(await owner.PutAsJsonAsync("/api/v1/settings/business", new { customerSmsEnabled = true }));
         Assert.Equal(HttpStatusCode.NoContent, (await owner.PostAsync($"/api/v1/cases/{id}/send-link", null)).StatusCode);
         Assert.Equal("case.link", api.Sms.Keys[mobile].Last());
+        // A second send right away is refused (cool-down), and nothing more goes out.
+        var count = api.Sms.Keys[mobile].Count;
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.PostAsync($"/api/v1/cases/{id}/send-link", null)).StatusCode);
+        Assert.Equal(count, api.Sms.Keys[mobile].Count);
 
         var techMobile = ArteApiFactory.NewMobile();
         await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, role = "technician" });
