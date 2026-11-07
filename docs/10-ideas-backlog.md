@@ -118,3 +118,18 @@ The platform admin should see all outgoing SMS in one place (admin panel → گ�
   central SMS log table. The report needs one (`SmsLog`: branch, kind, masked mobile, result, error, time) written by the
   notifier, the survey sender and the OTP service; keep it append-only and never store message text or codes.
 Priority: after the current design and draft work; plan it with the `arte-planning` skill before building.
+
+---
+
+## Zero-downtime deploys (owner, ۱۴۰۵/۰۸/۱۷ — low priority)
+
+Today `docker compose build api && up -d` recreates the API container: for a few seconds (more while migrations run)
+requests fail with 502, and anything in flight is lost. Restarting `web` after a new `web/dist` is a shorter blip.
+A customer or technician in the middle of an action can see an error or lose an unsaved step.
+
+Plan, in order of cost:
+1. **Deploy at quiet hours and show a banner**: a «در حال بروزرسانی» notice the web app shows on 502 for a few seconds, then retries by itself (the client already retries network errors; add 502/503).
+2. **Graceful shutdown**: the API finishes in-flight requests before stopping (`HostOptions.ShutdownTimeout`, `stop_grace_period`), and the health check gates traffic.
+3. **Two API replicas behind the proxy** with `docker compose up -d --no-deps --scale api=2` then removing the old one (rolling), so one is always serving.
+4. **Backward-compatible migrations only** (add columns first, drop later) so old and new API versions can run together during the roll.
+5. **Drafts survive a reload**: intake and case forms already keep drafts; extend to the other long forms.
