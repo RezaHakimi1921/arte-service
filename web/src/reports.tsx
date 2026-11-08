@@ -164,7 +164,7 @@ function WorkshopBlock({ from, to }: { from: Date; to: Date }) {
     return () => { alive = false; };
   }, [from.getTime(), to.getTime()]);
   if (!r) return null;
-  const TYPE_NAMES: Record<string, string> = { geared: "دنده‌ای", automatic: "کلیچ / اتوماتیک" };
+  const TYPE_NAMES: Record<string, string> = { geared: "دنده‌ای", automatic: "اتوماتیک" };
   const list = (rows: { title: string; count: number }[], empty: string) => rows.length === 0
     ? <p className="muted small">{empty}</p>
     : <div className="settings-list">{rows.map((x) => <div key={x.title} className="setting-row"><span><strong>{x.title}</strong></span><span className="font-num">{formatNumber(x.count)} بار</span></div>)}</div>;
