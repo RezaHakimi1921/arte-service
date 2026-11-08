@@ -9,7 +9,7 @@ import { MOTO_PROBLEMS, MOTO_SERVICE_CATEGORIES } from "./vehicles";
 
 export const MOTOR_TYPES = [
   { key: "geared", label: "دنده‌ای" },
-  { key: "automatic", label: "کلیچ / اتوماتیک" },
+  { key: "automatic", label: "اتوماتیک" },
 ] as const;
 
 export type IntakeOption = { id: string; kind: "problem" | "service" | "category" | "service_category"; group: string | null; title: string; sortOrder: number; isActive: boolean };
