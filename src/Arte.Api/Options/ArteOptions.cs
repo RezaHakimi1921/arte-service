@@ -52,6 +52,11 @@ public sealed class SmsOptions
     /// </summary>
     public string SmartXKeys { get; set; } = "";
 
+    /// <summary>
+    /// Every message except the login code goes through SmartX. The login code always stays on Sms:Provider (sms.ir / IranPayamak).
+    /// </summary>
+    public bool SmartXAll { get; set; }
+
     public string[] SmartXKeyList() =>
         SmartXKeys.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     public SmsIrOptions SmsIr { get; set; } = new();

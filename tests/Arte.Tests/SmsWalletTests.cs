@@ -155,7 +155,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task The_login_code_is_paid_by_arte_not_by_the_branch()
+    public async Task The_login_code_never_goes_through_smartx_and_costs_no_credit()
     {
         var (_, tenantId) = await api.NewBusinessAsync();
         using var rig = Wrap(NewRig());
@@ -165,14 +165,15 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         var res = await rig.Inner.Provider.SendAsync(
             new SmsRequest("09121234567", MessageKeys.AuthOtp, new Dictionary<string, string> { ["code"] = "123456" }, tenantId), default);
 
-        Assert.True(res.Accepted, res.Error);
+        Assert.False(res.Accepted);
+        Assert.Equal(SmartXSmsProvider.OtpNotViaSmartX, res.Error);
+        Assert.Empty(rig.Inner.Http.Bodies);
         Assert.Equal(10, await rig.Inner.Wallet.BranchBalanceAsync(tenantId, default));
-        Assert.Equal(before.CentralParts - 1, (await rig.Inner.Wallet.StatusAsync(default)).CentralParts);
-        Assert.Contains("123456", Sent(rig.Inner));
+        Assert.Equal(before.CentralParts, (await rig.Inner.Wallet.StatusAsync(default)).CentralParts);
     }
 
     [Fact]
-    public async Task A_branch_without_credit_is_refused_and_nothing_is_sent_but_the_login_code_still_goes()
+    public async Task A_branch_without_credit_is_refused_and_nothing_is_sent()
     {
         var (_, tenantId) = await api.NewBusinessAsync();
         using var rig = Wrap(NewRig());
@@ -182,10 +183,6 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         Assert.False(res.Accepted);
         Assert.Equal(SmsWalletService.InsufficientCredit, res.Error);
         Assert.Empty(rig.Inner.Http.Bodies);
-
-        var otp = await rig.Inner.Provider.SendAsync(
-            new SmsRequest("09121234567", MessageKeys.AuthOtp, new Dictionary<string, string> { ["code"] = "123456" }, tenantId), default);
-        Assert.True(otp.Accepted);
     }
 
     [Fact]
@@ -220,7 +217,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Branch_messages_wait_for_the_morning_but_the_login_code_does_not()
+    public async Task Branch_messages_wait_for_the_morning()
     {
         var (_, tenantId) = await api.NewBusinessAsync();
         using var rig = Wrap(NewRig(now: Night));
@@ -230,12 +227,6 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         Assert.Equal(SmartXSmsProvider.OutsideHours, res.Error);
         Assert.Equal(10, await rig.Inner.Wallet.BranchBalanceAsync(tenantId, default));
         Assert.Empty(rig.Inner.Http.Bodies);
-
-        var otp = await rig.Inner.Provider.SendAsync(
-            new SmsRequest("09121234567", MessageKeys.AuthOtp, new Dictionary<string, string> { ["code"] = "123456" }), default);
-        Assert.True(otp.Accepted);
-        // The login code is not held back by SmartX's quiet hours unless asked.
-        Assert.False(JsonDocument.Parse(rig.Inner.Http.Bodies[0]).RootElement.GetProperty("shouldCheckQuietHours").GetBoolean());
     }
 
     [Fact]
@@ -401,12 +392,27 @@ public sealed class SmsWalletTests(ArteApiFactory api)
     {
         var legacy = new Recorder("legacy");
         var smartx = new Recorder("smartx");
-        var router = new RoutingSmsProvider(legacy, smartx, new HashSet<string> { MessageKeys.CaseOpened });
+        var router = new RoutingSmsProvider(legacy, smartx, new HashSet<string> { MessageKeys.CaseOpened }, smartxAll: false);
 
         await router.SendAsync(new SmsRequest("09121234567", MessageKeys.CaseOpened, new Dictionary<string, string>()), default);
+        await router.SendAsync(new SmsRequest("09121234567", MessageKeys.CaseReady, new Dictionary<string, string>()), default);
         await router.SendAsync(new SmsRequest("09121234567", MessageKeys.AuthOtp, new Dictionary<string, string>()), default);
 
         Assert.Equal([MessageKeys.CaseOpened], smartx.Keys);
+        Assert.Equal([MessageKeys.CaseReady, MessageKeys.AuthOtp], legacy.Keys);
+    }
+
+    [Fact]
+    public async Task With_smartx_all_every_message_but_the_login_code_goes_to_smartx()
+    {
+        var legacy = new Recorder("legacy");
+        var smartx = new Recorder("smartx");
+        var router = new RoutingSmsProvider(legacy, smartx, new HashSet<string>(), smartxAll: true);
+
+        foreach (var key in new[] { MessageKeys.CaseOpened, MessageKeys.CaseReady, MessageKeys.CaseDelivered, MessageKeys.CaseLink, MessageKeys.SurveyRequest, MessageKeys.AuthOtp })
+            await router.SendAsync(new SmsRequest("09121234567", key, new Dictionary<string, string>()), default);
+
+        Assert.Equal([MessageKeys.CaseOpened, MessageKeys.CaseReady, MessageKeys.CaseDelivered, MessageKeys.CaseLink, MessageKeys.SurveyRequest], smartx.Keys);
         Assert.Equal([MessageKeys.AuthOtp], legacy.Keys);
     }
 

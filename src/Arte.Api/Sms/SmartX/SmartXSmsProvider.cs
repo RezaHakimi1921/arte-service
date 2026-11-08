@@ -21,6 +21,8 @@ public sealed class SmartXSmsProvider(
     public const string NotApproved = "template_not_approved";
     public const string OutsideHours = "outside_sending_hours";
     public const string SendFailed = "smartx_not_accepted";
+    /// <summary>The login code never goes to SmartX (see RoutingSmsProvider); refused here as a safety net.</summary>
+    public const string OtpNotViaSmartX = "otp_not_via_smartx";
 
     private static readonly TimeSpan Tehran = TimeSpan.FromHours(3.5);   // Iran has no DST since 2022.
 
@@ -32,11 +34,11 @@ public sealed class SmartXSmsProvider(
     public async Task<SmsSendResult> SendAsync(SmsRequest request, CancellationToken ct)
     {
         var o = options.Value;
-        var isOtp = request.MessageKey == MessageKeys.AuthOtp;
+        if (request.MessageKey == MessageKeys.AuthOtp) return new SmsSendResult(false, null, OtpNotViaSmartX);
 
         // 1) The text.
         var text = SmsTemplates.DefaultFor(request.MessageKey);
-        if (!isOtp && request.TenantId is { } tid)
+        if (request.TenantId is { } tid)
         {
             var approved = await templates.ApprovedTextAsync(tid, request.MessageKey, ct);
             if (approved is not null) text = approved;
@@ -46,13 +48,12 @@ public sealed class SmartXSmsProvider(
         var body = SmsTags.Fill(text, SmsTemplateService.Values(request.MessageKey, request.Tokens, request.Extra, o.LinkBase)).Trim();
 
         // 2) Arte's own window; the login code goes out at any hour.
-        if (!isOtp && !InSendingHours(clock.UtcNow, o.SendFromHour, o.SendUntilHour))
+        if (!InSendingHours(clock.UtcNow, o.SendFromHour, o.SendUntilHour))
             return new SmsSendResult(false, null, OutsideHours);
 
         // 3) Parts, from the branch (and the central balance), or from the central balance alone for Arte's own messages.
         var parts = SmsParts.Count(body);
-        var payer = isOtp ? null : request.TenantId;
-        var (reservation, error) = await wallet.ReserveAsync(payer, parts, request.MessageKey, ct);
+        var (reservation, error) = await wallet.ReserveAsync(request.TenantId, parts, request.MessageKey, ct);
         if (reservation is null) return new SmsSendResult(false, null, error);
 
         // 4) Send. Any failure hands the parts back.
@@ -60,7 +61,7 @@ public sealed class SmartXSmsProvider(
         {
             var result = await client.SendAsync(
                 [new SmsRecipient(0, request.Mobile, body)],
-                new SmsSendOptions(CheckQuietHours: isOtp ? o.OtpCheckQuietHours : null),
+                null,
                 ct);
             if (result.AllAccepted && result.Batches.Count == 1)
                 return new SmsSendResult(true, result.Batches[0].BatchId.ToString("N"), null);
