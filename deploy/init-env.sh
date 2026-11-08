@@ -18,7 +18,9 @@ SMSIR_API_KEY=
 SMSIR_OTP_TEMPLATE_ID=
 SMSIR_OTP_PARAM=CODE
 # SmartX SMS (docs/15). Secrets come from the SmartX back office; never paste them into chat or git.
-# Send everything through SmartX: SMS_PROVIDER=smartx. Move single keys first: SMARTX_KEYS=case.opened,case.ready
+# Rollout: the login code always stays on SMS_PROVIDER (smsir). SMARTX_ALL=true sends every other message to SmartX
+# (or list single keys in SMARTX_KEYS while testing). Never list auth.otp.
+SMARTX_ALL=false
 SMARTX_BASE_URL=https://staging-api.smartx.ir
 SMARTX_CLIENT_ID=
 SMARTX_CLIENT_SECRET=
