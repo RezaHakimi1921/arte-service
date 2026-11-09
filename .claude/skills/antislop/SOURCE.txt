@@ -1,0 +1,5 @@
+Source: https://github.com/miqdadbadjuber/anti-slop
+Commit: c8a7fbc688c4a3b5cbfa72206b9e477df61c8bd0
+Version: 3.2.26
+Included skills: antislop, antislop-ui, antislop-human, antislop-layoutmobile (copywriting and code skills not vendored)
+License: MIT (see antislop/LICENSE)

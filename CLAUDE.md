@@ -137,3 +137,18 @@ build → test → commit → branch + pull request → owner approves on GitHub
 Same design rules as PersonalWallet (tokens in `:root` for both themes, motion tokens, no `letter-spacing` on Persian text,
 `:hover` only under `(hover: hover)`, `dvh` not `vh`, safe-area padding, `prefers-reduced-motion/transparency/contrast`).
 Use the `ui-ux-pro-max` skill for new screens.
+
+**Anti-slop filter** (https://github.com/miqdadbadjuber/anti-slop, vendored in `.claude/skills/antislop*`, MIT):
+every UI task also runs through it, alongside `ui-ux-pro-max`.
+
+- Skills: `antislop` (core rules, always), `antislop-ui` (layout, colour, components, motion), `antislop-human`
+  (contrast, keyboard, focus, states), `antislop-layoutmobile` (breakpoints, overflow, tap targets).
+  Copywriting and code-comment skills are not vendored (our copy is Persian and follows the UX principles above).
+- Mode: **during** (apply the rules while building; end with the Delivery Gate PASS/FAIL report). Use **after**
+  (numbered audit, owner picks what to fix) only when the owner asks to audit existing screens. Do not ask the mode question.
+- It is a filter, not a source of direction: direction stays ours (navy `--accent`, light neutral default, plain cards,
+  the **Visual** principle above). Every decoration must name what it serves; no invented stats, fake ratings or
+  placeholder claims; no assets created without asking.
+- Where `ui-ux-pro-max` and anti-slop disagree, the rules in this file win, then anti-slop's Hard Gate, then `ui-ux-pro-max`.
+- RTL and Persian digits are not slop; keep `dir="rtl"`, logical properties and Persian numerals.
+- Update: re-copy the four folders from the repo and bump `Commit`/`Version` in `.claude/skills/antislop/SOURCE.txt`.
