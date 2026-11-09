@@ -10,6 +10,25 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The server is down or being replaced (a deploy): the proxy answers 502/503/504, or the connection fails
+ * while the phone itself is online. Not for 4xx, rate limiting or an offline phone, which keep their own messages.
+ */
+export function isServerDown(e: unknown): boolean {
+  if (!(e instanceof ApiError)) return false;
+  return e.status === 502 || e.status === 503 || e.status === 504 || (e.status === 0 && navigator.onLine);
+}
+
+/** True when the server answers at all (any status except a proxy failure); used to know when an upgrade is over. */
+export async function serverIsUp(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/v1/public/info", { cache: "no-store", credentials: "same-origin" });
+    return ![502, 503, 504].includes(res.status);
+  } catch {
+    return false;
+  }
+}
+
 let accessToken: string | null = null;
 let refreshing: Promise<Session | null> | null = null;
 let onSignedOut: () => void = () => {};

@@ -1,6 +1,7 @@
 import { Mechanic } from "./mechanic";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ApiError, api, type Session } from "./api";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ApiError, api, isServerDown, type Session } from "./api";
+import { ServerUpgrading } from "./upgrading";
 import { applyTheme } from "./App";
 import { toLatinDigits } from "./ui";
 
@@ -186,9 +187,14 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
   const [mode, setMode] = useState<"phone" | "password" | "code" | "reset" | "reset-code">("phone");
   const [signup, setSignup] = useState(false);
   const [supportPhone, setSupportPhone] = useState<string | null>(null);
-  useEffect(() => {
-    api<{ supportPhone: string | null }>("/api/v1/public/info").then((i) => setSupportPhone(i.supportPhone)).catch(() => {});
+  // The server is being replaced (a deploy): show the upgrading screen instead of a connection error.
+  const [down, setDown] = useState(false);
+  const loadInfo = useCallback(() => {
+    api<{ supportPhone: string | null }>("/api/v1/public/info")
+      .then((i) => setSupportPhone(i.supportPhone))
+      .catch((e) => { if (isServerDown(e)) setDown(true); });
   }, []);
+  useEffect(() => { loadInfo(); }, [loadInfo]);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -200,6 +206,7 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
   const [sendKey, setSendKey] = useState(0);
   const left = useCountdown(sent.resendInSeconds, sendKey);
   const verifying = useRef(false);
+  const fail = (e: unknown) => { if (isServerDown(e)) setDown(true); else setError(message(e)); };
 
   const codeStep = mode === "code" || mode === "reset-code";
 
@@ -220,7 +227,7 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
       setCode("");
       setMode(nextMode);
     } catch (e) {
-      setError(message(e));
+      fail(e);
     } finally {
       setBusy(false);
     }
@@ -235,7 +242,7 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
     try {
       onDone(await api<Session>("/api/v1/auth/otp/verify", { body: { mobile: phone, code: value } }));
     } catch (e) {
-      setError(message(e));
+      fail(e);
       setCode("");
     } finally {
       verifying.current = false;
@@ -266,7 +273,7 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
         onDone(await api<Session>("/api/v1/auth/password/reset", { body: { mobile: phone, code, newPassword } }));
       }
     } catch (err) {
-      setError(message(err));
+      fail(err);
     } finally {
       setBusy(false);
     }
@@ -281,6 +288,8 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
       </button>
     </div>
   );
+
+  if (down) return <ServerUpgrading onBack={() => { setDown(false); setError(null); loadInfo(); }} />;
 
   return (
     <AuthLayout>
