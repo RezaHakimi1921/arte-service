@@ -11,19 +11,22 @@ export class ApiError extends Error {
 }
 
 /**
- * The server is down or being replaced (a deploy): the proxy answers 502/503/504, or the connection fails
- * while the phone itself is online. Not for 4xx, rate limiting or an offline phone, which keep their own messages.
+ * The server is down or being replaced (a deploy): the proxy answers 502/503/504 with no JSON body, or the connection
+ * fails while the phone itself is online. A 5xx WITH a JSON problem body is the API itself answering (for example 503
+ * «ارسال پیامک انجام نشد»), so it keeps its own message. Not for 4xx, rate limiting or an offline phone either.
  */
 export function isServerDown(e: unknown): boolean {
   if (!(e instanceof ApiError)) return false;
-  return e.status === 502 || e.status === 503 || e.status === 504 || (e.status === 0 && navigator.onLine);
+  if (e.status === 0) return navigator.onLine;
+  return (e.status === 502 || e.status === 503 || e.status === 504) && e.body === null;
 }
 
-/** True when the server answers at all (any status except a proxy failure); used to know when an upgrade is over. */
+/** True when the server answers at all; used to know when an upgrade is over. A proxy failure has no JSON body. */
 export async function serverIsUp(): Promise<boolean> {
   try {
     const res = await fetch("/api/v1/public/info", { cache: "no-store", credentials: "same-origin" });
-    return ![502, 503, 504].includes(res.status);
+    const json = (res.headers.get("content-type") ?? "").includes("json");
+    return !([502, 503, 504].includes(res.status) && !json);
   } catch {
     return false;
   }
@@ -44,7 +47,8 @@ export function applySession(s: Session | null) {
 async function parse(res: Response) {
   if (res.status === 204) return null;
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: any = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = null; }
   if (!res.ok) {
     const fields: Record<string, string[]> = body?.errors ?? {};
     const message = body?.title ?? Object.values(fields)[0]?.[0] ?? "خطا در ارتباط با سرور";
