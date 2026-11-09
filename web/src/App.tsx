@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, applySession, refresh, setSignedOutHandler, type Session } from "./api";
+import { api, ApiError, applySession, isServerDown, refresh, setSignedOutHandler, type Session } from "./api";
+import { ServerUpgrading } from "./upgrading";
 import { CaseDetail, CasesView, type CaseFilter } from "./cases";
 import { FeedbackProvider } from "./feedback";
 import { HomeView } from "./home";
@@ -126,6 +127,7 @@ function AdminRoot() {
 function ShopApp() {
   const [booting, setBooting] = useState(true);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [bootDown, setBootDown] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [me, setMe] = useState<Me | null>(null);
 
@@ -163,14 +165,19 @@ function ShopApp() {
   function boot() {
     setBooting(true);
     setBootError(null);
+    setBootDown(false);
     refresh()
       .then(async (s) => s ?? (await openModeSession()))
       .then((s) => signIn(s))
-      .catch((err) => setBootError(err instanceof ApiError ? err.message : "خطا در ارتباط با سرور"))
+      .catch((err) => {
+        if (isServerDown(err)) setBootDown(true);
+        else setBootError(err instanceof ApiError ? err.message : "خطا در ارتباط با سرور");
+      })
       .finally(() => setBooting(false));
   }
 
   if (booting) return <div className="splash" aria-busy="true" />;
+  if (bootDown) return <ServerUpgrading onBack={boot} />;
   if (bootError)
     return (
       <main className="auth">

@@ -1425,6 +1425,24 @@ a.button.primary { background: var(--accent); color: #fff; }
   transform-origin: right;
   animation: lg-fill 6s linear both;
 }
+/* ── server upgrading: shown on the sign-in page while a deploy replaces the API ── */
+.up { display: flex; flex-direction: column; }
+.up-gears { display: grid; place-items: center; height: 136px; margin-bottom: 22px; border-radius: 18px; background: var(--accent-soft); }
+.up-gears svg { width: 170px; height: auto; overflow: visible; }
+.up-gear { transform-box: fill-box; transform-origin: center; }
+/* 12 and 8 teeth: the periods keep the 12:8 ratio, so the gears stay meshed. */
+.up-gear-big { fill: var(--accent); animation: up-turn 12s linear infinite; }
+.up-gear-small { fill: var(--stage-orange); animation: up-turn 8s linear infinite reverse; }
+.up-track { height: 4px; margin: 4px 0 14px; overflow: hidden; border-radius: 10px; background: var(--surface-2); }
+.up-track span { display: block; width: 38%; height: 100%; border-radius: inherit; background: var(--accent); animation: up-slide 1.6s var(--ease-in-out) infinite; }
+.up-state { min-height: 1.7em; margin: 0 0 18px; color: var(--muted); font-size: 0.85rem; }
+@keyframes up-turn { to { transform: rotate(360deg); } }
+/* The page is RTL: the bar enters from the right edge and leaves on the left. */
+@keyframes up-slide { from { transform: translateX(110%); } to { transform: translateX(-270%); } }
+@media (prefers-reduced-motion: reduce) {
+  .up-gear { animation: none; }
+  .up-track span { width: 100%; opacity: 0.35; animation: none; }
+}
 @keyframes lg-spin { to { transform: rotate(360deg); } }
 @keyframes lg-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
