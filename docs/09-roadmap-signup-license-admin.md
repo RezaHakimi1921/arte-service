@@ -2,13 +2,13 @@
 
 Priorities set by the owner: **1. finish OTP → 2. licences → 3. branches (structure only for now).**
 
-## 1. OTP and sign-in — done in this change, waiting for sms.ir template approval
+## 1. OTP and sign-in — done (Faraz / Iran Payamak)
 - Self sign-up: verify mobile by SMS code → «ثبت‌نام» asks only for full name (shop name optional,
   defaults to «تعمیرگاه {name}») → straight into the app. No invite code (`Signup:RequireInviteCode=false`).
 - Password login accepts the username **or** the mobile number.
 - Forgotten password: SMS code → new password → signed in; every other session of that user ends.
-- sms.ir adapter is deployed with the key; it switches on when the template is approved
-  (`SMS_PROVIDER=smsir`, `OPEN_MODE=false`). No OTP on/off switch is needed in the admin panel.
+- Faraz (`iranpayamak`) is the SMS provider for OTP and shop messages
+  (`SMS_PROVIDER=iranpayamak`, `OPEN_MODE=false`). No OTP on/off switch is needed in the admin panel.
 
 ## 2. Licences (next)
 **Model**

@@ -4,7 +4,7 @@ namespace Arte.Api.Sms;
 
 /// <summary>
 /// Decides, per message, which provider sends it:
-///  • the login code (auth.otp) ALWAYS goes to the legacy provider (sms.ir / IranPayamak), never to SmartX;
+///  • the login code (auth.otp) ALWAYS goes to the legacy provider (Faraz / IranPayamak), never to SmartX;
 ///  • with <c>Sms:SmartXAll=true</c> every other message goes to SmartX;
 ///  • otherwise only the keys listed in <c>Sms:SmartXKeys</c> go to SmartX and the rest stay on the legacy provider.
 /// </summary>

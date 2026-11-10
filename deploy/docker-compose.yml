@@ -36,7 +36,7 @@ services:
       Jwt__Key: ${JWT_KEY:?set in .env}
       Otp__Pepper: ${OTP_PEPPER:?set in .env}
       # Must match the SMS pattern's code length (Faraz pattern: 5 digits).
-      Otp__Digits: ${OTP_DIGITS:-6}
+      Otp__Digits: ${OTP_DIGITS:-5}
       Signup__InviteCode: ${SIGNUP_INVITE_CODE:?set in .env}
       Signup__RequireInviteCode: ${SIGNUP_REQUIRE_INVITE:-false}
       Auth__PasswordLoginEnabled: ${PASSWORD_LOGIN:-false}
@@ -45,10 +45,7 @@ services:
       Sms__AllowFakeInProduction: ${SMS_ALLOW_FAKE:-false}
       Sms__FakeAllowedMobiles__0: ${SMS_FAKE_MOBILE_1:-}
       Sms__FakeAllowedMobiles__1: ${SMS_FAKE_MOBILE_2:-}
-      Sms__SmsIr__ApiKey: ${SMSIR_API_KEY:-}
-      Sms__SmsIr__Templates__auth_otp: ${SMSIR_OTP_TEMPLATE_ID:-0}
-      Sms__SmsIr__ParamNames__code: ${SMSIR_OTP_PARAM:-CODE}
-      # SmartX (docs/15). The login code ALWAYS stays on Sms__Provider (smsir); SMARTX_ALL=true sends every other message to SmartX.
+      # SmartX (docs/15). The login code ALWAYS stays on Sms__Provider (iranpayamak / Faraz); SMARTX_ALL=true sends every other message to SmartX.
       Sms__SmartXAll: ${SMARTX_ALL:-false}
       Sms__SmartXKeys: ${SMARTX_KEYS:-}
       SmartXSms__BaseUrl: ${SMARTX_BASE_URL:-https://staging-api.smartx.ir}

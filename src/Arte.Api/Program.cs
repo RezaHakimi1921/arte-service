@@ -85,17 +85,7 @@ builder.Services.AddScoped<SmsTemplateService>();
 builder.Services.AddScoped<Arte.Api.Sms.SmartX.SmartXSmsProvider>();
 var smartxKeys = smsOptions.SmartXKeyList().ToHashSet();
 var smartxEnabled = smsOptions.SmartXAll || smartxKeys.Count > 0;
-if (smsOptions.Provider == "smsir")
-{
-    builder.Services.AddHttpClient<SmsIrProvider>(SmsIrProvider.HttpClientName, c =>
-    {
-        c.BaseAddress = new Uri(smsOptions.SmsIr.BaseUrl);
-        c.Timeout = TimeSpan.FromSeconds(15);
-        c.DefaultRequestHeaders.Add("x-api-key", smsOptions.SmsIr.ApiKey);
-        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-    });
-}
-else if (smsOptions.Provider == "iranpayamak")
+if (smsOptions.Provider == "iranpayamak")
 {
     builder.Services.AddHttpClient<IranPayamakProvider>(c =>
     {
@@ -106,12 +96,11 @@ else if (smsOptions.Provider == "iranpayamak")
     });
 }
 
-// The legacy provider carries the login code always, and every other message unless it is routed to SmartX.
+// Faraz carries the login code always, and every other message unless it is routed to SmartX.
 builder.Services.AddScoped<ISmsProvider>(sp =>
 {
     ISmsProvider legacy = smsOptions.Provider switch
     {
-        "smsir" => sp.GetRequiredService<SmsIrProvider>(),
         "iranpayamak" => sp.GetRequiredService<IranPayamakProvider>(),
         _ => sp.GetRequiredService<FakeSmsProvider>(),
     };
@@ -328,8 +317,8 @@ static class StartupChecks
         if (string.IsNullOrEmpty(connectionString)) problems.Add("ConnectionStrings:Default is missing.");
         if (env.IsProduction() && sms.Provider == "fake" && !sms.AllowFakeInProduction)
             problems.Add("Sms:Provider is 'fake' in production. Set Sms:AllowFakeInProduction with Sms:FakeAllowedMobiles, or configure a real provider.");
-        if (sms.Provider is not ("fake" or "smsir" or "iranpayamak"))
-            problems.Add($"Sms:Provider '{sms.Provider}' is unknown (use smsir or iranpayamak; SmartX is chosen per message with SMARTX_ALL or SMARTX_KEYS).");
+        if (sms.Provider is not ("fake" or "iranpayamak"))
+            problems.Add($"Sms:Provider '{sms.Provider}' is unknown (use iranpayamak / Faraz; SmartX is chosen per message with SMARTX_ALL or SMARTX_KEYS).");
         if (sms.SmartXAll || sms.SmartXKeyList().Length > 0)
         {
             // Only when SmartX is actually in use: a missing key must stop the start, not the first customer's SMS.
@@ -350,8 +339,6 @@ static class StartupChecks
             if (!ip.Templates.TryGetValue("auth_otp", out var otpPattern) || string.IsNullOrWhiteSpace(otpPattern))
                 problems.Add("Sms:IranPayamak:Templates:auth_otp (pattern code) is missing.");
         }
-        if (sms.Provider == "smsir" && sms.SmsIr.ApiKey.Length < 20) problems.Add("Sms:SmsIr:ApiKey is missing.");
-        if (sms.Provider == "smsir" && (!sms.SmsIr.Templates.TryGetValue("auth_otp", out var otpTemplate) || otpTemplate <= 0)) problems.Add("Sms:SmsIr:Templates:auth_otp (template id) is missing.");
 
         if (problems.Count > 0)
             throw new InvalidOperationException("Configuration is not safe to start:\n- " + string.Join("\n- ", problems));

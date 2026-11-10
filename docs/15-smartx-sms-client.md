@@ -5,7 +5,7 @@
 ## تصمیم‌ها
 
 - Arte فقط لوله‌ی ارسال به اسمارت است (`POST /connect/token`، `POST /api/v1/notification/direct-send`). صف، وضعیت تحویل، موجودی شعبه و انتخاب خط پیاده نشده‌اند.
-- **کد ورود (`auth.otp`) هرگز از اسمارت نمی‌رود.** همیشه از `Sms:Provider` (sms.ir) فرستاده می‌شود و هزینه‌اش روی Arte می‌ماند؛ از شارژ هیچ شعبه‌ای کم نمی‌شود.
+- **کد ورود (`auth.otp`) هرگز از اسمارت نمی‌رود.** همیشه از `Sms:Provider` (Faraz / Iran Payamak) فرستاده می‌شود و هزینه‌اش روی Arte می‌ماند؛ از شارژ هیچ شعبه‌ای کم نمی‌شود.
 - بقیه‌ی پیام‌ها (`case.*`، `survey.request`، …) با `SMARTX_ALL=true` از اسمارت می‌روند و هزینه‌شان از **شارژ همان شعبه** کم می‌شود؛ موجودی مرکزی هم با هر پارت کم می‌شود.
 - قیمت هر پارت: خرید ۱۰۰ تومان، فروش ۲۱۹ تومان (قابل تغییر در پنل ادمین، نه در کد).
 - همه‌ی پیام‌ها غیر از کد ورود فقط ۰۸:۰۰ تا ۲۳:۰۰ به وقت تهران فرستاده می‌شوند (`SmartXSms__SendFromHour/SendUntilHour`). بیرون از این بازه پیام فرستاده **نمی‌شود** (در تاریخچه‌ی پرونده با دلیل ثبت می‌شود)؛ نظرسنجی خودش تا صبح صبر می‌کند. پیام تأخیری/صف ساخته نشده است.
@@ -14,7 +14,7 @@
 
 | نام | توضیح |
 |---|---|
-| `SMS_PROVIDER` | همیشه `smsir` (یا `iranpayamak`): کد ورود از این سرویس می‌رود و هرگز از اسمارت نمی‌رود |
+| `SMS_PROVIDER` | همیشه `iranpayamak` (Faraz): کد ورود از این سرویس می‌رود و هرگز از اسمارت نمی‌رود |
 | `SMARTX_ALL` | `true`: همه‌ی پیام‌ها غیر از کد ورود از اسمارت. پیش‌فرض `false` |
 | `SMARTX_KEYS` | برای آزمایش تک‌تک: با ویرگول، مثلاً `case.opened`. با `SMARTX_ALL` همزمان نباشد؛ `auth.otp` نباید در آن باشد |
 | `SMARTX_BASE_URL` | staging: `https://staging-api.smartx.ir` ، production: `https://api.smartx.ir` |
@@ -22,7 +22,7 @@
 | `SMARTX_SENDER_NUMBER` | خط ثابت ارسال |
 | `SMARTX_REQUIRE_APPROVED` | `true`: فقط متن تأییدشده‌ی شعبه فرستاده شود؛ پیش‌فرض `false`: تا تأیید، متن سیستم |
 
-اگر `SMARTX_ALL=true` یا `SMARTX_KEYS` پر باشد و یکی از مقدارهای SmartX خالی باشد، برنامه بالا نمی‌آید و نام کلید گمشده را می‌گوید. `Sms:Provider=smartx` دیگر پذیرفته نمی‌شود.
+اگر `SMARTX_ALL=true` یا `SMARTX_KEYS` پر باشد و یکی از مقدارهای SmartX خالی باشد، برنامه بالا نمی‌آید و نام کلید گمشده را می‌گوید. `Sms:Provider=smartx` و `smsir` پذیرفته نمی‌شوند.
 
 ## مخزن شارژ
 
@@ -56,7 +56,7 @@ docker compose run --rm -T api sms-wallet credit "مکانیک موتور" 100  
 
 ## متن پیامک هر شعبه
 
-برای هر `(شعبه، MessageKey)`: پیش‌نویس ← تأیید ادمین ← ارسال. متن تأییدشده‌ی همان شعبه فرستاده می‌شود، وگرنه متن سیستم (`SmsTemplates.Branch`). تگ‌ها: `{{CustomerName}}`، `{{CustomerLink}}`، `{{WorkshopName}}`، `{{CaseCode}}`، `{{Vehicle}}`. متن تا ۴۰۰ نویسه؛ پیام‌های دارای لینک باید `{{CustomerLink}}` داشته باشند. تاریخ و کاربر تأیید ثبت می‌شود. متن کد ورود سراسری است (sms.ir) و هزینه‌اش با Arte.
+برای هر `(شعبه، MessageKey)`: پیش‌نویس ← تأیید ادمین ← ارسال. متن تأییدشده‌ی همان شعبه فرستاده می‌شود، وگرنه متن سیستم (`SmsTemplates.Branch`). تگ‌ها: `{{CustomerName}}`، `{{CustomerLink}}`، `{{WorkshopName}}`، `{{CaseCode}}`، `{{Vehicle}}`. متن تا ۴۰۰ نویسه؛ پیام‌های دارای لینک باید `{{CustomerLink}}` داشته باشند. تاریخ و کاربر تأیید ثبت می‌شود. متن کد ورود سراسری است (Faraz) و هزینه‌اش با Arte.
 
 ## کلاینت
 
@@ -71,6 +71,6 @@ docker compose run --rm -T api sms-wallet credit "مکانیک موتور" 100  
 ## راه‌اندازی و تست
 
 1. مقدارهای بالا را در `deploy/.env` بگذار (staging).
-2. `SMS_PROVIDER=smsir` را نگه دار و `docker compose up -d` بزن.
+2. `SMS_PROVIDER=iranpayamak` را نگه دار و `docker compose up -d` بزن.
 3. تست مستقیم: `docker compose run --rm -T api smartx-test <موبایل>` ← باید `Accepted by SmartX` بگوید و پیامک برسد.
 4. موجودی مرکزی و شارژ شعبه را ثبت کن، بعد `SMARTX_KEYS=case.opened` را بگذار و یک پرونده‌ی تست باز کن. اگر درست بود، `SMARTX_KEYS` را خالی کن و `SMARTX_ALL=true` بگذار.

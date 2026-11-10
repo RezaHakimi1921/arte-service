@@ -33,7 +33,7 @@ Message row (status = queued)      ← در همان تراکنش دیتابیس
 SmsDispatcher (BackgroundService)  ← retry با backoff، حداکثر ۳ بار
         │
         ▼
-ISmsProvider  ──►  KavenegarProvider | SmsIrProvider | MelipayamakProvider | FakeSmsProvider
+ISmsProvider  ──►  IranPayamakProvider (Faraz) | FakeSmsProvider | (+ SmartX for non-OTP when enabled)
         │
         ▼
 Delivery webhook / poll  →  Message.status = delivered | failed

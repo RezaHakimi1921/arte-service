@@ -89,15 +89,9 @@ approved. Adapter `IranPayamakProvider` (POST https://api.iranpayamak.com/ws/v1/
 Server settings: `SMS_PROVIDER=iranpayamak`, `IRANPAYAMAK_API_KEY`, `IRANPAYAMAK_LINE`, `IRANPAYAMAK_OTP_PATTERN`,
 `IRANPAYAMAK_OTP_PARAM`.
 
-### History: sms.ir needs a business licence for the OTP template
+### History: sms.ir dropped
 
-Status (۱۴۰۵/۰۷/۱۷): the sms.ir adapter is built and deployed, but sms.ir will not approve the template without a
-business licence (مجوز کسب‌وکار). Until then: password login (username or mobile), open demo mode.
-Options to evaluate:
-- **Bale OTP (safir.bale.ai)** — free, code delivered inside the Bale app (no SMS fallback); check its registration requirements.
-- Other SMS panels that accept an individual (e.g. a personal shared service line); compare requirements, not just price.
-- Voice OTP (some panels read the code by phone call) — check whether it has the same licence rule.
-- Getting eNamad / a business licence also unlocks a payment gateway (§4).
+sms.ir needed a business licence for the OTP template and was removed; OTP and shop SMS stay on Faraz (`SMS_PROVIDER=iranpayamak`).
 
 ## 7. Monitoring
 - **Done:** Bugsink at https://error.artepersia.com (server + browser errors, no personal data).

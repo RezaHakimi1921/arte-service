@@ -13,12 +13,14 @@ SMS_PROVIDER=fake
 SMS_ALLOW_FAKE=true
 SMS_FAKE_MOBILE_1=${1:-}
 SMS_FAKE_MOBILE_2=
-# sms.ir: set SMS_PROVIDER=smsir once the OTP template is approved.
-SMSIR_API_KEY=
-SMSIR_OTP_TEMPLATE_ID=
-SMSIR_OTP_PARAM=CODE
+# Faraz SMS / Iran Payamak: set SMS_PROVIDER=iranpayamak and fill the keys below once patterns are approved.
+OTP_DIGITS=5
+IRANPAYAMAK_API_KEY=
+IRANPAYAMAK_LINE=
+IRANPAYAMAK_OTP_PATTERN=
+IRANPAYAMAK_OTP_PARAM=code
 # SmartX SMS (docs/15). Secrets come from the SmartX back office; never paste them into chat or git.
-# Rollout: the login code always stays on SMS_PROVIDER (smsir). SMARTX_ALL=true sends every other message to SmartX
+# Rollout: the login code always stays on SMS_PROVIDER (iranpayamak). SMARTX_ALL=true sends every other message to SmartX
 # (or list single keys in SMARTX_KEYS while testing). Never list auth.otp.
 SMARTX_ALL=false
 SMARTX_BASE_URL=https://staging-api.smartx.ir

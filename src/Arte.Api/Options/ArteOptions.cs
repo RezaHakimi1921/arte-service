@@ -53,13 +53,12 @@ public sealed class SmsOptions
     public string SmartXKeys { get; set; } = "";
 
     /// <summary>
-    /// Every message except the login code goes through SmartX. The login code always stays on Sms:Provider (sms.ir / IranPayamak).
+    /// Every message except the login code goes through SmartX. The login code always stays on Sms:Provider (Faraz / IranPayamak).
     /// </summary>
     public bool SmartXAll { get; set; }
 
     public string[] SmartXKeyList() =>
         SmartXKeys.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    public SmsIrOptions SmsIr { get; set; } = new();
     public IranPayamakOptions IranPayamak { get; set; } = new();
 }
 
@@ -76,13 +75,3 @@ public sealed class IranPayamakOptions
     public Dictionary<string, string> ParamNames { get; set; } = [];
 }
 
-/// <summary>sms.ir settings. The API key comes only from the server's environment (deploy/.env).</summary>
-public sealed class SmsIrOptions
-{
-    public string BaseUrl { get; set; } = "https://api.sms.ir/";
-    public string ApiKey { get; set; } = "";
-    /// <summary>Message key with '.' replaced by '_' (e.g. "auth_otp") → sms.ir template id.</summary>
-    public Dictionary<string, int> Templates { get; set; } = [];
-    /// <summary>Our token name → the template's parameter name; default is the token name upper-cased ("code" → "CODE").</summary>
-    public Dictionary<string, string> ParamNames { get; set; } = [];
-}

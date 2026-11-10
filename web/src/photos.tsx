@@ -6,7 +6,7 @@ import { formatNumber } from "./ui";
 
 export type CasePhoto = { id: string; stageKey: string; caption: string | null; createdAt: string; visibleToCustomer: boolean; isVideo?: boolean };
 
-const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 
 /** True when this browser can decode the clip (phone clips in H.265 often cannot be played by other browsers). */
 function playable(file: File): Promise<boolean> {
@@ -87,8 +87,7 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
       for (const file of Array.from(files).slice(0, 6)) {
         const form = new FormData();
         if (file.type.startsWith("video/")) {
-          // Videos go as recorded: keep clips short (about 30 seconds); the server refuses anything over 30 MB.
-          if (file.size > MAX_VIDEO_BYTES) { notify("فیلم بزرگ‌تر از ۳۰ مگابایت است؛ کوتاه‌تر ضبط کنید.", "error"); continue; }
+          if (file.size > MAX_VIDEO_BYTES) { notify("فیلم بزرگ‌تر از ۲۰۰ مگابایت است.", "error"); continue; }
           if (!(await playable(file))) notify("این فیلم در همه‌ی مرورگرها پخش نمی‌شود (احتمالاً فرمت H.265). در تنظیمات دوربین حالت «سازگارترین» را انتخاب کنید.", "error");
           form.append("file", file, file.name || "video.mp4");
         } else form.append("file", await compress(file), "photo.jpg");

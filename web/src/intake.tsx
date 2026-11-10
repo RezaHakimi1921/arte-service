@@ -132,7 +132,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       const made: { blob: Blob; url: string; video?: boolean }[] = [];
       for (const f of Array.from(files).slice(0, 6)) {
         if (f.type.startsWith("video/")) {
-          if (f.size > 30 * 1024 * 1024) { notify("فیلم بزرگ‌تر از ۳۰ مگابایت است؛ کوتاه‌تر ضبط کنید.", "error"); continue; }
+          if (f.size > 200 * 1024 * 1024) { notify("فیلم بزرگ‌تر از ۲۰۰ مگابایت است.", "error"); continue; }
           made.push({ blob: f, url: URL.createObjectURL(f), video: true });
         } else { const blob = await compress(f); made.push({ blob, url: URL.createObjectURL(blob) }); }
       }
@@ -592,7 +592,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
             </button>
           </div>
         )}
-        <p className="hint">وضعیت ظاهری وسیله هنگام تحویل؛ بعد از ثبت پذیرش در پرونده می‌ماند. فیلم فقط برای کارگاه است (تا ۳۰ مگابایت).</p>
+        <p className="hint">وضعیت ظاهری وسیله هنگام تحویل؛ بعد از ثبت پذیرش در پرونده می‌ماند. فیلم فقط برای کارگاه است.</p>
       </Section>
 
       {full && (

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Arte.Api.Cases;
 
 namespace Arte.Tests;
 
@@ -68,7 +69,7 @@ public sealed class WorkshopVideoTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Other_files_and_oversized_files_are_refused()
+    public async Task Other_files_are_refused()
     {
         var (owner, _) = await api.NewBusinessAsync();
         var id = (await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
@@ -78,6 +79,12 @@ public sealed class WorkshopVideoTests(ArteApiFactory api)
         }))).GetProperty("id").GetGuid();
 
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsync($"/api/v1/cases/{id}/attachments", File(new byte[200], "video/mp4", "fake.mp4"))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsync($"/api/v1/cases/{id}/attachments", File(Mp4(31 * 1024 * 1024), "video/mp4", "big.mp4"))).StatusCode);
+    }
+
+    [Fact]
+    public void Video_size_cap_is_not_a_short_clip_limit()
+    {
+        // Was 30 MB (~30s); keep a disk guard only, not a duration rule.
+        Assert.True(AttachmentEndpoints.MaxVideoBytes >= 100L * 1024 * 1024);
     }
 }

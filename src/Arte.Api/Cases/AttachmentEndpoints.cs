@@ -14,8 +14,8 @@ namespace Arte.Api.Cases;
 public static class AttachmentEndpoints
 {
     public const long MaxBytes = 6 * 1024 * 1024;
-    /// <summary>A short clip (about 30 seconds from a phone camera). Videos are kept for the shop only, never shown to the customer.</summary>
-    public const long MaxVideoBytes = 30 * 1024 * 1024;
+    /// <summary>Phone videos for the shop (not a duration cap — size only, to protect disk). Shown to the customer only when shared on purpose.</summary>
+    public const long MaxVideoBytes = 200 * 1024 * 1024;
 
     private static readonly (string Type, string Ext, byte[] Magic, int Offset)[] Allowed =
     [
@@ -68,7 +68,7 @@ public static class AttachmentEndpoints
         var form = await request.ReadFormAsync(ct);
         var file = form.Files.GetFile("file");
         if (file is null || file.Length == 0) return Results.Problem(statusCode: 400, title: "فایلی ارسال نشده است.");
-        if (file.Length > MaxVideoBytes) return Results.Problem(statusCode: 400, title: "حجم فیلم حداکثر ۳۰ مگابایت است (حدود ۳۰ ثانیه).");
+        if (file.Length > MaxVideoBytes) return Results.Problem(statusCode: 400, title: "حجم فیلم حداکثر ۲۰۰ مگابایت است.");
         var caption = form["caption"].ToString().Trim();
         if (caption.Length > 200) caption = caption[..200];
         // A receipt belongs to a payment: never in the gallery, never shown to the customer.
