@@ -182,7 +182,7 @@ public static class CaseEndpoints
         return Results.Ok(await BuildDetail(c, me.RequiredMembership, db, ct));
     }
 
-    private static async Task<object> BuildDetail(Case c, Membership me, ArteDbContext db, CancellationToken ct)
+    private static async Task<object> BuildDetail(Case c, Membership me, ArteDbContext db, CancellationToken ct, string? smsNotice = null)
     {
         var customer = await db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking()
             .Where(x => x.Id == c.CustomerId).Select(x => new { x.Id, x.FullName, x.Mobile }).SingleAsync(ct);
@@ -254,6 +254,7 @@ public static class CaseEndpoints
             CanManage = me.Has(Permissions.CasesCreate),
             CanAssign = me.Has(Permissions.CasesAssign),
             Timeline = timeline.Select(e => new { e.Id, e.Type, e.OccurredAt, Data = e.Data?.RootElement, e.Actor }),
+            SmsNotice = smsNotice,
         };
     }
 
@@ -452,8 +453,8 @@ public static class CaseEndpoints
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        await notifier.NotifyAsync(c, MessageKeys.CaseOpened, ct);
-        return Results.Created($"/api/v1/cases/{c.Id}", new { c.Id, c.Number });
+        var smsNotice = await notifier.NotifyAsync(c, MessageKeys.CaseOpened, ct);
+        return Results.Created($"/api/v1/cases/{c.Id}", new { c.Id, c.Number, SmsNotice = smsNotice });
     }
 
     private static async Task<IResult> UpdateAsync(Guid id, UpdateCase req, RequestUser me, ArteDbContext db, IClock clock, CancellationToken ct)
@@ -597,9 +598,11 @@ public static class CaseEndpoints
 
         return await SaveOr409(db, ct, async () =>
         {
-            if (to.Key == "ready") await notifier.NotifyAsync(c, MessageKeys.CaseReady, ct);
-            else if (to.Key == "delivered") await notifier.NotifyAsync(c, MessageKeys.CaseDelivered, ct);
-            else if (to.Key == "awaiting_parts" && waitReason == WaitReasons.CustomerParts) await notifier.NotifyAsync(c, MessageKeys.CaseWaitingPart, ct);
+            string? smsNotice = null;
+            if (to.Key == "ready") smsNotice = await notifier.NotifyAsync(c, MessageKeys.CaseReady, ct);
+            else if (to.Key == "delivered") smsNotice = await notifier.NotifyAsync(c, MessageKeys.CaseDelivered, ct);
+            else if (to.Key == "awaiting_parts" && waitReason == WaitReasons.CustomerParts)
+                smsNotice = await notifier.NotifyAsync(c, MessageKeys.CaseWaitingPart, ct);
             else if (to.Key == "review") await notifier.NotifyMastersAsync(c, userId, ct);
 
             // Push to the people who run the business: work started, finished, delivered.
@@ -612,7 +615,7 @@ public static class CaseEndpoints
                 _ => null,
             };
             if (pushTitle is not null && !c.IsSample) await push.CaseEventAsync(c.Id, c.Number, userId, pushTitle, Permissions.CasesCreate, ct);
-            return Results.Ok(await BuildDetail(c, m, db, ct));
+            return Results.Ok(await BuildDetail(c, m, db, ct, smsNotice));
         });
     }
 

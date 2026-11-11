@@ -370,8 +370,9 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
     if (busy) return;
     setBusy(true);
     try {
-      setC(await api<CaseDetailView>(`/api/v1/cases/${id}/transitions/${t.id}`, { body: extra }));
-      notify(`انجام شد: ${t.label}`);
+      const updated = await api<CaseDetailView & { smsNotice?: string | null }>(`/api/v1/cases/${id}/transitions/${t.id}`, { body: extra });
+      setC(updated);
+      notify(updated.smsNotice || `انجام شد: ${t.label}`, updated.smsNotice ? "error" : undefined);
       close();
     } catch (err) {
       if (err instanceof ApiError && err.body?.code === "balance_due") {
@@ -523,7 +524,12 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
                 </span>
                 <span className="muted small">
                   {faDateTime.format(new Date(e.occurredAt))}
-                  {!e.data?.sent && ` · ${e.data?.error === "template_not_configured" ? "الگوی این پیامک روی سرور تنظیم نشده" : "سرویس‌دهنده نپذیرفت"}`}
+                  {!e.data?.sent && ` · ${({
+                    template_not_configured: "الگوی این پیامک روی سرور تنظیم نشده",
+                    skipped_no_credit: "شارژ پیامک کافی نبود",
+                    skipped_license: "پرونده‌های رایگان تمام شده",
+                    outside_sending_hours: "خارج از ساعت ارسال",
+                  } as Record<string, string>)[String(e.data?.error)] ?? "سرویس‌دهنده نپذیرفت"}`}
                 </span>
               </li>
             ))}

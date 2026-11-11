@@ -40,19 +40,78 @@ public sealed class LicensingTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task New_business_starts_with_a_14_day_trial_and_sees_the_price_list()
+    public async Task New_business_starts_with_a_15_case_trial_and_sees_the_price_list()
     {
         var (owner, _) = await api.NewBusinessAsync();
         var license = (await Me(owner)).GetProperty("business").GetProperty("license");
         Assert.Equal("active", license.GetProperty("state").GetString());
         Assert.Equal("trial", license.GetProperty("kind").GetString());
-        Assert.Equal(14, license.GetProperty("daysLeft").GetInt32());
+        Assert.True(license.GetProperty("onCaseTrial").GetBoolean());
+        Assert.Equal(LicensePolicy.TrialCaseLimit, license.GetProperty("freeCasesLimit").GetInt32());
+        Assert.Equal(LicensePolicy.TrialCaseLimit, license.GetProperty("freeCasesLeft").GetInt32());
+        Assert.Equal(0, license.GetProperty("freeCasesUsed").GetInt32());
         Assert.True((await Me(owner)).GetProperty("business").GetProperty("surveyEnabled").GetBoolean());
 
         var mine = await Json(await owner.GetAsync("/api/v1/license"));
         var plans = mine.GetProperty("plans").EnumerateArray().ToList();
         Assert.Contains(plans, p => p.GetProperty("months").GetInt32() == 12 && p.GetProperty("priceRials").GetInt64() == 100_000_000);
         Assert.Single(mine.GetProperty("history").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task After_15_free_cases_intake_and_attachments_are_blocked()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            scope.ServiceProvider.GetRequiredService<Arte.Core.Tenancy.TenantContext>().Set(tenantId);
+            var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+            var clock = scope.ServiceProvider.GetRequiredService<IClock>();
+            var now = clock.UtcNow;
+            var wf = await db.Workflows.IgnoreQueryFilters().FirstAsync(w => w.TenantId == tenantId);
+            var stage = await db.Stages.IgnoreQueryFilters().FirstAsync(s => s.WorkflowId == wf.Id);
+            var customer = new Arte.Core.Customers.Customer
+            {
+                TenantId = tenantId, Mobile = ArteApiFactory.NewMobile(), FullName = "آزمایش", CreatedAt = now, UpdatedAt = now,
+            };
+            db.Customers.Add(customer);
+            for (var i = 0; i < LicensePolicy.TrialCaseLimit; i++)
+            {
+                db.Cases.Add(new Arte.Core.Cases.Case
+                {
+                    TenantId = tenantId, Number = i + 1, CustomerId = customer.Id, WorkflowId = wf.Id, StageId = stage.Id,
+                    Request = $"c{i}", OpenedAt = now, StageEnteredAt = now, TrackingCode = $"t{i:0000000000}",
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var license = (await Me(owner)).GetProperty("business").GetProperty("license");
+        Assert.Equal("expired", license.GetProperty("state").GetString());
+        Assert.Equal(0, license.GetProperty("freeCasesLeft").GetInt32());
+
+        var blocked = await owner.PostAsJsonAsync("/api/v1/cases", new { mobile = ArteApiFactory.NewMobile(), request = "x" });
+        Assert.Equal(HttpStatusCode.PaymentRequired, blocked.StatusCode);
+        Assert.Contains(LicenseService.TrialCasesExhausted, await blocked.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Platform_support_can_still_read_an_inactive_branch()
+    {
+        var admin = await AdminAsync();
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PatchAsJsonAsync($"/api/v1/admin/businesses/{tenantId}", new { isActive = false, reason = "تست" })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync($"/api/v1/admin/businesses/{tenantId}/support", null)).StatusCode);
+        var switched = await Json(await admin.PostAsJsonAsync("/api/v1/auth/select-tenant", new { tenantId }));
+        using var support = api.Client();
+        support.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", switched.GetProperty("accessToken").GetString());
+
+        Assert.Equal(HttpStatusCode.OK, (await support.GetAsync("/api/v1/cases")).StatusCode);
+        Assert.True((await Me(support)).GetProperty("business").GetProperty("support").GetBoolean());
+        Assert.False((await Me(support)).GetProperty("business").GetProperty("isActive").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.GetAsync("/api/v1/cases")).StatusCode);
     }
 
     [Fact]

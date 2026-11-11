@@ -71,11 +71,20 @@ public static class LicenseEndpoints
 
             return Results.Ok(rows.Select(r =>
             {
+                var used = r.Cases;
+                var limit = LicensePolicy.TrialCaseLimit;
+                var left = Math.Max(0, limit - used);
+                var onTrial = r.License?.Kind == LicenseKinds.Trial;
                 var (state, days) = LicensePolicy.StateOf(r.License?.EndsAt, now);
+                if (onTrial && state != LicenseStates.Expired)
+                {
+                    if (used >= limit) { state = LicenseStates.Expired; days = 0; }
+                    else if (left <= 3) state = LicenseStates.Expiring;
+                }
                 return new
                 {
                     r.Id, r.Name, r.Phone, r.CreatedAt, r.IsActive, r.Brand, r.Mine, r.Owner, r.Staff, r.Cases, r.LastCaseAt,
-                    License = new LicenseStatus(state, days, r.License?.EndsAt, r.License?.Kind),
+                    License = new LicenseStatus(state, days, r.License?.EndsAt, r.License?.Kind, used, limit, left, onTrial),
                 };
             }));
         });
@@ -152,7 +161,8 @@ public static class LicenseEndpoints
         admin.MapPost("/businesses/{id:guid}/support", async (Guid id, RequestUser me, IServiceScopeFactory scopes, IClock clock,
             Audit audit, ArteDbContext db, CancellationToken ct) =>
         {
-            if (!await db.Tenants.AnyAsync(t => t.Id == id && t.IsActive, ct)) return Results.NotFound();
+            // Allow support into deactivated shops too — the admin must still inspect them.
+            if (!await db.Tenants.AnyAsync(t => t.Id == id, ct)) return Results.NotFound();
             var userId = me.RequiredUserId;
             await using var scope = scopes.CreateAsyncScope();
             scope.ServiceProvider.GetRequiredService<Arte.Core.Tenancy.TenantContext>().Set(id);

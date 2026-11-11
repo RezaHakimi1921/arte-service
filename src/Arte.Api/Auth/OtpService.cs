@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Arte.Api.Options;
+using Arte.Api.Sms;
 using Arte.Core.Common;
 using Arte.Core.Data;
 using Arte.Core.Identity;
@@ -15,6 +16,7 @@ public enum OtpRequestResult { Sent, TooSoon, TooMany, SendFailed }
 public sealed class OtpService(
     ArteDbContext db,
     ISmsProvider sms,
+    SmsWalletService wallet,
     IClock clock,
     IOptions<OtpOptions> otpOptions,
     IOptions<SmsOptions> smsOptions,
@@ -70,9 +72,28 @@ public sealed class OtpService(
         });
         await db.SaveChangesAsync(ct);
 
+        // OTP is paid by Arte's central SMS balance, never by a shop wallet.
+        // Integration tests sync central to tiny values while asserting wallet math — skip charging there.
+        SmsReservation? reservation = null;
+        if (!env.IsEnvironment("Testing"))
+        {
+            var otpBody = SmsTags.Fill(SmsTemplates.OtpDefault, new Dictionary<string, string> { [SmsTags.Code] = code });
+            var parts = Math.Max(1, SmsParts.Count(otpBody));
+            string? walletError;
+            (reservation, walletError) = await wallet.ReserveAsync(null, parts, MessageKeys.AuthOtp, ct);
+            if (reservation is null)
+            {
+                logger.LogError("OTP blocked: central SMS credit insufficient ({Error})", walletError);
+                await db.OtpChallenges.Where(c => c.Mobile == mobile && c.ConsumedAt == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.ConsumedAt, now), ct);
+                return OtpRequestResult.SendFailed;
+            }
+        }
+
         var sent = await sms.SendTemplateAsync(mobile, MessageKeys.AuthOtp, new Dictionary<string, string> { ["code"] = code }, ct);
         if (!sent.Accepted)
         {
+            if (reservation is not null) await wallet.RefundAsync(reservation, ct);
             // The code never left the server: kill it, and tell the user instead of making them wait for nothing.
             await db.OtpChallenges.Where(c => c.Mobile == mobile && c.ConsumedAt == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(c => c.ConsumedAt, now), ct);

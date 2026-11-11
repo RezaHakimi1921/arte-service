@@ -53,22 +53,22 @@ public static class SmsTemplates
     public static readonly IReadOnlyList<Definition> Branch =
     [
         new(MessageKeys.CaseOpened, "هنگام پذیرش",
-            "آرته سرویس\nنام: {{CustomerName}}\nوسیله: {{Vehicle}}\nتعمیرگاه: {{WorkshopName}}\nوضعیت: پذیرش شد و در نوبت کار قرار گرفت.\nلینک پیگیری: {{CustomerLink}}", true),
+            "{{WorkshopName}}\n{{CustomerName}} عزیز\n{{Vehicle}} پذیرش شد.\nپیگیری: {{CustomerLink}}", true),
         new(MessageKeys.CaseReady, "آماده‌ی تحویل",
-            "آرته سرویس\nنام: {{CustomerName}}\nوسیله: {{Vehicle}}\nتعمیرگاه: {{WorkshopName}}\nوضعیت: آماده‌ی تحویل است.\nلینک جزئیات و هزینه: {{CustomerLink}}", true),
+            "{{WorkshopName}}\nهمراه گرامی\n{{Vehicle}} آماده‌ی تحویل است.\nجزئیات: {{CustomerLink}}", true),
         new(MessageKeys.CaseDelivered, "هنگام تحویل",
-            "آرته سرویس\nنام: {{CustomerName}}\nوسیله: {{Vehicle}}\nتعمیرگاه: {{WorkshopName}}\nوضعیت: تحویل شد.\nلینک سابقه و ضمانت: {{CustomerLink}}", true),
+            "{{WorkshopName}}\n{{Vehicle}} تحویل شد.\nسابقه و ضمانت: {{CustomerLink}}", true),
         new(MessageKeys.CaseLink, "ارسال دوباره‌ی لینک (از پرونده)",
-            "آرته سرویس\nنام: {{CustomerName}}\nوسیله: {{Vehicle}}\nتعمیرگاه: {{WorkshopName}}\nلینک پیگیری: {{CustomerLink}}", true),
+            "{{WorkshopName}}\nلینک پیگیری {{Vehicle}}:\n{{CustomerLink}}", true),
         new(MessageKeys.CaseWaitingPart, "منتظر قطعه‌ی مشتری",
-            "آرته سرویس\nنام: {{CustomerName}}\nوسیله: {{Vehicle}}\nتعمیرگاه: {{WorkshopName}}\nوضعیت: منتظر قطعه‌ای هستیم که شما تهیه می‌کنید.\nلینک پیگیری: {{CustomerLink}}", true),
+            "{{WorkshopName}}\nبرای ادامه‌ی کار {{Vehicle}} منتظر قطعه‌ی شما هستیم.\n{{CustomerLink}}", true),
         new(MessageKeys.SurveyRequest, "نظرسنجی بعد از تحویل",
-            "آرته سرویس\nنام: {{CustomerName}}\nتعمیرگاه: {{WorkshopName}}\nلطفاً نظر خود را درباره‌ی این تعمیر ثبت کنید.\nلینک نظرسنجی: {{CustomerLink}}", true),
+            "{{WorkshopName}}\nنظر شما برای ما مهم است.\nثبت نظر: {{CustomerLink}}", true),
         new(MessageKeys.StaffWorkFinished, "به استادکار: کار در انتظار بازبینی",
-            "آرته سرویس\nتعمیرگاه: {{WorkshopName}}\nکار {{CaseCode}} ({{Vehicle}}) تمام شد و منتظر بازبینی شماست.", false),
+            "{{WorkshopName}}\n{{CaseCode}} ({{Vehicle}}) تمام شد؛ منتظر بازبینی شماست.", false),
     ];
 
-    public const string OtpDefault = "آرته سرویس\nکد ورود: {{Code}}\nاین کد را به کسی ندهید.";
+    public const string OtpDefault = "آرته سرویس\nکد ورود: {{Code}}\nدر اختیار کسی نگذارید.";
 
     public static Definition? Find(string key) => Branch.FirstOrDefault(d => d.Key == key);
 

@@ -22,15 +22,31 @@ public sealed class LicenseEnforcementMiddleware(RequestDelegate next)
     private static readonly string[] NewThings = ["/api/v1/cases", "/api/v1/customers", "/api/v1/staff"];
 
     // Routing ignores case, so this check must too (otherwise /API/V1/CASES would slip past it).
-    private static bool CreatesSomethingNew(HttpRequest r) =>
-        HttpMethods.IsPost(r.Method) && r.Path.Value?.TrimEnd('/') is { } path
-        && NewThings.Any(p => string.Equals(path, p, StringComparison.OrdinalIgnoreCase));
+    private static bool CreatesSomethingNew(HttpRequest r)
+    {
+        if (!HttpMethods.IsPost(r.Method) && !HttpMethods.IsPut(r.Method) && !HttpMethods.IsPatch(r.Method)) return false;
+        var path = r.Path.Value?.TrimEnd('/') ?? "";
+        if (NewThings.Any(p => string.Equals(path, p, StringComparison.OrdinalIgnoreCase))) return true;
+        // Photos / videos on a case: POST /api/v1/cases/{id}/attachments
+        if (HttpMethods.IsPost(r.Method)
+            && path.StartsWith("/api/v1/cases/", StringComparison.OrdinalIgnoreCase)
+            && path.EndsWith("/attachments", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
 
     public async Task InvokeAsync(HttpContext http, RequestUser user, ArteDbContext db, IClock clock)
     {
         var path = http.Request.Path.Value ?? "";
         if (user.Membership is not { } m || http.User.HasClaim(c => c.Type == ArteClaims.OpenMode)
             || AlwaysAllowed.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            await next(http);
+            return;
+        }
+
+        // Arte support (platform admin inside a branch) must always see the shop, even when it is switched off.
+        if (m.IsSupport)
         {
             await next(http);
             return;
@@ -47,13 +63,11 @@ public sealed class LicenseEnforcementMiddleware(RequestDelegate next)
 
         if (CreatesSomethingNew(http.Request))
         {
-            var end = await db.Licenses.AsNoTracking().Where(l => l.TenantId == m.TenantId)
-                .MaxAsync(l => (DateTimeOffset?)l.EndsAt, http.RequestAborted);
-            if (LicensePolicy.StateOf(end, clock.UtcNow).State == LicenseStates.Expired)
+            var access = await LicenseService.AccessAsync(db, m.TenantId, clock.UtcNow, http.RequestAborted);
+            if (!access.CanGrow)
             {
-                await Results.Problem(statusCode: 402,
-                    title: "اعتبار اشتراک این تعمیرگاه تمام شده است. پرونده‌های فعلی را می‌توانید ادامه دهید؛ برای پذیرش جدید اشتراک را تمدید کنید.",
-                    extensions: new Dictionary<string, object?> { ["code"] = "license_expired" }).ExecuteAsync(http);
+                await Results.Problem(statusCode: 402, title: access.LockMessage,
+                    extensions: new Dictionary<string, object?> { ["code"] = access.LockCode }).ExecuteAsync(http);
                 return;
             }
         }

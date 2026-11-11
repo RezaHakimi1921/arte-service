@@ -239,7 +239,12 @@ public static class TenantEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["businessType"] = ["نوع کسب‌وکار را انتخاب کنید."] });
             var tenant = await ProvisionAsync(scopes, me.RequiredUserId, name!, phone, ownerName, ct, businessType);
 
-            return Results.Created($"/api/v1/tenants/{tenant.Id}", new { tenant.Id, tenant.Name, TrialDays = Arte.Core.Licensing.LicensePolicy.TrialDays });
+            return Results.Created($"/api/v1/tenants/{tenant.Id}", new
+            {
+                tenant.Id, tenant.Name,
+                TrialCaseLimit = Arte.Core.Licensing.LicensePolicy.TrialCaseLimit,
+                SignupSmsCreditToman = Arte.Core.Licensing.LicensePolicy.SignupSmsCreditToman,
+            });
         }).RequireAuthorization().RequireRateLimiting("auth");
     }
 
@@ -289,6 +294,27 @@ public static class TenantEndpoints
         }
         sp.GetRequiredService<Audit>().Record("tenant.created", tenant.Id, ownerUserId, tenant.Name);
         await db.SaveChangesAsync(ct);
+
+        // Starter SMS credit so the free 15 cases can notify customers (about 30٬000 toman at the sale rate).
+        // Integration tests fund wallets themselves and assert exact balances — skip the gift there.
+        if (!sp.GetRequiredService<IHostEnvironment>().IsEnvironment("Testing"))
+        {
+            try
+            {
+                var wallet = sp.GetRequiredService<Arte.Api.Sms.SmsWalletService>();
+                var status = await wallet.StatusAsync(ct);
+                var parts = Arte.Api.Sms.SmsWalletService.PartsFor(
+                    Arte.Core.Licensing.LicensePolicy.SignupSmsCreditToman * 10, status.SalePricePerPartRial);
+                if (parts > 0)
+                    await wallet.CreditBranchAsync(tenant.Id, parts, Arte.Core.Licensing.LicensePolicy.SignupSmsCreditToman * 10,
+                        "شارژ شروع ثبت‌نام", null, ct);
+            }
+            catch (Arte.Api.Sms.SmsWalletException ex)
+            {
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger("TenantProvision")
+                    .LogWarning(ex, "Could not grant signup SMS credit to {TenantId}: {Code}", tenant.Id, ex.Code);
+            }
+        }
 
         // Every new business starts with the sample case the intro tour walks through.
         if (sp.GetRequiredService<IConfiguration>().GetValue("Onboarding:SampleData", true))

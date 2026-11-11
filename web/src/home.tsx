@@ -99,8 +99,17 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
         <button type="button" className="trial-banner" onClick={license.open}>
           <span className="trial-icon"><Icon name="calendar" /></span>
           <span>
-            <strong>{formatNumber(license.status.daysLeft)} روز از {license.status.kind === "trial" ? "دوره‌ی رایگان" : "اشتراک"} باقی مانده</strong>
-            {license.status.endsAt && <span>تا {shortDate.format(new Date(license.status.endsAt))}</span>}
+            {license.status.onCaseTrial || (license.status.kind === "trial" && license.status.freeCasesLimit != null) ? (
+              <>
+                <strong>{formatNumber(license.status.freeCasesLeft ?? 0)} پرونده از دوره‌ی رایگان باقی مانده</strong>
+                <span>از {formatNumber(license.status.freeCasesLimit ?? 15)} پرونده</span>
+              </>
+            ) : (
+              <>
+                <strong>{formatNumber(license.status.daysLeft)} روز از {license.status.kind === "trial" ? "دوره‌ی رایگان" : "اشتراک"} باقی مانده</strong>
+                {license.status.endsAt && <span>تا {shortDate.format(new Date(license.status.endsAt))}</span>}
+              </>
+            )}
           </span>
           <span className="banner-chevron"><Icon name="chevron" /></span>
         </button>

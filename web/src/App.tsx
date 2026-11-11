@@ -195,7 +195,8 @@ function ShopApp() {
         onClose={me.business && atBranches ? () => setAtBranches(false) : undefined} />
     );
   if (!me.business) return <ChooseBusiness session={session} onDone={signIn} />;
-  if (!me.business.isActive) return <BranchBlocked name={me.business.name} onSignOut={() => signIn(null)} />;
+  // Platform support inside a shop must keep working even when the branch is switched off.
+  if (!me.business.isActive && !me.business.support) return <BranchBlocked name={me.business.name} onSignOut={() => signIn(null)} />;
   return (
     <FeedbackProvider>
       <Shell me={me} onSignOut={() => signIn(null)} onBranches={() => setAtBranches(true)} onSettingsChanged={() => { api<Me>("/api/v1/me").then(setMe).catch(() => {}); }} />
@@ -549,5 +550,8 @@ export function applyTheme(theme: string, persist = true) {
 
 function licenseLine(s: LicenseStatus) {
   if (s.state === "expired") return "تمام شده";
+  if (s.onCaseTrial || (s.kind === "trial" && s.freeCasesLimit != null)) {
+    return `دوره‌ی رایگان · ${new Intl.NumberFormat("fa-IR").format(s.freeCasesLeft ?? 0)} پرونده مانده`;
+  }
   return `${s.kind === "trial" ? "دوره‌ی رایگان" : "فعال"} · ${new Intl.NumberFormat("fa-IR").format(s.daysLeft)} روز مانده`;
 }

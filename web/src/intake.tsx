@@ -292,7 +292,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     setBusy(true);
     setErrors({});
     try {
-      const created = await api<{ id: string }>("/api/v1/cases", {
+      const created = await api<{ id: string; smsNotice?: string | null }>("/api/v1/cases", {
         body: {
           mobile,
           customerName: customer?.fullName ? undefined : customerName.trim() || undefined,
@@ -324,6 +324,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         } catch { failed++; }
       }
       if (failed > 0) notify(`${formatNumber(failed)} عکس بارگذاری نشد؛ از صفحه‌ی پرونده دوباره اضافه کنید`, "error");
+      else if (created.smsNotice) notify(created.smsNotice, "error");
       onCreated(created.id);
     } catch (err) {
       if (err instanceof ApiError) {

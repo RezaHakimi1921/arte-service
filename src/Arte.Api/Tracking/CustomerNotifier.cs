@@ -64,10 +64,10 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
         }
 
         var result = await SendAsync(c, t, MessageKeys.CaseLink, ct);
+        if (SoftFailNotice(result) is { } soft) return soft;
         return result switch
         {
             { Accepted: true } => null,
-            { Error: SmsWalletService.InsufficientCredit } => "شارژ پیامک این شعبه تمام شده است. برای شارژ با پشتیبانی آرته تماس بگیرید.",
             { Error: SmartXSmsProvider.OutsideHours } => "پیامک فقط از ساعت ۸ تا ۲۳ فرستاده می‌شود؛ صبح دوباره امتحان کنید.",
             { Error: SmartXSmsProvider.NotApproved } => "متن این پیامک هنوز توسط مدیریت آرته تأیید نشده است.",
             { Error: "template_not_configured" } => "پیامک لینک هنوز فعال نشده است؛ فعلاً لینک را با «اشتراک‌گذاری» بفرستید.",
@@ -75,11 +75,12 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
         };
     }
 
-    public async Task NotifyAsync(Case c, string messageKey, CancellationToken ct)
+    /// <summary>Returns a short Persian notice when the action succeeded but SMS was skipped (credit / licence).</summary>
+    public async Task<string?> NotifyAsync(Case c, string messageKey, CancellationToken ct)
     {
         try
         {
-            if (c.IsSample || c.TrackingCode is null) return;
+            if (c.IsSample || c.TrackingCode is null) return null;
             var t = await db.Tenants.AsNoTracking().SingleAsync(x => x.Id == c.TenantId, ct);
             var wanted = messageKey switch
             {
@@ -89,16 +90,27 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
                 MessageKeys.CaseWaitingPart => t.SmsOnWaitingPart,
                 _ => false,
             };
-            if (!t.CustomerSmsEnabled || !wanted) return;
+            if (!t.CustomerSmsEnabled || !wanted) return null;
             // Where the survey add-on sends its SMS after delivery, that one replaces the «delivered» SMS.
-            if (messageKey == MessageKeys.CaseDelivered && t.SurveyEnabled && t.SurveySendOn) return;
-            await SendAsync(c, t, messageKey, ct);
+            if (messageKey == MessageKeys.CaseDelivered && t.SurveyEnabled && t.SurveySendOn) return null;
+            return SoftFailNotice(await SendAsync(c, t, messageKey, ct));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "Customer SMS {MessageKey} for case {CaseId} failed", messageKey, c.Id);
+            return null;
         }
     }
+
+    public static string? SoftFailNotice(SmsSendResult result) => result switch
+    {
+        { Accepted: true } => null,
+        { Error: SmartXSmsProvider.SkippedNoCredit or SmsWalletService.InsufficientCredit } =>
+            "این عملیات بدون پیامک انجام شد. لطفاً پنل پیامک خود را شارژ کنید.",
+        { Error: SmartXSmsProvider.SkippedLicense } =>
+            "به‌خاطر اتمام پرونده‌های رایگان، پیامک ارسال نشد. برای فعال‌سازی اشتراک با پشتیبانی آرته تماس بگیرید.",
+        _ => null,
+    };
 
     /// <summary>SMS to the master(s) that a finished job waits for review. Who: members who can approve work (cases.create), except the one who finished it.</summary>
     public async Task NotifyMastersAsync(Case c, Guid actorUserId, CancellationToken ct)

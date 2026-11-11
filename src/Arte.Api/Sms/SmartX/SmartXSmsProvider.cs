@@ -1,5 +1,7 @@
+using Arte.Api.Licensing;
 using Arte.Api.Options;
 using Arte.Core.Common;
+using Arte.Core.Data;
 using Arte.Core.Messaging;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +16,7 @@ public sealed class SmartXSmsProvider(
     SmartXSmsClient client,
     SmsWalletService wallet,
     SmsTemplateService templates,
+    ArteDbContext db,
     IClock clock,
     IOptions<SmartXSmsOptions> options,
     ILogger<SmartXSmsProvider> logger) : ISmsProvider
@@ -21,6 +24,10 @@ public sealed class SmartXSmsProvider(
     public const string NotApproved = "template_not_approved";
     public const string OutsideHours = "outside_sending_hours";
     public const string SendFailed = "smartx_not_accepted";
+    /// <summary>Branch credit empty: the triggering action still succeeds; the shop is told to top up.</summary>
+    public const string SkippedNoCredit = "skipped_no_credit";
+    /// <summary>Free trial cases used up: no SMS until a paid/gift licence.</summary>
+    public const string SkippedLicense = "skipped_license";
     /// <summary>The login code never goes to SmartX (see RoutingSmsProvider); refused here as a safety net.</summary>
     public const string OtpNotViaSmartX = "otp_not_via_smartx";
 
@@ -35,6 +42,13 @@ public sealed class SmartXSmsProvider(
     {
         var o = options.Value;
         if (request.MessageKey == MessageKeys.AuthOtp) return new SmsSendResult(false, null, OtpNotViaSmartX);
+
+        // Trial case cap: no SMS for this branch until a paid/gift licence.
+        if (request.TenantId is { } licenseTenant)
+        {
+            var access = await LicenseService.AccessAsync(db, licenseTenant, clock.UtcNow, ct);
+            if (!access.CanSendSms) return new SmsSendResult(false, null, SkippedLicense);
+        }
 
         // 1) The text.
         var text = SmsTemplates.DefaultFor(request.MessageKey);
@@ -51,10 +65,14 @@ public sealed class SmartXSmsProvider(
         if (!InSendingHours(clock.UtcNow, o.SendFromHour, o.SendUntilHour))
             return new SmsSendResult(false, null, OutsideHours);
 
-        // 3) Parts, from the branch (and the central balance), or from the central balance alone for Arte's own messages.
+        // 3) Parts from the branch (+ central). Soft-skip when the branch cannot pay so the shop action still works.
         var parts = SmsParts.Count(body);
         var (reservation, error) = await wallet.ReserveAsync(request.TenantId, parts, request.MessageKey, ct);
-        if (reservation is null) return new SmsSendResult(false, null, error);
+        if (reservation is null)
+        {
+            if (error == SmsWalletService.InsufficientCredit) return new SmsSendResult(false, null, SkippedNoCredit);
+            return new SmsSendResult(false, null, error);
+        }
 
         // 4) Send. Any failure hands the parts back.
         try
