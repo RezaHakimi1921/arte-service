@@ -103,7 +103,8 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         var opts = Options.Create(o);
         var factory = new Factory(http);
         var client = new SmartXSmsClient(factory, new SmartXTokenProvider(factory, opts), new InMemorySmsBatchLog(), opts, NullLogger<SmartXSmsClient>.Instance);
-        var provider = new SmartXSmsProvider(client, wallet, templates, new FixedClock(now ?? Daytime), opts, NullLogger<SmartXSmsProvider>.Instance);
+        var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+        var provider = new SmartXSmsProvider(client, wallet, templates, db, new FixedClock(now ?? Daytime), opts, NullLogger<SmartXSmsProvider>.Instance);
         return new Rig(provider, wallet, templates, http, scope);
     }
 
@@ -150,7 +151,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         Assert.Equal(10 - parts, await rig.Inner.Wallet.BranchBalanceAsync(tenantId, default));
         Assert.Equal(before.CentralParts - parts, after.CentralParts);
         Assert.Equal(before.HeadroomParts, after.HeadroomParts);   // spending never changes the free amount
-        Assert.Contains("رضا", Sent(rig.Inner));
+        Assert.Contains("همراه گرامی", Sent(rig.Inner));
         Assert.Contains("service.artepersia.com/t/abc234", Sent(rig.Inner));
     }
 
@@ -173,7 +174,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task A_branch_without_credit_is_refused_and_nothing_is_sent()
+    public async Task A_branch_without_credit_is_soft_skipped_and_nothing_is_sent()
     {
         var (_, tenantId) = await api.NewBusinessAsync();
         using var rig = Wrap(NewRig());
@@ -181,7 +182,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
 
         var res = await rig.Inner.Provider.SendAsync(Case(tenantId), default);
         Assert.False(res.Accepted);
-        Assert.Equal(SmsWalletService.InsufficientCredit, res.Error);
+        Assert.Equal(SmartXSmsProvider.SkippedNoCredit, res.Error);
         Assert.Empty(rig.Inner.Http.Bodies);
     }
 

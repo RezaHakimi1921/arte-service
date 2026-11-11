@@ -1,34 +1,66 @@
 /**
- * The customer SMS patterns exactly as registered with the SMS provider (Faraz / Iran Payamak). The provider wants
- * the brand or site in every pattern, a label before every variable («نام: %name%»), and no advertising. Keep this
- * file and the provider in step: the settings page shows the customer these texts, filled with sample values.
+ * System default SMS texts (mirrors Arte.Core Messaging.SmsTemplates.Branch).
+ * Shops only preview these; wording changes go through a change-request to the platform admin.
  */
-export type SmsKey = "case.opened" | "case.ready" | "case.delivered" | "case.link" | "survey.request";
+export type SmsKey =
+  | "case.opened" | "case.ready" | "case.delivered" | "case.link"
+  | "case.waiting_part" | "survey.request" | "staff.work_finished";
 
 export const SMS_PATTERNS: { key: SmsKey; title: string; text: string }[] = [
   {
     key: "case.opened", title: "هنگام پذیرش",
-    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nوضعیت: پذیرش شد و در نوبت کار قرار گرفت.\nلینک پیگیری: service.artepersia.com/t/%code%",
+    text: "{{WorkshopName}}\n{{CustomerName}} عزیز\n{{Vehicle}} پذیرش شد.\nپیگیری: {{CustomerLink}}",
   },
   {
     key: "case.ready", title: "آماده‌ی تحویل",
-    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nوضعیت: آماده‌ی تحویل است.\nلینک جزئیات و هزینه: service.artepersia.com/t/%code%",
+    text: "{{WorkshopName}}\nهمراه گرامی\n{{Vehicle}} آماده‌ی تحویل است.\nجزئیات: {{CustomerLink}}",
   },
   {
     key: "case.delivered", title: "هنگام تحویل",
-    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nوضعیت: تحویل شد.\nلینک سابقه و ضمانت: service.artepersia.com/t/%code%",
+    text: "{{WorkshopName}}\n{{Vehicle}} تحویل شد.\nسابقه و ضمانت: {{CustomerLink}}",
   },
   {
     key: "case.link", title: "ارسال دوباره‌ی لینک (از پرونده)",
-    text: "آرته سرویس\nنام: %name%\nوسیله: %vehicle%\nتعمیرگاه: %shop%\nلینک پیگیری: service.artepersia.com/t/%code%",
+    text: "{{WorkshopName}}\nلینک پیگیری {{Vehicle}}:\n{{CustomerLink}}",
+  },
+  {
+    key: "case.waiting_part", title: "منتظر قطعه‌ی مشتری",
+    text: "{{WorkshopName}}\nبرای ادامه‌ی کار {{Vehicle}} منتظر قطعه‌ی شما هستیم.\n{{CustomerLink}}",
   },
   {
     key: "survey.request", title: "نظرسنجی بعد از تحویل",
-    text: "آرته سرویس\nنام: %name%\nتعمیرگاه: %shop%\nلطفاً نظر خود را درباره‌ی این تعمیر ثبت کنید.\nلینک نظرسنجی: service.artepersia.com/s/%code%",
+    text: "{{WorkshopName}}\nنظر شما برای ما مهم است.\nثبت نظر: {{CustomerLink}}",
+  },
+  {
+    key: "staff.work_finished", title: "به استادکار: کار در انتظار بازبینی",
+    text: "{{WorkshopName}}\n{{CaseCode}} ({{Vehicle}}) تمام شد؛ منتظر بازبینی شماست.",
   },
 ];
 
-/** The text with sample values, as the customer would read it. */
-export function fillSms(text: string, values: { shop: string; name: string; vehicle: string; code: string }) {
-  return text.replace(/%(shop|name|vehicle|code)%/g, (_, k: keyof typeof values) => values[k]);
+const SAMPLE: Record<string, string> = {
+  WorkshopName: "مکانیک موتور",
+  CustomerName: "سیما کریمی",
+  Vehicle: "موتور هوندا ۱۲۵",
+  CustomerLink: "service.artepersia.com/t/k7m2q9xd4p",
+  CaseCode: "CASE-123",
+  Code: "123456",
+};
+
+/** Preview with sample or shop-provided values. Legacy %name% tokens still work. */
+export function fillSms(text: string, values?: { shop?: string; name?: string; vehicle?: string; code?: string }) {
+  const map: Record<string, string> = {
+    ...SAMPLE,
+    ...(values?.shop ? { WorkshopName: values.shop } : {}),
+    ...(values?.name ? { CustomerName: values.name } : {}),
+    ...(values?.vehicle ? { Vehicle: values.vehicle } : {}),
+    ...(values?.code ? { CustomerLink: `service.artepersia.com/t/${values.code}`, Code: values.code } : {}),
+  };
+  return text
+    .replace(/\{\{\s*([A-Za-z]+)\s*\}\}/g, (_, k: string) => map[k] ?? "")
+    .replace(/%(shop|name|vehicle|code)%/g, (_, k: string) => {
+      if (k === "shop") return map.WorkshopName;
+      if (k === "name") return map.CustomerName;
+      if (k === "vehicle") return map.Vehicle;
+      return values?.code ?? "k7m2q9xd4p";
+    });
 }

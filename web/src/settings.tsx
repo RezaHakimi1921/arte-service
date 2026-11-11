@@ -387,16 +387,59 @@ export function IntakeRulesPage({ onBack, onSaved }: { onBack: () => void; onSav
   );
 }
 
+type ShopTemplate = {
+  key: string; title: string; defaultText: string; approvedText: string | null; status: string; pendingRequestId: string | null;
+};
+
 export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
   const { s, save } = useBusinessSettings(onSaved);
+  const { notify } = useFeedback();
   const [confirmSms, setConfirmSms] = useState(false);
   const [preview, setPreview] = useState<SmsKey | null>(null);
   const [delay, setDelay] = useState("");
   const [customDelay, setCustomDelay] = useState(false);
+  const [walletParts, setWalletParts] = useState<number | null>(null);
+  const [templates, setTemplates] = useState<ShopTemplate[] | null>(null);
+  const [requestKey, setRequestKey] = useState<string | null>(null);
+  const [proposed, setProposed] = useState("");
+  const [requestNote, setRequestNote] = useState("");
+  const [busyReq, setBusyReq] = useState(false);
+
+  useEffect(() => {
+    api<{ parts: number }>("/api/v1/sms/wallet").then((w) => setWalletParts(w.parts)).catch(() => setWalletParts(null));
+    api<{ templates: ShopTemplate[] }>("/api/v1/sms/templates").then((t) => setTemplates(t.templates)).catch(() => setTemplates(null));
+  }, []);
+
+  const previewText = (key: SmsKey) => {
+    const fromApi = templates?.find((t) => t.key === key);
+    return fromApi?.approvedText || fromApi?.defaultText || SMS_PATTERNS.find((p) => p.key === key)?.text || "";
+  };
+
+  async function submitChangeRequest() {
+    if (!requestKey || !proposed.trim()) return;
+    setBusyReq(true);
+    try {
+      await api(`/api/v1/sms/templates/${requestKey}/change-requests`, { body: { text: proposed, note: requestNote || undefined } });
+      notify("درخواست تغییر متن ثبت شد؛ پس از تأیید آرته اعمال می‌شود.");
+      setRequestKey(null); setProposed(""); setRequestNote("");
+      setTemplates((await api<{ templates: ShopTemplate[] }>("/api/v1/sms/templates")).templates);
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : "خطا", "error");
+    } finally {
+      setBusyReq(false);
+    }
+  }
+
   return (
     <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
         <>
+          {walletParts != null && (
+            <div className="card">
+              <p><span className="muted">شارژ پیامک شعبه:</span> <strong className="font-num">{formatNumber(walletParts)}</strong> پارت</p>
+              <p className="muted small">اگر شارژ کم باشد، کار شعبه انجام می‌شود ولی پیامک نمی‌رود. شارژ آنلاین به‌زودی فعال می‌شود.</p>
+            </div>
+          )}
           <p className="hint">
             هر پرونده یک لینک اختصاصی دارد که مشتری بدون ورود، وضعیت کارش را در آن می‌بیند. لینک را از صفحه‌ی پرونده هم
             می‌توانید بفرستید (مثلاً در واتساپ).
@@ -490,21 +533,51 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
               </div>
             </>
           )}
+          <h3>متن پیامک‌ها</h3>
+          <p className="muted small">متن را خودتان ذخیره نمی‌کنید؛ پیش‌نمایش سیستم را ببینید و اگر لازم بود «درخواست تغییر متن» بفرستید تا آرته تأیید کند.</p>
+          <div className="settings-list">
+            {(templates ?? SMS_PATTERNS.map((p) => ({ key: p.key, title: p.title, defaultText: p.text, approvedText: null, status: "default", pendingRequestId: null }))).map((t) => (
+              <button key={t.key} type="button" className="settings-row" onClick={() => setPreview(t.key as SmsKey)}>
+                <span className="settings-row-text">
+                  <strong>{t.title}</strong>
+                  <span className="muted small">{t.pendingRequestId ? "در انتظار تأیید آرته" : t.approvedText ? "متن تأییدشده‌ی شعبه" : "متن سیستم"}</span>
+                </span>
+                <span className="muted" aria-hidden="true">‹</span>
+              </button>
+            ))}
+          </div>
         </>
       )}
       <BottomSheet open={!!preview} title={SMS_PATTERNS.find((p) => p.key === preview)?.title ?? "متن پیامک"} onClose={() => setPreview(null)}>
         {preview && s && (
           <>
             <div className="sms-preview" dir="rtl">
-              {fillSms(SMS_PATTERNS.find((p) => p.key === preview)!.text, {
+              {fillSms(previewText(preview), {
                 shop: s.name, name: "سیما کریمی",
                 vehicle: s.businessType === "motorcycle_repair" ? "موتور هوندا CG 125" : "خودرو پژو ۲۰۶",
                 code: "k7m2q9xd4p",
               })}
             </div>
             <p className="hint">نمونه با نام نمونه‌ی مشتری و وسیله؛ در پیامک واقعی نام مشتری، وسیله و لینک همان پرونده می‌آید.</p>
+            <SheetOption label="درخواست تغییر متن" onClick={() => {
+              const t = templates?.find((x) => x.key === preview);
+              setProposed(t?.approvedText || t?.defaultText || previewText(preview));
+              setRequestNote("");
+              setRequestKey(preview);
+              setPreview(null);
+            }} />
           </>
         )}
+      </BottomSheet>
+      <BottomSheet open={!!requestKey} title="درخواست تغییر متن" onClose={() => setRequestKey(null)}>
+        <Field label="متن پیشنهادی">
+          <textarea className="sms-text" value={proposed} maxLength={400} onChange={(e) => setProposed(e.target.value)} rows={6} />
+        </Field>
+        <Field label="توضیح برای آرته (اختیاری)">
+          <textarea value={requestNote} maxLength={500} onChange={(e) => setRequestNote(e.target.value)} rows={3} />
+        </Field>
+        <SheetOption label={busyReq ? "در حال ارسال…" : "ارسال درخواست"} disabled={busyReq || !proposed.trim()} onClick={() => void submitChangeRequest()} />
+        <SheetOption label="انصراف" onClick={() => setRequestKey(null)} />
       </BottomSheet>
       <BottomSheet open={confirmSms} title="ارسال پیامک به مشتری روشن شود؟" onClose={() => setConfirmSms(false)}>
         <p>

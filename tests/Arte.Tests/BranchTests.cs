@@ -64,10 +64,14 @@ public sealed class BranchTests(ArteApiFactory api)
         var brand = brands.EnumerateArray().Single(b => b.GetProperty("id").GetGuid() == brandId);
         Assert.Equal(2, brand.GetProperty("branches").GetArrayLength());
 
-        // The new branch: trial licence, copied settings and price list, no cases.
+        // The new branch: case-based trial licence, copied settings and price list, no cases.
         var detail = await Json(await admin.GetAsync($"/api/v1/admin/businesses/{second}"));
-        Assert.Equal("trial", detail.GetProperty("status").GetProperty("kind").GetString());
-        Assert.Equal(14, detail.GetProperty("status").GetProperty("daysLeft").GetInt32());
+        var status = detail.GetProperty("status");
+        Assert.Equal("trial", status.GetProperty("kind").GetString());
+        Assert.True(status.GetProperty("onCaseTrial").GetBoolean());
+        Assert.Equal(Arte.Core.Licensing.LicensePolicy.TrialCaseLimit, status.GetProperty("freeCasesLimit").GetInt32());
+        Assert.Equal(Arte.Core.Licensing.LicensePolicy.TrialCaseLimit, status.GetProperty("freeCasesLeft").GetInt32());
+        Assert.Equal(0, status.GetProperty("freeCasesUsed").GetInt32());
         Assert.Equal("برند تست", detail.GetProperty("brand").GetString());
 
         await ArteApiFactory.SelectAsync(owner, second);

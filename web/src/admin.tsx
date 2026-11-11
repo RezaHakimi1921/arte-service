@@ -148,14 +148,18 @@ function AdminList({ onBack, onOpen, onPlans, onSurvey, onCatalog, onSms, onBran
                 {b.owner?.displayName ?? "بی‌نام"} · <span dir="ltr" className="font-num">{b.owner?.mobile}</span>
               </span>
               <span className="muted small admin-cell-usage">
-                {b.license.state === "expired" ? "بدون اشتراک" : `${formatNumber(b.license.daysLeft)} روز مانده`}
+                {b.license.state === "expired"
+                  ? "بدون اشتراک"
+                  : b.license.onCaseTrial || (b.license.kind === "trial" && b.license.freeCasesLimit != null)
+                    ? `${formatNumber(b.license.freeCasesLeft ?? 0)} پرونده رایگان مانده`
+                    : `${formatNumber(b.license.daysLeft)} روز مانده`}
                 {" · "}{formatNumber(b.cases)} پرونده · {formatNumber(b.staff)} نفر
                 {b.lastCaseAt && <> · آخرین پذیرش {jalaliDate.format(new Date(b.lastCaseAt))}</>}
               </span>
             </span>
             <span className="muted" aria-hidden="true">‹</span>
           </button>
-          {b.isActive && <EnterButton id={b.id} mine={!!b.mine} />}
+          <EnterButton id={b.id} mine={!!b.mine} />
           </div>
         ))}
       </div>
@@ -212,7 +216,7 @@ function AdminBusiness({ id, onBack }: { id: string; onBack: () => void }) {
         )}
         {!b.isActive && b.deactivatedReason && <p className="muted small">دلیل: {b.deactivatedReason}</p>}
         <button className="primary block" onClick={() => setSheet("grant")}>ثبت اشتراک یا هدیه</button>
-        {b.isActive && <EnterButton id={id} mine={b.mine} wide />}
+        <EnterButton id={id} mine={b.mine} wide />
       </div>
 
       <div className="card admin-facts">

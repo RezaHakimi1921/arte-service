@@ -14,7 +14,19 @@ type Status = {
   warnings: string[];
 };
 type LedgerRow = { id: string; kind: string; parts: number; centralAfter: number; amountRial: number | null; note: string | null; createdAt: string; tenantId: string | null };
-type Overview = { status: Status; branches: { id: string; name: string; balanceParts: number }[]; ledger: LedgerRow[] };
+type Report = {
+  days: number; purchasePricePerPartRial: number; salePricePerPartRial: number; profitPerPartRial: number;
+  branchParts: number; arteParts: number; branchMessages: number; arteMessages: number;
+  byKey: { kind: string; messageKey: string | null; messages: number; parts: number; saleRial: number; costRial: number }[];
+};
+type TemplateRequest = {
+  id: string; tenantId: string; tenantName: string; messageKey: string; title: string;
+  proposedText: string; note: string | null; status: string; createdAt: string; reviewNote: string | null;
+};
+type Overview = {
+  status: Status; branches: { id: string; name: string; balanceParts: number }[]; ledger: LedgerRow[];
+  report?: Report; pendingTemplateRequests?: number;
+};
 
 const KIND_TITLES: Record<string, string> = {
   central_topup: "خرید شارژ از اسمارت", central_sync: "هم‌سان‌سازی با پنل اسمارت", credit: "شارژ شعبه",
@@ -54,16 +66,25 @@ export function AdminSmsPage({ onBack, onOpen }: { onBack: () => void; onOpen: (
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sheet, setSheet] = useState<null | "topup" | "sync" | "prices">(null);
+  const [sheet, setSheet] = useState<null | "topup" | "sync" | "prices" | "requests">(null);
   const [parts, setParts] = useState(""); const [amount, setAmount] = useState(""); const [note, setNote] = useState("");
   const [buy, setBuy] = useState(""); const [sell, setSell] = useState(""); const [low, setLow] = useState("");
+  const [requests, setRequests] = useState<TemplateRequest[] | null>(null);
+  const [review, setReview] = useState<TemplateRequest | null>(null);
 
   const load = useCallback(() => api<Overview>("/api/v1/admin/sms").then(setData).catch((e) => setError(errorText(e))), []);
   useEffect(() => { load(); }, [load]);
 
+  async function openRequests() {
+    setSheet("requests");
+    setRequests(null);
+    try { setRequests(await api<TemplateRequest[]>("/api/v1/admin/sms/template-requests")); }
+    catch (e) { notify(errorText(e), "error"); setSheet(null); }
+  }
+
   async function run(work: () => Promise<unknown>, done: string) {
     setBusy(true);
-    try { await work(); notify(done); setSheet(null); setParts(""); setAmount(""); setNote(""); await load(); }
+    try { await work(); notify(done); setSheet(null); setParts(""); setAmount(""); setNote(""); setReview(null); await load(); }
     catch (e) { notify(errorText(e), "error"); }
     finally { setBusy(false); }
   }
@@ -71,6 +92,7 @@ export function AdminSmsPage({ onBack, onOpen }: { onBack: () => void; onOpen: (
   if (error) return <section className="admin"><button className="link back" onClick={onBack}>→ فهرست</button><p className="error" role="alert">{error}</p></section>;
   if (!data) return <div className="splash" aria-busy="true" />;
   const s = data.status;
+  const r = data.report;
   const body = { parts: parts ? Number(parts) : undefined, amountRial: amount ? Number(amount) * 10 : undefined, note: note || undefined };
 
   return (
@@ -78,6 +100,14 @@ export function AdminSmsPage({ onBack, onOpen }: { onBack: () => void; onOpen: (
       <button className="link back" onClick={onBack}>→ فهرست</button>
       <h2>پیامک و شارژ</h2>
       <Warnings status={s} />
+
+      {(data.pendingTemplateRequests ?? 0) > 0 && (
+        <button type="button" className="card admin-facts" onClick={() => void openRequests()} style={{ textAlign: "right", width: "100%" }}>
+          <p><strong>⚠ {formatNumber(data.pendingTemplateRequests!)} درخواست تغییر متن پیامک</strong> در انتظار تأیید است.</p>
+          <span className="muted small">برای بررسی و تأیید/رد بزنید</span>
+        </button>
+      )}
+      <button type="button" className="block" onClick={() => void openRequests()}>درخواست‌های تغییر متن</button>
 
       <div className="card admin-facts">
         <h3>شارژ دفتر مرکزی (پنل اسمارت)</h3>
@@ -88,6 +118,28 @@ export function AdminSmsPage({ onBack, onOpen }: { onBack: () => void; onOpen: (
         <button className="block" onClick={() => setSheet("sync")}>ثبت موجودی پنل اسمارت</button>
         <button className="block" onClick={() => { setBuy(String(s.purchasePricePerPartRial / 10)); setSell(String(s.salePricePerPartRial / 10)); setLow(String(s.lowCentralParts)); setSheet("prices"); }}>قیمت‌ها</button>
       </div>
+
+      {r && (
+        <div className="card admin-facts">
+          <h3>گزارش ۳۰ روز اخیر</h3>
+          <p><span className="muted">پیام شعبه:</span> <strong className="font-num">{formatNumber(r.branchMessages)}</strong> · <span className="font-num">{formatNumber(r.branchParts)}</span> پارت · فروش {toman(r.branchParts * r.salePricePerPartRial)}</p>
+          <p><span className="muted">پیام آرته (OTP و …):</span> <strong className="font-num">{formatNumber(r.arteMessages)}</strong> · <span className="font-num">{formatNumber(r.arteParts)}</span> پارت · هزینه {toman(r.arteParts * r.purchasePricePerPartRial)}</p>
+          <p className="muted small">نرخ خرید {toman(r.purchasePricePerPartRial)} · فروش {toman(r.salePricePerPartRial)} · سود هر پارت {toman(r.profitPerPartRial)}</p>
+          {r.byKey.length > 0 && (
+            <div className="settings-list">
+              {r.byKey.map((row) => (
+                <div key={`${row.kind}-${row.messageKey}`} className="settings-row static">
+                  <span className="settings-row-text">
+                    <span>{row.messageKey ?? "—"} {row.kind === "spend_arte" ? "(آرته)" : ""}</span>
+                    <span className="muted small">{formatNumber(row.messages)} پیام · {formatNumber(row.parts)} پارت</span>
+                  </span>
+                  <span className="font-num muted small">{toman(row.costRial)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <h3>شارژ شعبه‌ها</h3>
       {data.branches.length === 0 && <p className="muted">هنوز به هیچ شعبه‌ای شارژ داده نشده. از صفحه‌ی هر کسب‌وکار، بخش «پیامک» را باز کنید.</p>}
@@ -136,6 +188,34 @@ export function AdminSmsPage({ onBack, onOpen }: { onBack: () => void; onOpen: (
         <Field label="هشدار وقتی موجودی مرکزی کمتر از (پارت)"><NumberInput value={low} onChange={setLow} max={9} /></Field>
         <SheetOption label={busy ? "در حال ذخیره…" : "ذخیره"} disabled={busy || !buy || !sell}
           onClick={() => run(() => api("/api/v1/admin/sms/prices", { method: "PUT", body: { purchasePricePerPartRial: Number(buy) * 10, salePricePerPartRial: Number(sell) * 10, lowCentralParts: low ? Number(low) : undefined } }), "قیمت‌ها ذخیره شد")} />
+      </BottomSheet>
+
+      <BottomSheet open={sheet === "requests" && !review} title="درخواست‌های تغییر متن" onClose={() => setSheet(null)}>
+        {!requests && <div className="splash" aria-busy="true" />}
+        {requests && requests.length === 0 && <p className="muted">درخواست معلقی نیست.</p>}
+        {requests?.map((req) => (
+          <button key={req.id} type="button" className="settings-row" onClick={() => setReview(req)}>
+            <span className="settings-row-text">
+              <strong>{req.tenantName}</strong>
+              <span className="muted small">{req.title} · {jalaliDate.format(new Date(req.createdAt))}</span>
+            </span>
+            <span className="muted" aria-hidden="true">‹</span>
+          </button>
+        ))}
+      </BottomSheet>
+
+      <BottomSheet open={!!review} title={review?.title ?? "بررسی متن"} onClose={() => setReview(null)}>
+        {review && (
+          <>
+            <p className="muted small">{review.tenantName}</p>
+            <p className="sms-preview">{review.proposedText}</p>
+            {review.note && <p className="hint">توضیح شعبه: {review.note}</p>}
+            <SheetOption label={busy ? "در حال تأیید…" : "تأیید و اعمال متن"} disabled={busy}
+              onClick={() => run(() => api(`/api/v1/admin/sms/template-requests/${review.id}/approve`, { method: "POST" }), "متن تأیید شد",)} />
+            <SheetOption label="رد درخواست" tone="danger" disabled={busy}
+              onClick={() => run(() => api(`/api/v1/admin/sms/template-requests/${review.id}/reject`, { method: "POST", body: {} }), "درخواست رد شد")} />
+          </>
+        )}
       </BottomSheet>
     </section>
   );

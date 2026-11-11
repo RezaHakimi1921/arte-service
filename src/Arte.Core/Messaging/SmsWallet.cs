@@ -70,3 +70,26 @@ public sealed class SmsTemplate
     public Guid? ApprovedBy { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
+
+public static class SmsTemplateRequestStates
+{
+    public const string Pending = "pending";
+    public const string Approved = "approved";
+    public const string Rejected = "rejected";
+}
+
+/// <summary>A shop asks the platform admin to change an SMS template; only the admin can approve it.</summary>
+public sealed class SmsTemplateChangeRequest
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid TenantId { get; set; }
+    public required string MessageKey { get; set; }
+    public required string ProposedText { get; set; }
+    public string? Note { get; set; }
+    public required string Status { get; set; } = SmsTemplateRequestStates.Pending;
+    public Guid RequestedBy { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public Guid? ReviewedBy { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
+    public string? ReviewNote { get; set; }
+}

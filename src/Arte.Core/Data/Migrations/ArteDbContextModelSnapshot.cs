@@ -2717,6 +2717,59 @@ namespace Arte.Core.Data.Migrations
                     b.ToTable("SmsTemplates");
                 });
 
+            modelBuilder.Entity("Arte.Core.Messaging.SmsTemplateChangeRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MessageKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ProposedText")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.HasIndex("TenantId", "MessageKey", "CreatedAt");
+
+                    b.ToTable("SmsTemplateChangeRequests");
+                });
+
             modelBuilder.Entity("Arte.Core.Messaging.TenantSmsWallet", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -3672,7 +3725,17 @@ namespace Arte.Core.Data.Migrations
                     b.HasOne("Arte.Core.Tenancy.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Arte.Core.Messaging.SmsTemplateChangeRequest", b =>
+                {
+                    b.HasOne("Arte.Core.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Arte.Core.Messaging.TenantSmsWallet", b =>
@@ -3680,7 +3743,8 @@ namespace Arte.Core.Data.Migrations
                     b.HasOne("Arte.Core.Tenancy.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict).IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Arte.Core.Surveys.NotificationRecipient", b =>

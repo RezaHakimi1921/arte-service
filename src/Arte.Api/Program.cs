@@ -223,7 +223,19 @@ app.MapReports();
 if (config.GetValue("Database:MigrateOnStartup", false))
 {
     await using var scope = app.Services.CreateAsyncScope();
-    await scope.ServiceProvider.GetRequiredService<ArteDbContext>().Database.MigrateAsync();
+    var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
+    await db.Database.MigrateAsync();
+    // Integration tests log in via OTP, which now spends central SMS credit — keep a large pool in Testing.
+    if (app.Environment.IsEnvironment("Testing"))
+    {
+        var sms = await db.SmsSettings.SingleAsync(x => x.Id == 1);
+        if (sms.CentralBalanceParts < 100_000)
+        {
+            sms.CentralBalanceParts = 100_000;
+            sms.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        }
+    }
 }
 
 // One-time data fixes (each runs once; a marker row remembers it so later manual changes are never undone).

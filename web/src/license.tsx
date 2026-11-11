@@ -3,7 +3,16 @@ import { ApiError, api } from "./api";
 import { SubPage } from "./settings";
 import { formatNumber } from "./ui";
 
-export type LicenseStatus = { state: "active" | "expiring" | "expired"; daysLeft: number; endsAt: string | null; kind: string | null };
+export type LicenseStatus = {
+  state: "active" | "expiring" | "expired";
+  daysLeft: number;
+  endsAt: string | null;
+  kind: string | null;
+  freeCasesUsed?: number;
+  freeCasesLimit?: number;
+  freeCasesLeft?: number;
+  onCaseTrial?: boolean;
+};
 type Plan = { id: string; name: string; months: number; priceRials: number };
 type LicenseView = {
   status: LicenseStatus; plans: Plan[]; supportPhone: string | null;
@@ -16,9 +25,33 @@ const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} توم
 
 /** Plain words for the state; colour only backs them up. */
 export function licenseHeadline(s: LicenseStatus) {
-  if (s.state === "expired") return "اشتراک تمام شده است";
-  if (s.kind === "trial") return s.state === "expiring" ? "دوره‌ی رایگان رو به پایان است" : "دوره‌ی رایگان";
+  if (s.state === "expired") {
+    return s.onCaseTrial || s.kind === "trial" ? "پرونده‌های رایگان تمام شد" : "اشتراک تمام شده است";
+  }
+  if (s.onCaseTrial || s.kind === "trial") {
+    return s.state === "expiring" ? "پرونده‌های رایگان رو به پایان است" : "دوره‌ی رایگان (پرونده)";
+  }
   return s.state === "expiring" ? "اشتراک رو به پایان است" : "اشتراک فعال";
+}
+
+function remainingLine(s: LicenseStatus) {
+  if (s.onCaseTrial || (s.kind === "trial" && s.freeCasesLimit != null)) {
+    const left = s.freeCasesLeft ?? Math.max(0, (s.freeCasesLimit ?? 15) - (s.freeCasesUsed ?? 0));
+    const limit = s.freeCasesLimit ?? 15;
+    const used = s.freeCasesUsed ?? limit - left;
+    return (
+      <p className="license-days">
+        <strong className="font-num">{formatNumber(left)}</strong> از {formatNumber(limit)} پرونده رایگان مانده
+        <span className="muted"> · {formatNumber(used)} استفاده‌شده</span>
+      </p>
+    );
+  }
+  return (
+    <p className="license-days">
+      <strong className="font-num">{formatNumber(s.daysLeft)}</strong> روز مانده
+      {s.endsAt && <span className="muted"> · تا {jalaliDate.format(new Date(s.endsAt))}</span>}
+    </p>
+  );
 }
 
 /** Settings → اشتراک: where the branch stands, the price list, and how to renew. */
@@ -41,13 +74,10 @@ export function LicensePage({ onBack }: { onBack: () => void }) {
             {data.status.state === "expired" ? (
               <p>
                 پرونده‌های فعلی را می‌توانید ادامه دهید، تحویل بدهید و پرداخت ثبت کنید؛
-                اما پذیرش جدید، مشتری جدید و همکار جدید تا تمدید بسته است.
+                اما پذیرش جدید، عکس/فیلم جدید و پیامک تا تمدید بسته است.
               </p>
             ) : (
-              <p className="license-days">
-                <strong className="font-num">{formatNumber(data.status.daysLeft)}</strong> روز مانده
-                {data.status.endsAt && <span className="muted"> · تا {jalaliDate.format(new Date(data.status.endsAt))}</span>}
-              </p>
+              remainingLine(data.status)
             )}
           </div>
 
@@ -106,8 +136,12 @@ export function LicensePage({ onBack }: { onBack: () => void }) {
 export function LicenseBanner({ status, onOpen }: { status: LicenseStatus; onOpen?: () => void }) {
   if (status.state === "active") return null;
   const text = status.state === "expired"
-    ? "اشتراک تمام شده؛ پرونده‌های فعلی باز است ولی پذیرش جدید تا تمدید بسته است."
-    : `${formatNumber(status.daysLeft)} روز تا پایان ${status.kind === "trial" ? "دوره‌ی رایگان" : "اشتراک"} مانده است.`;
+    ? (status.onCaseTrial || status.kind === "trial"
+      ? "پرونده‌های رایگان تمام شد؛ پذیرش و پیامک جدید تا خرید اشتراک بسته است."
+      : "اشتراک تمام شده؛ پرونده‌های فعلی باز است ولی پذیرش جدید تا تمدید بسته است.")
+    : status.onCaseTrial || status.kind === "trial"
+      ? `${formatNumber(status.freeCasesLeft ?? status.daysLeft)} پرونده رایگان مانده است.`
+      : `${formatNumber(status.daysLeft)} روز تا پایان ${status.kind === "trial" ? "دوره‌ی رایگان" : "اشتراک"} مانده است.`;
   return (
     <div className={`license-banner ${status.state}`} role="status">
       <span>{text}</span>
@@ -119,11 +153,16 @@ export function LicenseBanner({ status, onOpen }: { status: LicenseStatus; onOpe
 /** Home screen, for managers: how long the subscription still runs (the banner takes over in the last days). */
 export function LicenseStrip({ status, onOpen }: { status: LicenseStatus; onOpen: () => void }) {
   if (status.state !== "active") return null;
+  const trialCases = status.onCaseTrial || (status.kind === "trial" && status.freeCasesLimit != null);
   return (
     <button type="button" className="license-strip" onClick={onOpen}>
       <span>{status.kind === "trial" ? "دوره‌ی رایگان" : "اشتراک"}</span>
-      <strong className="font-num">{formatNumber(status.daysLeft)} روز مانده</strong>
-      {status.endsAt && <span className="muted small">تا {jalaliDate.format(new Date(status.endsAt))}</span>}
+      {trialCases ? (
+        <strong className="font-num">{formatNumber(status.freeCasesLeft ?? 0)} پرونده مانده</strong>
+      ) : (
+        <strong className="font-num">{formatNumber(status.daysLeft)} روز مانده</strong>
+      )}
+      {!trialCases && status.endsAt && <span className="muted small">تا {jalaliDate.format(new Date(status.endsAt))}</span>}
       <span className="muted" aria-hidden="true">‹</span>
     </button>
   );

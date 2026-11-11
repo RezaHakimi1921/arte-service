@@ -60,7 +60,12 @@ public static class LicenseStates
 
 public static class LicensePolicy
 {
+    /// <summary>Legacy time-based trial length (kept for old rows). New sign-ups use <see cref="TrialCaseLimit"/>.</summary>
     public const int TrialDays = 14;
+    /// <summary>Free cases a new shop may open before buying a licence (sample cases do not count).</summary>
+    public const int TrialCaseLimit = 15;
+    /// <summary>SMS credit granted at sign-up, in toman (converted to parts at the sale price).</summary>
+    public const long SignupSmsCreditToman = 30_000;
     public const int ExpiringDays = 3;
 
     public static (string State, int DaysLeft) StateOf(DateTimeOffset? endsAt, DateTimeOffset now)

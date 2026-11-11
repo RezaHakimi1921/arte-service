@@ -16,20 +16,44 @@ public static class SmsEndpoints
     public sealed record SyncInput(long? Parts, string? Note);
     public sealed record PricesInput(long? PurchasePricePerPartRial, long? SalePricePerPartRial, long? LowCentralParts);
     public sealed record TextInput(string? Text);
+    public sealed record ChangeRequestInput(string? Text, string? Note);
+    public sealed record ReviewInput(string? Note);
 
     public static void MapSms(this IEndpointRouteBuilder app)
     {
-        // ───────── the branch's own balance ─────────
+        // ───────── the branch's own balance + template preview / change request ─────────
         app.MapGet("/api/v1/sms/wallet", async (RequestUser me, SmsWalletService wallet, CancellationToken ct) =>
         {
             var parts = await wallet.BranchBalanceAsync(me.RequiredMembership.TenantId, ct);
             return Results.Ok(new { Parts = parts });
         }).RequirePermission(Permissions.SettingsManage);
 
+        app.MapGet("/api/v1/sms/templates", async (RequestUser me, SmsTemplateService svc, CancellationToken ct) =>
+        {
+            var tid = me.RequiredMembership.TenantId;
+            return Results.Ok(new
+            {
+                Templates = await svc.ListAsync(tid, ct),
+                Tags = SmsTags.Titles.Where(t => t.Key != SmsTags.Code).Select(t => new { Tag = "{{" + t.Key + "}}", Title = t.Value }),
+                MaxLength = SmsTemplates.MaxLength,
+            });
+        }).RequirePermission(Permissions.SettingsManage);
+
+        app.MapPost("/api/v1/sms/templates/{key}/change-requests", async (string key, ChangeRequestInput req, RequestUser me,
+            SmsTemplateService svc, Audit audit, ArteDbContext db, CancellationToken ct) =>
+        {
+            var tid = me.RequiredMembership.TenantId;
+            var (row, error) = await svc.RequestChangeAsync(tid, key, req.Text ?? "", req.Note, me.RequiredUserId, ct);
+            if (error is not null) return Fail("invalid_text", error);
+            audit.Record("sms.template_change_requested", tid, me.RequiredUserId, key);
+            await db.SaveChangesAsync(ct);
+            return Results.Created($"/api/v1/sms/templates/{key}/change-requests/{row!.Id}", new { row.Id, row.Status });
+        }).RequirePermission(Permissions.SettingsManage);
+
         // ───────── platform admin ─────────
         var admin = app.MapGroup("/api/v1/admin/sms").RequirePlatformAdmin();
 
-        admin.MapGet("", async (SmsWalletService wallet, ArteDbContext db, CancellationToken ct) =>
+        admin.MapGet("", async (SmsWalletService wallet, SmsTemplateService templates, ArteDbContext db, CancellationToken ct) =>
         {
             var status = await wallet.StatusAsync(ct);
             var branches = await db.SmsWallets.AsNoTracking()
@@ -38,7 +62,55 @@ public static class SmsEndpoints
             var ledger = await db.SmsLedger.AsNoTracking().Where(l => l.TenantId == null || l.Kind == SmsLedgerKinds.Credit)
                 .OrderByDescending(l => l.CreatedAt).Take(30)
                 .Select(l => new { l.Id, l.Kind, l.Parts, l.CentralAfter, l.AmountRial, l.Note, l.CreatedAt, l.TenantId }).ToListAsync(ct);
-            return Results.Ok(new { Status = status, Branches = branches, Ledger = ledger });
+
+            var since = DateTimeOffset.UtcNow.AddDays(-30);
+            var spends = await db.SmsLedger.AsNoTracking()
+                .Where(l => l.CreatedAt >= since && (l.Kind == SmsLedgerKinds.Spend || l.Kind == SmsLedgerKinds.SpendArte))
+                .GroupBy(l => new { l.Kind, l.MessageKey })
+                .Select(g => new
+                {
+                    g.Key.Kind, g.Key.MessageKey,
+                    Messages = g.Count(),
+                    Parts = g.Sum(x => -x.Parts),
+                }).ToListAsync(ct);
+            var report = new
+            {
+                Days = 30,
+                PurchasePricePerPartRial = status.PurchasePricePerPartRial,
+                SalePricePerPartRial = status.SalePricePerPartRial,
+                ProfitPerPartRial = status.ProfitPerPartRial,
+                BranchParts = spends.Where(s => s.Kind == SmsLedgerKinds.Spend).Sum(s => s.Parts),
+                ArteParts = spends.Where(s => s.Kind == SmsLedgerKinds.SpendArte).Sum(s => s.Parts),
+                BranchMessages = spends.Where(s => s.Kind == SmsLedgerKinds.Spend).Sum(s => s.Messages),
+                ArteMessages = spends.Where(s => s.Kind == SmsLedgerKinds.SpendArte).Sum(s => s.Messages),
+                ByKey = spends.OrderByDescending(s => s.Parts).Select(s => new
+                {
+                    s.Kind, s.MessageKey, s.Messages, s.Parts,
+                    SaleRial = s.Kind == SmsLedgerKinds.Spend ? s.Parts * status.SalePricePerPartRial : 0,
+                    CostRial = s.Parts * status.PurchasePricePerPartRial,
+                }),
+            };
+            var pendingTemplateRequests = await templates.PendingRequestCountAsync(ct);
+            return Results.Ok(new { Status = status, Branches = branches, Ledger = ledger, Report = report, PendingTemplateRequests = pendingTemplateRequests });
+        });
+
+        admin.MapGet("/template-requests", async (string? status, SmsTemplateService svc, CancellationToken ct) =>
+            Results.Ok(await svc.ListRequestsAsync(status, ct)));
+
+        admin.MapPost("/template-requests/{id:guid}/approve", async (Guid id, SmsTemplateService svc, Audit audit, RequestUser me, ArteDbContext db, CancellationToken ct) =>
+        {
+            if (await svc.ApproveRequestAsync(id, me.RequiredUserId, ct) is { } error) return Fail("cannot_approve", error);
+            audit.Record("admin.sms_template_request_approved", null, me.RequiredUserId, id.ToString());
+            await db.SaveChangesAsync(ct);
+            return Results.Ok();
+        });
+
+        admin.MapPost("/template-requests/{id:guid}/reject", async (Guid id, ReviewInput req, SmsTemplateService svc, Audit audit, RequestUser me, ArteDbContext db, CancellationToken ct) =>
+        {
+            if (await svc.RejectRequestAsync(id, me.RequiredUserId, req.Note, ct) is { } error) return Fail("cannot_reject", error);
+            audit.Record("admin.sms_template_request_rejected", null, me.RequiredUserId, id.ToString());
+            await db.SaveChangesAsync(ct);
+            return Results.Ok();
         });
 
         admin.MapPut("/prices", async (PricesInput req, SmsWalletService wallet, Audit audit, RequestUser me, ArteDbContext db, CancellationToken ct) =>
