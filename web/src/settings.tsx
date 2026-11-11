@@ -398,7 +398,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
   const [preview, setPreview] = useState<SmsKey | null>(null);
   const [delay, setDelay] = useState("");
   const [customDelay, setCustomDelay] = useState(false);
-  const [walletParts, setWalletParts] = useState<number | null>(null);
+  const [wallet, setWallet] = useState<{ parts: number; valueRial: number } | null>(null);
   const [templates, setTemplates] = useState<ShopTemplate[] | null>(null);
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [proposed, setProposed] = useState("");
@@ -406,7 +406,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
   const [busyReq, setBusyReq] = useState(false);
 
   useEffect(() => {
-    api<{ parts: number }>("/api/v1/sms/wallet").then((w) => setWalletParts(w.parts)).catch(() => setWalletParts(null));
+    api<{ parts: number; valueRial: number }>("/api/v1/sms/wallet").then(setWallet).catch(() => setWallet(null));
     api<{ templates: ShopTemplate[] }>("/api/v1/sms/templates").then((t) => setTemplates(t.templates)).catch(() => setTemplates(null));
   }, []);
 
@@ -434,10 +434,10 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
     <SubPage title="پیامک و پیگیری مشتری" onBack={onBack}>
       {!s ? <div className="splash" aria-busy="true" /> : (
         <>
-          {walletParts != null && (
+          {wallet != null && (
             <div className="card">
-              <p><span className="muted">شارژ پیامک شعبه:</span> <strong className="font-num">{formatNumber(walletParts)}</strong> پارت</p>
-              <p className="muted small">اگر شارژ کم باشد، کار شعبه انجام می‌شود ولی پیامک نمی‌رود. شارژ آنلاین به‌زودی فعال می‌شود.</p>
+              <p><span className="muted">شارژ پیامک شعبه:</span> <strong className="font-num">{formatNumber(Math.round(wallet.valueRial / 10))}</strong> تومان</p>
+              <p className="muted small">{formatNumber(wallet.parts)} پارت · اگر شارژ کم باشد، کار شعبه انجام می‌شود ولی پیامک نمی‌رود. شارژ آنلاین به‌زودی فعال می‌شود.</p>
             </div>
           )}
           <p className="hint">

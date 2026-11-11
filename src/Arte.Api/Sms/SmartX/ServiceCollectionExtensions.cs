@@ -17,6 +17,8 @@ public static class SmartXSmsServiceCollectionExtensions
             var o = sp.GetRequiredService<IOptions<SmartXSmsOptions>>().Value;
             http.BaseAddress = new Uri(o.BaseUrl);
             http.Timeout = TimeSpan.FromSeconds(Math.Max(5, o.RequestTimeoutSeconds));
+            // SmartX nginx returns 403 when User-Agent is empty (HttpClient default).
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("ArteService/1.0");
         });
 
         services.AddSingleton<SmartXTokenProvider>();

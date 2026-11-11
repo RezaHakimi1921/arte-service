@@ -2101,7 +2101,9 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .trial-banner > span:nth-child(2) > span { color: var(--muted); font-size: 0.74rem; }
 .trial-icon { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; color: var(--stage-green); border-radius: 0.8rem; background: var(--good-bg); }
 .trial-icon.brand { color: var(--accent); background: var(--accent-soft); }
+.trial-icon.warn { color: var(--stage-orange); background: var(--warn-bg); }
 .brand-banner { border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.sms-credit-banner.low { border-color: color-mix(in srgb, var(--stage-orange) 40%, var(--border)); }
 .banner-chevron { color: var(--soft-text); }
 
 .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; margin-bottom: 1.25rem; }

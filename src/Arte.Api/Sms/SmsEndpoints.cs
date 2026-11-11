@@ -24,8 +24,15 @@ public static class SmsEndpoints
         // ───────── the branch's own balance + template preview / change request ─────────
         app.MapGet("/api/v1/sms/wallet", async (RequestUser me, SmsWalletService wallet, CancellationToken ct) =>
         {
-            var parts = await wallet.BranchBalanceAsync(me.RequiredMembership.TenantId, ct);
-            return Results.Ok(new { Parts = parts });
+            var tid = me.RequiredMembership.TenantId;
+            var parts = await wallet.BranchBalanceAsync(tid, ct);
+            var status = await wallet.StatusAsync(ct);
+            return Results.Ok(new
+            {
+                Parts = parts,
+                SalePricePerPartRial = status.SalePricePerPartRial,
+                ValueRial = parts * status.SalePricePerPartRial,
+            });
         }).RequirePermission(Permissions.SettingsManage);
 
         app.MapGet("/api/v1/sms/templates", async (RequestUser me, SmsTemplateService svc, CancellationToken ct) =>

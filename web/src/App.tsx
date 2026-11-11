@@ -423,7 +423,8 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
     license={!me.openMode && can("settings.manage") ? { status: me.business!.license, open: () => { go("settings"); setMorePage("license"); } } : null}
     canReports={can("reports.view")} onOpen={(id) => { setTab("cases"); setCaseId(id); }}
     onOpenSurvey={(id) => { setTab("cases"); setCaseId(id); setSurveyCase(id); }} surveyEnabled={me.business!.surveyEnabled}
-    brand={me.branchCount > 1 ? { name: me.business!.brand, count: me.branchCount, open: onBranches } : null} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake} />;
+    brand={me.branchCount > 1 ? { name: me.business!.brand, count: me.branchCount, open: onBranches } : null} onOpenCases={openCases} onNewCase={startNewCase} canCreate={canIntake}
+    smsCredit={can("settings.manage") ? { open: () => { go("settings"); setMorePage("customer"); } } : null} />;
 
   return (
     <div className={`shell app2${wide ? " wide-page" : ""}`}>

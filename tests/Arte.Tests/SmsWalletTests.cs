@@ -361,7 +361,10 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         var committed = (await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/sms")).GetProperty("status").GetProperty("committedParts").GetInt64();
         await admin.PostAsJsonAsync("/api/v1/admin/sms/central/sync", new { parts = committed + 7 });
         await admin.PostAsJsonAsync($"/api/v1/admin/sms/businesses/{tenantId}/credit", new { parts = 7 });
-        Assert.Equal(7, (await owner.GetFromJsonAsync<JsonElement>("/api/v1/sms/wallet")).GetProperty("parts").GetInt64());
+        var wallet = await owner.GetFromJsonAsync<JsonElement>("/api/v1/sms/wallet");
+        Assert.Equal(7, wallet.GetProperty("parts").GetInt64());
+        Assert.True(wallet.GetProperty("salePricePerPartRial").GetInt64() > 0);
+        Assert.Equal(7 * wallet.GetProperty("salePricePerPartRial").GetInt64(), wallet.GetProperty("valueRial").GetInt64());
     }
 
     [Fact]
