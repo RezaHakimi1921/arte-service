@@ -55,8 +55,10 @@ public static class TrackingEndpoints
             var sp = scope.ServiceProvider;
             var db = sp.GetRequiredService<ArteDbContext>();
             // Find the business by the code (tenant filter bypassed by name only), then read as that business.
+            // Sample onboarding cases are visible on the tracking page so the shop can preview the customer link;
+            // SMS to the customer is still refused for those cases.
             var found = await db.Cases.IgnoreQueryFilters([ArteDbContext.TenantFilter]).AsNoTracking()
-                .Where(c => c.TrackingCode == code && !c.IsSample).Select(c => new { c.Id, c.TenantId }).SingleOrDefaultAsync(ct);
+                .Where(c => c.TrackingCode == code).Select(c => new { c.Id, c.TenantId }).SingleOrDefaultAsync(ct);
             if (found is null) return Results.NotFound();
             sp.GetRequiredService<TenantContext>().Set(found.TenantId);
 
@@ -193,7 +195,7 @@ public static class TrackingEndpoints
             await using var scope = scopes.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
             var tenantId = await db.Cases.IgnoreQueryFilters([ArteDbContext.TenantFilter]).AsNoTracking()
-                .Where(c => c.TrackingCode == code && !c.IsSample && c.DeletedAt == null).Select(c => (Guid?)c.TenantId).SingleOrDefaultAsync(ct);
+                .Where(c => c.TrackingCode == code && c.DeletedAt == null).Select(c => (Guid?)c.TenantId).SingleOrDefaultAsync(ct);
             if (tenantId is null) return Results.NotFound();
             var path = await db.Tenants.AsNoTracking().Where(t => t.Id == tenantId && t.IsActive).Select(t => t.LogoPath).SingleOrDefaultAsync(ct);
             return Arte.Api.Tenants.TenantEndpoints.LogoFile(path, config, env);
@@ -208,7 +210,7 @@ public static class TrackingEndpoints
             var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
             var photo = await (from a in db.CaseAttachments.IgnoreQueryFilters([ArteDbContext.TenantFilter])
                                join c in db.Cases.IgnoreQueryFilters([ArteDbContext.TenantFilter]) on a.CaseId equals c.Id
-                               where a.Id == photoId && a.VisibleToCustomer && a.Purpose == AttachmentPurposes.Photo && c.TrackingCode == code && !c.IsSample
+                               where a.Id == photoId && a.VisibleToCustomer && a.Purpose == AttachmentPurposes.Photo && c.TrackingCode == code
                                      && a.DeletedAt == null && c.DeletedAt == null
                                select new { a.StoragePath, a.ContentType }).SingleOrDefaultAsync(ct);
             if (photo is null) return Results.NotFound();

@@ -220,18 +220,18 @@ async function openModeSession(): Promise<Session | null> {
  * businesses picks one, or registers another.
  */
 function ChooseBusiness({ session, onDone }: { session: Session; onDone: (s: Session) => void }) {
-  const [welcome, setWelcome] = useState<{ session: Session; days: number } | null>(null);
+  const [welcome, setWelcome] = useState<{ session: Session; freeCases: number } | null>(null);
   const adding = session.memberships.length === 0;
 
   const select = (tenantId: string) => api<Session>("/api/v1/auth/select-tenant", { body: { tenantId } });
 
   async function create(ownerName: string, shopName: string, businessType: string) {
-    const t = await api<{ id: string; trialDays: number }>("/api/v1/tenants", { body: { ownerName, name: shopName || undefined, businessType } });
-    setWelcome({ session: await select(t.id), days: t.trialDays });
-    return t.trialDays;
+    const t = await api<{ id: string; trialCaseLimit: number }>("/api/v1/tenants", { body: { ownerName, name: shopName || undefined, businessType } });
+    setWelcome({ session: await select(t.id), freeCases: t.trialCaseLimit });
+    return t.trialCaseLimit;
   }
 
-  if (welcome) return <TrialWelcome days={welcome.days} onContinue={() => onDone(welcome.session)} />;
+  if (welcome) return <TrialWelcome freeCases={welcome.freeCases} onContinue={() => onDone(welcome.session)} />;
   if (adding) return <SignupView onCreate={create} />;
   return (
     <AuthLayout>

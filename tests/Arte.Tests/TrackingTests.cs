@@ -112,7 +112,7 @@ public sealed class TrackingTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Unknown_malformed_deleted_and_sample_codes_are_not_found()
+    public async Task Unknown_malformed_and_deleted_codes_are_not_found_but_sample_is_visible()
     {
         var (owner, _) = await api.NewBusinessAsync();
         var client = api.Client();
@@ -125,7 +125,8 @@ public sealed class TrackingTests(ArteApiFactory api)
 
         var sampleId = (await Json(await owner.PostAsync("/api/v1/onboarding/sample", null))).GetProperty("caseId").GetGuid();
         var sampleCode = (await Json(await owner.GetAsync($"/api/v1/cases/{sampleId}"))).GetProperty("trackingCode").GetString();
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/v1/track/{sampleCode}")).StatusCode);
+        // Sample cases are visible on the tracking page (preview); SMS is still refused for them.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/v1/track/{sampleCode}")).StatusCode);
     }
 
     [Fact]

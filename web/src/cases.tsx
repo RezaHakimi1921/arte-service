@@ -37,7 +37,7 @@ type CaseDetailView = {
   stage: StageRef; customer: { id: string; fullName: string | null; mobile: string };
   asset: { id: string; title: string; identifier: string | null; kind: string; attributes: Record<string, string> | null } | null;
   assignee: { id: string; name: string } | null; parentCase: { id: string; number: number } | null;
-  photos: CasePhoto[]; trackingCode: string | null; photosVisibleByDefault: boolean;
+  photos: CasePhoto[]; trackingCode: string | null; photosVisibleByDefault: boolean; isSample?: boolean;
   transitions: TransitionView[]; motorType?: string | null; checklist?: CaseChecklistRow[]; findings?: CaseFinding[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
   survey: CaseSurvey | null; canFollowUp: boolean;
@@ -578,10 +578,13 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
       {c.trackingCode && (
         <BottomSheet open={sheet === "link"} title="لینک پیگیری مشتری" onClose={close}>
           <p className="muted small">مشتری با این لینک، بدون ورود، وضعیت کار، قطعات و هزینه را می‌بیند.</p>
+          {c.isSample && <p className="hint">پرونده‌ی نمونه است؛ صفحه باز می‌شود ولی پیامک به مشتری فرستاده نمی‌شود.</p>}
           <SheetOption label="باز کردن صفحه‌ی مشتری" hint="همان چیزی که مشتری می‌بیند"
             onClick={() => { window.open(`/t/${c.trackingCode}`, "_blank", "noopener"); close(); }} />
-          <SheetOption label={busy ? "در حال ارسال…" : "ارسال دوباره با پیامک"} hint="به شماره‌ی مشتری · هزینه‌ی یک پیامک از اعتبار کم می‌شود" disabled={busy}
-            onClick={() => act(() => api(`/api/v1/cases/${id}/send-link`, { method: "POST" }), "لینک برای مشتری پیامک شد", () => { close(); load(); })} />
+          {!c.isSample && (
+            <SheetOption label={busy ? "در حال ارسال…" : "ارسال دوباره با پیامک"} hint="به شماره‌ی مشتری · هزینه‌ی یک پیامک از اعتبار کم می‌شود" disabled={busy}
+              onClick={() => act(() => api(`/api/v1/cases/${id}/send-link`, { method: "POST" }), "لینک برای مشتری پیامک شد", () => { close(); load(); })} />
+          )}
           {"share" in navigator && (
             <SheetOption label="اشتراک‌گذاری" hint="واتساپ، تلگرام، پیامک گوشی…"
               onClick={() => { navigator.share({ title: "پیگیری کار شما", url: `${location.origin}/t/${c.trackingCode}` }).catch(() => {}); close(); }} />

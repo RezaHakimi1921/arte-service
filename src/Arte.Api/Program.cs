@@ -250,6 +250,15 @@ if (config.GetValue("Database:MigrateOnStartup", false))
         await db.Database.ExecuteSqlRawAsync("UPDATE \"Memberships\" SET \"Permissions\" = array_append(\"Permissions\", 'cases.intake') WHERE \"Role\" = 'technician' AND NOT ('cases.intake' = ANY(\"Permissions\")) AND NOT ('cases.create' = ANY(\"Permissions\"))");
         app.Logger.LogInformation("Applied data fix roles-v2");
     }
+    // Cooler system SMS defaults: clear every branch's custom texts so all shops send the new templates (with WorkshopName).
+    if (await db.Database.ExecuteSqlRawAsync("INSERT INTO \"DataFixes\" (\"Key\") VALUES ('sms-templates-v2-reset') ON CONFLICT DO NOTHING") > 0)
+    {
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE "SmsTemplates"
+            SET "DraftText" = NULL, "ApprovedText" = NULL, "ApprovedAt" = NULL, "ApprovedBy" = NULL, "UpdatedAt" = now()
+            """);
+        app.Logger.LogInformation("Applied data fix sms-templates-v2-reset");
+    }
 }
 
 // Keep every business on the current workflow template (idempotent).
