@@ -231,7 +231,7 @@ public static class CaseEndpoints
 
         return new
         {
-            c.Id, c.Number, c.TrackingCode, c.Request, c.RequestedServices, c.ReportedProblems, c.FuelLevel, c.BodyStatus, c.BodyNotes,
+            c.Id, c.Number, c.TrackingCode, c.IsSample, c.Request, c.RequestedServices, c.ReportedProblems, c.FuelLevel, c.BodyStatus, c.BodyNotes,
             c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
             c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation, c.WaitReason,
             c.MotorType,

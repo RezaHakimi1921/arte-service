@@ -853,14 +853,14 @@ function AdminBrands({ onBack, onOpen }: { onBack: () => void; onOpen: (id: stri
       name: f.name.trim(), brandId: f.brandId || undefined, newBrandName: !f.brandId && f.newBrand.trim() ? f.newBrand.trim() : undefined,
       businessType: f.type, ownerMobile: f.mobile, ownerName: f.owner.trim() || undefined, phone: f.phone.trim() || undefined,
       copyFromId: f.copyFrom || undefined, copySettings: f.copySettings, copyCatalog: f.copyCatalog, copyStaff: f.copyStaff,
-    } }), "شعبه ساخته شد؛ ۱۴ روز رایگان");
+    } }), "شعبه ساخته شد؛ ۱۵ پرونده رایگان");
   }
 
   const nameOf = (id: string) => all.find((b) => b.id === id)?.name;
   const inBrand = new Set(brands?.flatMap((b) => b.branches.map((x) => x.id)) ?? []);
   return (
     <AdminPage title="برندها و شعب" back="فهرست" onBack={onBack}>
-      <p className="muted small">هر شعبه داده، همکاران و اشتراک جدا دارد؛ برند فقط شعب را کنار هم می‌گذارد. شعبه‌ی جدید ۱۴ روز رایگان دارد.</p>
+      <p className="muted small">هر شعبه داده، همکاران و اشتراک جدا دارد؛ برند فقط شعب را کنار هم می‌گذارد. شعبه‌ی جدید ۱۵ پرونده رایگان دارد.</p>
       <div className="admin-tools">
         <button className="primary" onClick={() => newBranch()}>+ شعبه‌ی جدید</button>
         <button onClick={() => { setBrandName(""); setErrors({}); setSheet("brand"); }}>+ برند</button>
@@ -926,7 +926,7 @@ function AdminBrands({ onBack, onOpen }: { onBack: () => void; onOpen: (id: stri
             </>
           )}
           {errors.form && <span className="error" role="alert">{errors.form}</span>}
-          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ساخت شعبه…" : "ساخت شعبه (۱۴ روز رایگان)"}</button>
+          <button className="primary block" disabled={busy} aria-busy={busy}>{busy ? "در حال ساخت شعبه…" : "ساخت شعبه (۱۵ پرونده رایگان)"}</button>
         </form>
       </BottomSheet>
 

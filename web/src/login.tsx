@@ -304,7 +304,7 @@ export function Login({ onDone }: { onDone: (s: Session) => void }) {
       ) : (
         signup && mode === "phone" ? (
           <Heading icon="user" over="ثبت‌نام رایگان" title="ثبت‌نام در آرته سرویس">
-            شماره‌ی موبایلتان را بزنید؛ با کد تأیید پیامکی حسابتان ساخته می‌شود و ۱۴ روز رایگان از همه‌ی امکانات استفاده می‌کنید.
+            شماره‌ی موبایلتان را بزنید؛ با کد تأیید پیامکی حسابتان ساخته می‌شود و ۱۵ پرونده رایگان می‌توانید بپذیرید.
           </Heading>
         ) : (
           <Heading icon="wrench" over="خوش آمدید" title="وارد حساب خود شوید">
@@ -440,7 +440,7 @@ export function SignupView({ onCreate }: { onCreate: (ownerName: string, shopNam
   return (
     <AuthLayout>
       <Heading icon="user" over="ثبت‌نام" title="به آرته سرویس خوش آمدید">
-        شماره‌ی شما تأیید شد. فقط نامتان را بنویسید تا وارد شوید؛ ۱۴ روز استفاده‌ی رایگان دارید.
+        شماره‌ی شما تأیید شد. فقط نامتان را بنویسید تا وارد شوید؛ ۱۵ پرونده رایگان دارید.
       </Heading>
       <form onSubmit={submit} noValidate>
         <span className="lg-label" id="lg-type-label">نوع کسب‌وکار</span>
@@ -472,8 +472,8 @@ export function SignupView({ onCreate }: { onCreate: (ownerName: string, shopNam
   );
 }
 
-/** Shown once after sign-up: the free period is on. Continues by itself after a few seconds. */
-export function TrialWelcome({ days, onContinue }: { days: number; onContinue: () => void }) {
+/** Shown once after sign-up: the free case quota is on. Continues by itself after a few seconds. */
+export function TrialWelcome({ freeCases, onContinue }: { freeCases: number; onContinue: () => void }) {
   const done = useRef(onContinue);
   done.current = onContinue;
   useEffect(() => {
@@ -485,8 +485,8 @@ export function TrialWelcome({ days, onContinue }: { days: number; onContinue: (
       <div className="lg-success" role="status" aria-live="polite">
         <div className="lg-success-mark"><span className="lg-success-ring" /><Icon name="gift" /></div>
         <span className="lg-overline">ثبت‌نام انجام شد</span>
-        <h2>{toFa(days)} روز استفاده‌ی رایگان برای شما فعال شد</h2>
-        <p>همه‌ی امکانات آرته در این مدت باز است. یک پرونده‌ی نمونه و راهنمای کوتاه هم برایتان آماده کرده‌ایم.</p>
+        <h2>{toFa(freeCases)} پرونده رایگان می‌توانید بپذیرید</h2>
+        <p>تا پایان این سهمیه، پذیرش و پیامک باز است. یک پرونده‌ی نمونه و راهنمای کوتاه هم برایتان آماده کرده‌ایم.</p>
         <div className="lg-success-progress"><span /></div>
         <button className="lg-submit" type="button" onClick={onContinue}><span>ورود به میز کار</span><Icon name="arrow" /></button>
       </div>
