@@ -10,8 +10,8 @@ using Arte.Api.Options;
 using Arte.Api.Reports;
 using Arte.Api.Security;
 using Arte.Api.Sms;
-using Arte.Api.Sms.SmartX;
 using Arte.Api.Staff;
+using Microsoft.Extensions.Options;
 using Arte.Api.Tenants;
 using Arte.Api.Workflows;
 using Arte.Core.Common;
@@ -55,8 +55,7 @@ builder.Services.Configure<SmsOptions>(config.GetSection(SmsOptions.Section));
 var jwt = config.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var otp = config.GetSection(OtpOptions.Section).Get<OtpOptions>() ?? new OtpOptions();
 var smsOptions = config.GetSection(SmsOptions.Section).Get<SmsOptions>() ?? new SmsOptions();
-StartupChecks.Validate(builder.Environment, jwt, otp, smsOptions, config.GetConnectionString("Default"),
-    config.GetSection(SmartXSmsOptions.Section).Get<SmartXSmsOptions>() ?? new SmartXSmsOptions());
+StartupChecks.Validate(builder.Environment, jwt, otp, smsOptions, config.GetConnectionString("Default"));
 
 builder.Services.AddScoped<TenantContext>();
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
@@ -78,35 +77,32 @@ if (config.GetValue("Storage:VideoTrashEnabled", true))
     builder.Services.AddHostedService(sp => sp.GetRequiredService<Arte.Api.Cases.VideoTrash>());
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddSingleton<FakeSmsProvider>();
-// SmartX (direct-send) is always registered; it is used only for the keys routed to it (see RoutingSmsProvider).
-builder.Services.AddSmartXSms(config);
 builder.Services.AddScoped<SmsWalletService>();
 builder.Services.AddScoped<SmsTemplateService>();
-builder.Services.AddScoped<Arte.Api.Sms.SmartX.SmartXSmsProvider>();
-var smartxKeys = smsOptions.SmartXKeyList().ToHashSet();
-var smartxEnabled = smsOptions.SmartXAll || smartxKeys.Count > 0;
+// SmartX paused: shop SMS uses Faraz free-text + approved Arte templates; OTP stays on Faraz pattern.
 if (smsOptions.Provider == "iranpayamak")
 {
-    builder.Services.AddHttpClient<IranPayamakProvider>(c =>
+    builder.Services.AddHttpClient("iranpayamak", c =>
     {
         c.BaseAddress = new Uri(smsOptions.IranPayamak.BaseUrl);
         c.Timeout = TimeSpan.FromSeconds(15);
         c.DefaultRequestHeaders.Add("Api-Key", smsOptions.IranPayamak.ApiKey);
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     });
+    builder.Services.AddScoped<IranPayamakProvider>(sp =>
+        new IranPayamakProvider(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient("iranpayamak"),
+            sp.GetRequiredService<IOptions<SmsOptions>>(),
+            sp.GetRequiredService<SmsTemplateService>(),
+            sp.GetRequiredService<ArteDbContext>(),
+            sp.GetRequiredService<IClock>(),
+            sp.GetRequiredService<ILogger<IranPayamakProvider>>()));
 }
 
-// Faraz carries the login code always, and every other message unless it is routed to SmartX.
-builder.Services.AddScoped<ISmsProvider>(sp =>
+builder.Services.AddScoped<ISmsProvider>(sp => smsOptions.Provider switch
 {
-    ISmsProvider legacy = smsOptions.Provider switch
-    {
-        "iranpayamak" => sp.GetRequiredService<IranPayamakProvider>(),
-        _ => sp.GetRequiredService<FakeSmsProvider>(),
-    };
-    return !smartxEnabled
-        ? legacy
-        : new RoutingSmsProvider(legacy, sp.GetRequiredService<Arte.Api.Sms.SmartX.SmartXSmsProvider>(), smartxKeys, smsOptions.SmartXAll);
+    "iranpayamak" => sp.GetRequiredService<IranPayamakProvider>(),
+    _ => sp.GetRequiredService<FakeSmsProvider>(),
 });
 
 builder.Services
@@ -304,8 +300,6 @@ if (args.Length > 0 && args[0] == "set-password")
     return await SetPasswordCommand.RunAsync(app.Services, args);
 if (args.Length > 0 && args[0] == "set-admin")
     return await SetAdminCommand.RunAsync(app.Services, args);
-if (args.Length > 0 && args[0] == "smartx-test")
-    return await SmartXTestCommand.RunAsync(app.Services, args);
 if (args.Length > 0 && args[0] == "sms-wallet")
     return await SmsWalletCommand.RunAsync(app.Services, args);
 
@@ -322,7 +316,7 @@ static class StartupChecks
     private const string DevelopmentJwtKey = "6oDXpROXQyEUV7GG0Oy4H2i4ea3uJ5XaP7jYroDSqI4=";
 
     /// <summary>Refuses to start with missing or weak secrets.</summary>
-    public static void Validate(IHostEnvironment env, JwtOptions jwt, OtpOptions otp, SmsOptions sms, string? connectionString, SmartXSmsOptions smartx)
+    public static void Validate(IHostEnvironment env, JwtOptions jwt, OtpOptions otp, SmsOptions sms, string? connectionString)
     {
         var problems = new List<string>();
         byte[] key = [];
@@ -339,19 +333,9 @@ static class StartupChecks
         if (env.IsProduction() && sms.Provider == "fake" && !sms.AllowFakeInProduction)
             problems.Add("Sms:Provider is 'fake' in production. Set Sms:AllowFakeInProduction with Sms:FakeAllowedMobiles, or configure a real provider.");
         if (sms.Provider is not ("fake" or "iranpayamak"))
-            problems.Add($"Sms:Provider '{sms.Provider}' is unknown (use iranpayamak / Faraz; SmartX is chosen per message with SMARTX_ALL or SMARTX_KEYS).");
+            problems.Add($"Sms:Provider '{sms.Provider}' is unknown (use iranpayamak / Faraz).");
         if (sms.SmartXAll || sms.SmartXKeyList().Length > 0)
-        {
-            // Only when SmartX is actually in use: a missing key must stop the start, not the first customer's SMS.
-            try { smartx.Validate(); }
-            catch (InvalidOperationException ex) { problems.Add(ex.Message); }
-            if (sms.SmartXAll && sms.SmartXKeyList().Length > 0)
-                problems.Add("SMARTX_ALL and SMARTX_KEYS are not used together: choose one.");
-            foreach (var k in sms.SmartXKeyList().Where(k => SmsTemplates.Find(k) is null))
-                problems.Add($"Sms:SmartXKeys has an unknown message key '{k}'.");
-            if (sms.SmartXKeyList().Contains(MessageKeys.AuthOtp))
-                problems.Add("The login code never goes through SmartX; remove auth.otp from SMARTX_KEYS.");
-        }
+            problems.Add("SmartX routing is paused: set SMARTX_ALL=false and leave SMARTX_KEYS empty.");
         if (sms.Provider == "iranpayamak")
         {
             var ip = sms.IranPayamak;

@@ -46,19 +46,25 @@ public sealed class SmsOptions
     /// </summary>
     public bool AllowFakeInProduction { get; set; }
     public string[] FakeAllowedMobiles { get; set; } = [];
-    /// <summary>
-    /// Message keys (e.g. "case.opened") sent through SmartX while the provider above still carries the others.
-    /// Comma-separated. Leave empty when Provider is "smartx" (then every key goes through SmartX).
-    /// </summary>
+    /// <summary>Paused: SmartX routing is off until delivery is fixed. Kept for a future re-enable.</summary>
     public string SmartXKeys { get; set; } = "";
 
-    /// <summary>
-    /// Every message except the login code goes through SmartX. The login code always stays on Sms:Provider (Faraz / IranPayamak).
-    /// </summary>
+    /// <summary>Paused: must stay false; shop SMS goes through Faraz free-text + approved Arte templates.</summary>
     public bool SmartXAll { get; set; }
 
     public string[] SmartXKeyList() =>
         SmartXKeys.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>Host for {{CustomerLink}} (no scheme); e.g. service.artepersia.com.</summary>
+    public string LinkBase { get; set; } = "service.artepersia.com";
+
+    /// <summary>When true, refuse shop SMS until the branch has an approved Arte template for that key.</summary>
+    public bool RequireApprovedTemplate { get; set; }
+
+    /// <summary>Tehran hour window for non-OTP shop SMS (inclusive from, exclusive until).</summary>
+    public int SendFromHour { get; set; } = 8;
+    public int SendUntilHour { get; set; } = 23;
+
     public IranPayamakOptions IranPayamak { get; set; } = new();
 }
 

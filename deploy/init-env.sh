@@ -19,16 +19,10 @@ IRANPAYAMAK_API_KEY=
 IRANPAYAMAK_LINE=
 IRANPAYAMAK_OTP_PATTERN=
 IRANPAYAMAK_OTP_PARAM=code
-# SmartX SMS (docs/15). Secrets come from the SmartX back office; never paste them into chat or git.
-# Rollout: the login code always stays on SMS_PROVIDER (iranpayamak). SMARTX_ALL=true sends every other message to SmartX
-# (or list single keys in SMARTX_KEYS while testing). Never list auth.otp.
+# SmartX paused (docs/15): keep false/empty. Shop SMS uses Faraz free-text + approved Arte templates.
 SMARTX_ALL=false
-SMARTX_BASE_URL=https://staging-api.smartx.ir
-SMARTX_CLIENT_ID=
-SMARTX_CLIENT_SECRET=
-SMARTX_TENANT_ID=
-SMARTX_SENDER_NUMBER=
 SMARTX_KEYS=
+SMS_LINK_BASE=service.artepersia.com
 # Bugsink error tracking: log in as admin@artepersia.com with the password after "admin@artepersia.com:".
 BUGSINK_SECRET_KEY=$(openssl rand -hex 40)
 BUGSINK_ADMIN=admin@artepersia.com:$(openssl rand -hex 12)

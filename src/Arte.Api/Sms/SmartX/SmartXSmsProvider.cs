@@ -21,14 +21,11 @@ public sealed class SmartXSmsProvider(
     IOptions<SmartXSmsOptions> options,
     ILogger<SmartXSmsProvider> logger) : ISmsProvider
 {
-    public const string NotApproved = "template_not_approved";
-    public const string OutsideHours = "outside_sending_hours";
+    public const string NotApproved = SmsSendErrors.NotApproved;
+    public const string OutsideHours = SmsSendErrors.OutsideHours;
     public const string SendFailed = "smartx_not_accepted";
-    /// <summary>Branch credit empty: the triggering action still succeeds; the shop is told to top up.</summary>
-    public const string SkippedNoCredit = "skipped_no_credit";
-    /// <summary>Free trial cases used up: no SMS until a paid/gift licence.</summary>
-    public const string SkippedLicense = "skipped_license";
-    /// <summary>The login code never goes to SmartX (see RoutingSmsProvider); refused here as a safety net.</summary>
+    public const string SkippedNoCredit = SmsSendErrors.SkippedNoCredit;
+    public const string SkippedLicense = SmsSendErrors.SkippedLicense;
     public const string OtpNotViaSmartX = "otp_not_via_smartx";
 
     private static readonly TimeSpan Tehran = TimeSpan.FromHours(3.5);   // Iran has no DST since 2022.

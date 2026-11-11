@@ -28,7 +28,7 @@ const today = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "long", d
 const shortDate = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", year: "numeric" });
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
 
-type IconName = "case" | "tool" | "check" | "clock" | "plus" | "calendar" | "chevron" | "alert" | "phone" | "star" | "building" | "sms";
+type IconName = "case" | "tool" | "check" | "clock" | "plus" | "calendar" | "chevron" | "alert" | "phone" | "star" | "building";
 function Icon({ name }: { name: IconName }) {
   const d: Record<IconName, ReactNode> = {
     case: <><rect x="4" y="5" width="16" height="16" rx="3" /><path d="M9 3h6v4H9zM8 12h8M8 16h5" /></>,
@@ -42,7 +42,6 @@ function Icon({ name }: { name: IconName }) {
     phone: <path d="M5 3h4l2 5-2.5 1.5a15 15 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2C10.2 20.5 3.5 13.8 3 5a2 2 0 0 1 2-2Z" />,
     star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />,
     building: <path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6M9 11h.01M15 11h.01" />,
-    sms: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M8 9h8M8 13h5" /></>,
   };
   return <svg className="h-icon" viewBox="0 0 24 24" aria-hidden="true">{d[name]}</svg>;
 }
@@ -51,9 +50,7 @@ function Icon({ name }: { name: IconName }) {
  * Home: who and when, the one main action, the shop in four numbers, then what needs attention and what is ready.
  * Technicians see their own numbers and jobs. Wide screens put the lists side by side.
  */
-type SmsWallet = { parts: number; valueRial: number };
-
-export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenSurvey, onNewCase, onOpenCases, surveyEnabled, brand, smsCredit }: {
+export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenSurvey, onNewCase, onOpenCases, surveyEnabled, brand }: {
   name: string | null;
   license: { status: LicenseStatus; open: () => void } | null;
   canReports: boolean;
@@ -61,19 +58,12 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
   onOpenCases: (f: CaseFilter) => void; surveyEnabled: boolean;
   /** In more than one branch: the way to the brand dashboard. */
   brand: { name: string | null; count: number; open: () => void } | null;
-  /** Shop SMS balance on home (settings.manage); opens the customer-SMS settings page. */
-  smsCredit: { open: () => void } | null;
 }) {
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [score, setScore] = useState<MyScore | null>(null);
   const [csat, setCsat] = useState<Csat>(null);
-  const [wallet, setWallet] = useState<SmsWallet | null>(null);
   useEffect(() => { api<Inbox>("/api/v1/inbox").then(setInbox).catch(() => {}); }, []);
   useEffect(() => { if (surveyEnabled) api<MyScore>("/api/v1/surveys/mine").then(setScore).catch(() => {}); }, [surveyEnabled]);
-  useEffect(() => {
-    if (!smsCredit) return;
-    api<SmsWallet>("/api/v1/sms/wallet").then(setWallet).catch(() => setWallet(null));
-  }, [smsCredit]);
   // The shop's satisfaction over the last 30 days (managers with reports).
   useEffect(() => {
     if (!surveyEnabled || !canReports) return;
@@ -131,17 +121,6 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
           <span>
             <strong>داشبورد برند{brand.name ? ` ${brand.name}` : ""}</strong>
             <span>{formatNumber(brand.count)} شعبه · وضعیت همه‌ی شعب و رفتن به هر کدام</span>
-          </span>
-          <span className="banner-chevron"><Icon name="chevron" /></span>
-        </button>
-      )}
-
-      {smsCredit && wallet && (
-        <button type="button" className={`trial-banner sms-credit-banner${wallet.parts <= 20 ? " low" : ""}`} onClick={smsCredit.open}>
-          <span className={`trial-icon${wallet.parts <= 20 ? " warn" : " brand"}`}><Icon name="sms" /></span>
-          <span>
-            <strong>شارژ پیامک: {formatNumber(Math.round(wallet.valueRial / 10))} تومان</strong>
-            <span>{formatNumber(wallet.parts)} پارت باقی‌مانده{wallet.parts <= 20 ? " · شارژ کم است" : ""}</span>
           </span>
           <span className="banner-chevron"><Icon name="chevron" /></span>
         </button>

@@ -45,15 +45,10 @@ services:
       Sms__AllowFakeInProduction: ${SMS_ALLOW_FAKE:-false}
       Sms__FakeAllowedMobiles__0: ${SMS_FAKE_MOBILE_1:-}
       Sms__FakeAllowedMobiles__1: ${SMS_FAKE_MOBILE_2:-}
-      # SmartX (docs/15). The login code ALWAYS stays on Sms__Provider (iranpayamak / Faraz); SMARTX_ALL=true sends every other message to SmartX.
-      Sms__SmartXAll: ${SMARTX_ALL:-false}
-      Sms__SmartXKeys: ${SMARTX_KEYS:-}
-      SmartXSms__BaseUrl: ${SMARTX_BASE_URL:-https://staging-api.smartx.ir}
-      SmartXSms__ClientId: ${SMARTX_CLIENT_ID:-}
-      SmartXSms__ClientSecret: ${SMARTX_CLIENT_SECRET:-}
-      SmartXSms__TenantId: ${SMARTX_TENANT_ID:-}
-      SmartXSms__SenderNumber: ${SMARTX_SENDER_NUMBER:-}
-      SmartXSms__RequireApprovedTemplate: ${SMARTX_REQUIRE_APPROVED:-false}
+      # SmartX paused (docs/15): keep SMARTX_ALL=false. Shop SMS = Faraz free-text + approved Arte templates.
+      Sms__SmartXAll: "false"
+      Sms__SmartXKeys: ""
+      Sms__LinkBase: ${SMS_LINK_BASE:-service.artepersia.com}
       Sms__IranPayamak__ApiKey: ${IRANPAYAMAK_API_KEY:-}
       Sms__IranPayamak__LineNumber: ${IRANPAYAMAK_LINE:-}
       Sms__IranPayamak__Templates__auth_otp: ${IRANPAYAMAK_OTP_PATTERN:-}

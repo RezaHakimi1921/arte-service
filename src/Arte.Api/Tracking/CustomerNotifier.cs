@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Arte.Api.Sms;
-using Arte.Api.Sms.SmartX;
 using Arte.Core.Cases;
 using Arte.Core.Common;
 using Arte.Core.Data;
@@ -68,8 +67,8 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
         return result switch
         {
             { Accepted: true } => null,
-            { Error: SmartXSmsProvider.OutsideHours } => "پیامک فقط از ساعت ۸ تا ۲۳ فرستاده می‌شود؛ صبح دوباره امتحان کنید.",
-            { Error: SmartXSmsProvider.NotApproved } => "متن این پیامک هنوز توسط مدیریت آرته تأیید نشده است.",
+            { Error: SmsSendErrors.OutsideHours } => "پیامک فقط از ساعت ۸ تا ۲۳ فرستاده می‌شود؛ صبح دوباره امتحان کنید.",
+            { Error: SmsSendErrors.NotApproved } => "متن این پیامک هنوز توسط مدیریت آرته تأیید نشده است.",
             { Error: "template_not_configured" } => "پیامک لینک هنوز فعال نشده است؛ فعلاً لینک را با «اشتراک‌گذاری» بفرستید.",
             _ => "ارسال پیامک انجام نشد. کمی بعد دوباره تلاش کنید.",
         };
@@ -105,9 +104,9 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
     public static string? SoftFailNotice(SmsSendResult result) => result switch
     {
         { Accepted: true } => null,
-        { Error: SmartXSmsProvider.SkippedNoCredit or SmsWalletService.InsufficientCredit } =>
+        { Error: SmsSendErrors.SkippedNoCredit or SmsWalletService.InsufficientCredit } =>
             "این عملیات بدون پیامک انجام شد. لطفاً پنل پیامک خود را شارژ کنید.",
-        { Error: SmartXSmsProvider.SkippedLicense } =>
+        { Error: SmsSendErrors.SkippedLicense } =>
             "به‌خاطر اتمام پرونده‌های رایگان، پیامک ارسال نشد. برای فعال‌سازی اشتراک با پشتیبانی آرته تماس بگیرید.",
         _ => null,
     };
