@@ -221,8 +221,9 @@ if (config.GetValue("Database:MigrateOnStartup", false))
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
     await db.Database.MigrateAsync();
-    // Integration tests log in via OTP, which now spends central SMS credit — keep a large pool in Testing.
-    if (app.Environment.IsEnvironment("Testing"))
+    // OTP spends central SMS credit. Testing and local Development use the log-only provider,
+    // so a fresh database must start with a pool or nobody can sign in.
+    if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
     {
         var sms = await db.SmsSettings.SingleAsync(x => x.Id == 1);
         if (sms.CentralBalanceParts < 100_000)

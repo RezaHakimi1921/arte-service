@@ -43,16 +43,28 @@ public static class CustomerEndpoints
             var items = await query
                 .OrderByDescending(c => c.UpdatedAt)
                 .Skip((p - 1) * 30).Take(30)
-                .Select(c => new { c.Id, c.Mobile, c.FullName, AssetCount = c.Assets.Count })
+                .Select(c => new
+                {
+                    c.Id, c.Mobile, c.FullName,
+                    AssetCount = c.Assets.Count,
+                    VehicleTitle = c.Assets.OrderByDescending(a => a.CreatedAt).Select(a => a.Title).FirstOrDefault(),
+                })
                 .ToListAsync(ct);
-            return Results.Ok(items);
+            var stats = await StatsFor(db, items.Select(c => c.Id).ToList(), ct);
+            return Results.Ok(items.Select(c =>
+            {
+                var s = stats[c.Id];
+                return new { c.Id, c.Mobile, c.FullName, c.AssetCount, c.VehicleTitle, s.VisitCount, s.ValueRials };
+            }));
         });
 
         read.MapGet("/{id:guid}", async (Guid id, RequestUser me, ArteDbContext db, CancellationToken ct) =>
         {
             if (!CanBrowse(me)) return Forbidden();
             var c = await db.Customers.AsNoTracking().Include(x => x.Assets).SingleOrDefaultAsync(x => x.Id == id, ct);
-            return c is null ? Results.NotFound() : Results.Ok(ToView(c));
+            if (c is null) return Results.NotFound();
+            var stats = await StatsFor(db, [c.Id], ct);
+            return Results.Ok(ToView(c, stats[c.Id]));
         });
 
         write.MapPost("/customers", async (CustomerInput req, ArteDbContext db, IClock clock, CancellationToken ct) =>
@@ -89,16 +101,13 @@ public static class CustomerEndpoints
             var c = await db.Customers.Include(x => x.Assets).SingleOrDefaultAsync(x => x.Id == id, ct);
             if (c is null) return Results.NotFound();
             if (mobile is not null && mobile != c.Mobile)
-            {
-                if (await db.Customers.AnyAsync(x => x.Mobile == mobile, ct))
-                    return Results.Problem(statusCode: 409, title: "مشتری با این شماره وجود دارد.");
-                c.Mobile = mobile;
-            }
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["mobile"] = ["شماره موبایل قابل تغییر نیست."] });
             if (req.FullName is not null) c.FullName = Clean(req.FullName);
             if (req.Notes is not null) c.Notes = Clean(req.Notes);
             c.UpdatedAt = clock.UtcNow;
             await db.SaveChangesAsync(ct);
-            return Results.Ok(ToView(c));
+            var stats = await StatsFor(db, [c.Id], ct);
+            return Results.Ok(ToView(c, stats[c.Id]));
         });
 
         write.MapPost("/customers/{id:guid}/assets", async (Guid id, AssetInput req, ArteDbContext db, IClock clock, CancellationToken ct) =>
@@ -158,7 +167,8 @@ public static class CustomerEndpoints
             c.DeletedBy = null;
             c.UpdatedAt = clock.UtcNow;
             await db.SaveChangesAsync(ct);
-            return Results.Ok(ToView(c));
+            var stats = await StatsFor(db, [c.Id], ct);
+            return Results.Ok(ToView(c, stats[c.Id]));
         });
 
         write.MapGet("/customers/trash", async (ArteDbContext db, CancellationToken ct) =>
@@ -220,12 +230,28 @@ public static class CustomerEndpoints
         mobile = null;
         if (req.Mobile is not null || requireMobile)
         {
-            if (Mobile.TryNormalize(req.Mobile, out var m)) mobile = m;
-            else errors["mobile"] = ["شماره موبایل معتبر نیست."];
+            if (IsShopMobile(req.Mobile, out var m)) mobile = m;
+            else errors["mobile"] = ["شماره باید با ۰۹ شروع شود و ۱۱ رقم باشد."];
         }
         if (req.FullName is { Length: > 120 }) errors["fullName"] = ["نام حداکثر ۱۲۰ حرف."];
         if (req.Notes is { Length: > 2000 }) errors["notes"] = ["یادداشت حداکثر ۲۰۰۰ حرف."];
         return errors;
+    }
+
+    /// <summary>Shop customers are stored only as 09 and exactly 11 digits. +98 and 10-digit forms are not rewritten here.</summary>
+    private static bool IsShopMobile(string? input, out string mobile)
+    {
+        mobile = "";
+        if (string.IsNullOrWhiteSpace(input) || input.Length > 16) return false;
+        var digits = new string(input.Select(ch => ch switch
+        {
+            >= '۰' and <= '۹' => (char)('0' + (ch - '۰')),
+            >= '٠' and <= '٩' => (char)('0' + (ch - '٠')),
+            _ => ch,
+        }).Where(char.IsAsciiDigit).ToArray());
+        if (digits.Length != 11 || !digits.StartsWith("09", StringComparison.Ordinal)) return false;
+        mobile = digits;
+        return true;
     }
 
     private static Dictionary<string, string[]> ValidateAsset(AssetInput req, bool isNew)
@@ -240,9 +266,38 @@ public static class CustomerEndpoints
         return errors;
     }
 
-    private static object ToView(Customer c) => new
+    /// <summary>Visits are real cases. Value is money actually paid, in rials. Sample data is left out.</summary>
+    private sealed record CustomerStats(int VisitCount, long ValueRials, DateTimeOffset? LastVisitAt);
+
+    private static async Task<Dictionary<Guid, CustomerStats>> StatsFor(ArteDbContext db, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0) return [];
+        var visits = await db.Cases.AsNoTracking()
+            .Where(k => ids.Contains(k.CustomerId) && !k.IsSample)
+            .GroupBy(k => k.CustomerId)
+            .Select(g => new { Id = g.Key, Count = g.Count(), Last = g.Max(k => k.OpenedAt) })
+            .ToListAsync(ct);
+        var paid = await db.Payments.AsNoTracking()
+            .Where(p => ids.Contains(p.CustomerId) && db.Cases.Any(k => k.Id == p.CaseId && !k.IsSample))
+            .GroupBy(p => p.CustomerId)
+            .Select(g => new { Id = g.Key, Sum = g.Sum(p => p.AmountRials) })
+            .ToListAsync(ct);
+        var visitMap = visits.ToDictionary(v => v.Id);
+        var payMap = paid.ToDictionary(p => p.Id, p => p.Sum);
+        return ids.ToDictionary(id => id, id =>
+        {
+            visitMap.TryGetValue(id, out var v);
+            payMap.TryGetValue(id, out var money);
+            return new CustomerStats(v?.Count ?? 0, money, v?.Last);
+        });
+    }
+
+    private static object ToView(Customer c, CustomerStats? stats = null) => new
     {
         c.Id, c.Mobile, c.FullName, c.Notes, c.CreatedAt,
+        VisitCount = stats?.VisitCount ?? 0,
+        ValueRials = stats?.ValueRials ?? 0L,
+        LastVisitAt = stats?.LastVisitAt,
         Assets = c.Assets.OrderBy(a => a.CreatedAt).Select(AssetView),
     };
 
