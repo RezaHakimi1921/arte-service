@@ -263,6 +263,7 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
   // Opened from a notification: the case page scrolls to the customer's feedback.
   const [surveyCase, setSurveyCase] = useState<string | null>(null);
   const [newCase, setNewCase] = useState(false);
+  const [intakeSeed, setIntakeSeed] = useState<string | null>(null);
   const [caseFilter, setCaseFilter] = useState<CaseFilter>({});
   const [undoCase, setUndoCase] = useState<{ id: string; number: number } | null>(null);
   const [morePage, setMorePage] = useState<SettingsPage | null>(null);
@@ -365,6 +366,13 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
     go("cases");
   }
   function startNewCase() {
+    setIntakeSeed(null);
+    setTab("cases");
+    setCaseId(null);
+    setNewCase(true);
+  }
+  function startIntakeFor(mobile: string) {
+    setIntakeSeed(mobile);
     setTab("cases");
     setCaseId(null);
     setNewCase(true);
@@ -385,18 +393,18 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
     { id: "settings", label: "تنظیمات", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z", go: () => go("settings") },
   ];
   // Home and the case list use the full width on a desktop; forms and the case page stay narrow and readable.
-  const wide = (tab === "home" && !caseId && !newCase) || (tab === "cases" && !caseId && !newCase);
+  const wide = (tab === "home" && !caseId && !newCase) || (tab === "cases" && !caseId && !newCase) || tab === "customers";
 
   let page;
   if (tab === "cases" && newCase)
-    page = <NewCaseView draftScope={`${me.id}:${me.business!.tenantId}`} canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} vehicleKinds={me.business!.vehicleKinds} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
+    page = <NewCaseView draftScope={`${me.id}:${me.business!.tenantId}`} canAssign={can("cases.assign")} requireAssignee={me.business!.requireAssigneeOnIntake} vehicleKinds={me.business!.vehicleKinds} seedMobile={intakeSeed} onCreated={(id) => { setNewCase(false); setCaseId(id); }} onCancel={() => setNewCase(false)}
       onOpenStaff={() => { go("settings"); if (can("staff.manage")) setMorePage("staff"); }} />;
   else if (tab === "cases" && caseId)
     page = <CaseDetail key={caseId} id={caseId} focusSurvey={surveyCase === caseId} onBack={() => { setCaseId(null); setSurveyCase(null); }} onDeleted={(number) => { setUndoCase({ id: caseId, number }); setCaseId(null); }} />;
   else if (tab === "cases")
     page = <CasesView key={JSON.stringify(caseFilter)} initialFilter={caseFilter} onOpen={setCaseId} onNewCase={startNewCase} canCreate={canIntake}
       draft={hasDraft(`${me.id}:${me.business!.tenantId}`)} onDraft={startNewCase} />;
-  else if (tab === "customers") page = <Customers canEdit={can("cases.create")} />;
+  else if (tab === "customers") page = <Customers canEdit={can("cases.create")} onNewCase={canIntake ? startIntakeFor : undefined} />;
   else if (tab === "settings") {
     const back = () => setMorePage(null);
     if (morePage === "receivables") page = <ReceivablesView onBack={() => setMorePage("reports")} onOpenCase={(id) => { setTab("cases"); setCaseId(id); }} />;

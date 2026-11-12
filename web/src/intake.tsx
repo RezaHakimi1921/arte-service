@@ -58,15 +58,17 @@ type Draft = {
   assigneeId: string; full: boolean;
 };
 
-export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKinds, onCreated, onCancel, onOpenStaff }: {
+export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKinds, onCreated, onCancel, onOpenStaff, seedMobile }: {
   /** Person + branch: the unfinished form is kept under this key while moving around the app. */
   draftScope: string;
   canAssign: boolean; requireAssignee: boolean; vehicleKinds: string[]; onCreated: (id: string) => void; onCancel: () => void; onOpenStaff: () => void;
+  /** Set when intake is opened from a customer profile. A saved draft still wins. */
+  seedMobile?: string | null;
 }) {
   // Only the vehicle kinds this business takes in (Settings → نوع کسب‌وکار و وسایل نقلیه).
   const kinds = VEHICLE_KINDS.filter((k) => vehicleKinds.includes(k.key));
   // customer
-  const [mobile, setMobile] = useState("");
+  const [mobile, setMobile] = useState(seedMobile ?? "");
   const [customer, setCustomer] = useState<CustomerFull | null>(null);
   const [lookedUp, setLookedUp] = useState(false);
   const [customerName, setCustomerName] = useState("");
