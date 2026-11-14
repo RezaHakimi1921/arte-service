@@ -454,17 +454,15 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
           </div>
         )}
         <header className="topbar">
-          {me.branchCount > 1 ? (
-            <button type="button" className="mobile-brand topbar-branch" onClick={onBranches} aria-label={`شعبه: ${me.business!.name}؛ عوض کردن شعبه`}>
-              <ArteMark />
-              <span><strong>{me.business!.name} <span aria-hidden="true">▾</span></strong><span>{me.displayName ?? me.mobile} · شعب</span></span>
-            </button>
-          ) : (
-            <div className="mobile-brand">
-              <ArteMark />
-              <span><strong>{me.business!.name}</strong><span>{me.displayName ?? me.mobile}</span></span>
-            </div>
-          )}
+          <button type="button" className="btn-hamburger" onClick={onBranches} aria-label="منوی شعبه‌ها">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div className="mobile-brand" style={{ flex: 1, minWidth: 0 }}>
+            <ArteMark />
+            <span><strong>{me.business!.name}</strong><span>{me.displayName ?? me.mobile}</span></span>
+          </div>
           <div className="topbar-actions">
             <ThemeToggle />
             {me.business!.surveyEnabled && (
@@ -527,7 +525,9 @@ const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) 
 function NavButton({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon: string }) {
   return (
     <button className={`nav-item${active ? " active" : ""}`} onClick={onClick} aria-current={active ? "page" : undefined}>
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d={icon} /></svg>
+      <span className="nav-icon-wrap">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d={icon} /></svg>
+      </span>
       <span>{label}</span>
     </button>
   );
