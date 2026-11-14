@@ -259,7 +259,7 @@ function Stat({ icon, tone, value, label, sub, onClick }: {
       <span className="stat-icon"><Icon name={icon} /></span>
       <strong className="font-num">{formatNumber(value)}</strong>
       <span className="stat-label">{label}</span>
-      <small>{sub}</small>
+      {sub && <small>{sub}</small>}
     </button>
   );
 }
