@@ -19,9 +19,16 @@ IRANPAYAMAK_API_KEY=
 IRANPAYAMAK_LINE=
 IRANPAYAMAK_OTP_PATTERN=
 IRANPAYAMAK_OTP_PARAM=code
-# SmartX paused (docs/15): keep false/empty. Shop SMS uses Faraz free-text + approved Arte templates.
-SMARTX_ALL=false
+# SmartX SMS (docs/15). OTP always stays on SMS_PROVIDER (iranpayamak).
+# Switch: SMARTX_ALL=true → every other message to SmartX; false → Faraz free-text. Or list keys in SMARTX_KEYS (not both; never auth.otp).
+SMARTX_ALL=true
 SMARTX_KEYS=
+SMARTX_BASE_URL=https://api.smartx.ir
+SMARTX_CLIENT_ID=
+SMARTX_CLIENT_SECRET=
+SMARTX_TENANT_ID=
+SMARTX_SENDER_NUMBER=
+SMARTX_REQUIRE_APPROVED=false
 SMS_LINK_BASE=service.artepersia.com
 # Bugsink error tracking: log in as admin@artepersia.com with the password after "admin@artepersia.com:".
 BUGSINK_SECRET_KEY=$(openssl rand -hex 40)

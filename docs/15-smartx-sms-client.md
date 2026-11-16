@@ -1,8 +1,16 @@
 # 15 — پیامک از مسیر اسمارت‌ایکس
 
-**وضعیت (موقتاً متوقف):** مسیر ارسال اسمارت به‌خاطر مشکل تحویل (Accept بدون رسیدن به گوشی) خاموش است.
-پیامک مشتری از **فاراز** می‌رود: OTP با پترن؛ بقیه با `POST /ws/v1/sms/simple` و متن تأییدشده‌ی شعبه (یا متن سیستم).
-کد اسمارت در ریپو مانده تا بعد از رفع تحویل دوباره روشن شود. روی سرور `SMARTX_ALL=false` و `SMARTX_KEYS` خالی بماند.
+**وضعیت:** سوئیچ سریع با env. الان پیش‌فرض `SMARTX_ALL=true` — پیامک مشتری از اسمارت؛ کد ورود از Faraz.
+
+## سوئیچ سریع
+
+| هدف | کار روی سرور |
+|---|---|
+| اسمارت (فعلی) | در `deploy/.env`: `SMARTX_ALL=true` و `SMARTX_KEYS=` خالی؛ بعد `docker compose up -d --force-recreate api` |
+| برگشت به فاراز | `SMARTX_ALL=false` (و کلیدها خالی)؛ recreate همان کانتینر api |
+| آزمایش تک‌کلید | `SMARTX_ALL=false` و مثلاً `SMARTX_KEYS=case.opened` |
+
+کد ورود (`auth.otp`) **هرگز** از اسمارت نمی‌رود؛ همیشه `SMS_PROVIDER=iranpayamak`.
 
 ## تصمیم‌ها
 
@@ -17,14 +25,14 @@
 | نام | توضیح |
 |---|---|
 | `SMS_PROVIDER` | همیشه `iranpayamak` (Faraz): کد ورود از این سرویس می‌رود و هرگز از اسمارت نمی‌رود |
-| `SMARTX_ALL` | `true`: همه‌ی پیام‌ها غیر از کد ورود از اسمارت. پیش‌فرض `false` |
+| `SMARTX_ALL` | `true`: همه‌ی پیام‌ها غیر از کد ورود از اسمارت. پیش‌فرض compose: `true` |
 | `SMARTX_KEYS` | برای آزمایش تک‌تک: با ویرگول، مثلاً `case.opened`. با `SMARTX_ALL` همزمان نباشد؛ `auth.otp` نباید در آن باشد |
 | `SMARTX_BASE_URL` | staging: `https://staging-api.smartx.ir` ، production: `https://api.smartx.ir` |
 | `SMARTX_CLIENT_ID` / `SMARTX_CLIENT_SECRET` / `SMARTX_TENANT_ID` | از بک‌آفیس اسمارت؛ فقط روی سرور |
 | `SMARTX_SENDER_NUMBER` | خط ثابت ارسال |
 | `SMARTX_REQUIRE_APPROVED` | `true`: فقط متن تأییدشده‌ی شعبه فرستاده شود؛ پیش‌فرض `false`: تا تأیید، متن سیستم |
 
-اگر `SMARTX_ALL=true` یا `SMARTX_KEYS` پر باشد و یکی از مقدارهای SmartX خالی باشد، برنامه بالا نمی‌آید و نام کلید گمشده را می‌گوید. `Sms:Provider=smartx` و `smsir` پذیرفته نمی‌شوند.
+اگر `SMARTX_ALL=true` یا `SMARTX_KEYS` پر باشد و یکی از مقدارهای SmartX خالی باشد، برنامه بالا نمی‌آید و نام کلید گمشده را می‌گوید. `Sms:Provider=smartx` پذیرفته نمی‌شود.
 
 ## مخزن شارژ
 
@@ -72,7 +80,7 @@ docker compose run --rm -T api sms-wallet credit "مکانیک موتور" 100  
 
 ## راه‌اندازی و تست
 
-1. مقدارهای بالا را در `deploy/.env` بگذار (staging).
-2. `SMS_PROVIDER=iranpayamak` را نگه دار و `docker compose up -d` بزن.
-3. تست مستقیم: `docker compose run --rm -T api smartx-test <موبایل>` ← باید `Accepted by SmartX` بگوید و پیامک برسد.
-4. موجودی مرکزی و شارژ شعبه را ثبت کن، بعد `SMARTX_KEYS=case.opened` را بگذار و یک پرونده‌ی تست باز کن. اگر درست بود، `SMARTX_KEYS` را خالی کن و `SMARTX_ALL=true` بگذار.
+1. مقدارهای بالا را در `deploy/.env` بگذار (production یا staging).
+2. `SMS_PROVIDER=iranpayamak` و `SMARTX_ALL=true`؛ `docker compose up -d --force-recreate api`.
+3. تست مستقیم: `docker compose run --rm -T api smartx-test <موبایل>` ← باید `Accepted by SmartX` بگوید.
+4. برای برگشت فوری به فاراز: فقط `SMARTX_ALL=false` و recreate.
