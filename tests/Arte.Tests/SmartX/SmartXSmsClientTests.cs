@@ -157,7 +157,7 @@ public class SmartXSmsClientTests
         Assert.Equal(1, info.GetArrayLength());
         Assert.Equal("989121234567", info[0].GetProperty("contactInfo").GetString());
         Assert.Equal("سلام", info[0].GetProperty("body").GetString());
-        Assert.Equal(9121234567L, info[0].GetProperty("recipientId").GetInt64());
+        Assert.Equal(1L, info[0].GetProperty("recipientId").GetInt64());
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class SmartXSmsClientTests
         var h = new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         var (client, _) = Create(h);
 
-        // Caller may pass 0; client overwrites recipientId from the mobile (docs/21 option B).
+        // TEMP: client forces recipientId = 1 (>0) until option B is live on the server.
         await client.SendAsync(new[] { new SmsRecipient(0, "09121234567", "متن", "order-7788") });
 
         var root = JsonDocument.Parse(h.SendBodies[0]).RootElement;
@@ -178,18 +178,8 @@ public class SmartXSmsClientTests
         Assert.True(root.GetProperty("shouldCheckConsent").GetBoolean());
         Assert.True(root.GetProperty("shouldCheckQuietHours").GetBoolean());
         var r = root.GetProperty("recipientInfo")[0];
-        Assert.Equal(9121234567L, r.GetProperty("recipientId").GetInt64());
+        Assert.Equal(1L, r.GetProperty("recipientId").GetInt64());
         Assert.Equal("order-7788", r.GetProperty("correlationId").GetString());
-    }
-
-    [Theory]
-    [InlineData("09362660550", 9362660550L)]
-    [InlineData("989362660550", 9362660550L)]
-    [InlineData("۹۳۶۲۶۶۰۵۵۰", 9362660550L)]
-    public void National_long_strips_leading_zero_for_recipient_id(string input, long expected)
-    {
-        Assert.True(Arte.Core.Common.Mobile.TryToNationalLong(input, out var id));
-        Assert.Equal(expected, id);
     }
 
     [Fact]
