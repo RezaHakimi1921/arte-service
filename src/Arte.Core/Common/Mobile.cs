@@ -37,4 +37,15 @@ public static partial class Mobile
     /// <summary>For logs: 0912***4567.</summary>
     public static string Mask(string mobile) =>
         mobile.Length == 11 ? $"{mobile[..4]}***{mobile[7..]}" : "***";
+
+    /// <summary>
+    /// Iranian mobile as a positive long without the leading zero (SmartX recipientId):
+    /// 09362660550 / 989362660550 → 9362660550.
+    /// </summary>
+    public static bool TryToNationalLong(string? input, out long national)
+    {
+        national = 0;
+        if (!TryNormalize(input, out var local)) return false;
+        return long.TryParse(local.AsSpan(1), out national) && national > 0;
+    }
 }

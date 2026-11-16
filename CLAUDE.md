@@ -6,6 +6,12 @@ React + Vite PWA (`web/`). Production: https://service.artepersia.com (stack in 
 
 Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` before changing the model.
 
+Arte Groups (direction, ۱۴۰۵/۰۸/۲۱, not built): this repo’s first product stays the workshop.
+Later products are siblings, not new workshop templates. The sports club is the separate repo
+`F:\reza\arte-spport` (own Postgres). Do not add gym entities to `Arte.Core`.
+Shared later: identity, SMS, licence, platform admin.
+Read `docs/18-plan-arte-groups.md` before any cross-product work.
+
 ## Data rules (every entity)
 
 1. **Nothing is hard-deleted from the UI or API.** Every user-created entity supports one of:
@@ -75,6 +81,9 @@ Product and domain decisions live in `docs/` — read `docs/03-domain-model.md` 
 ```text
 build → test → commit → branch + pull request → owner approves on GitHub → deploy → health check → summary
 ```
+
+End every implementation reply with **وضعیت انتشار** (skill `arte-ship-status`): تست الان؟ / PR؟ / Deploy؟ / قدم بعدی.
+Never tell the owner to test on production before merge + deploy.
 
 1. `dotnet build` (and `npm run build` in `web/` when the UI changed). Fix all errors and warnings you introduced.
 2. `dotnet test tests/Arte.Tests` (needs Docker Desktop running). Report PASS/FAIL with counts — no "looks fine".

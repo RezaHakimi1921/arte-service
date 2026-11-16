@@ -18,6 +18,7 @@ public static class SmartXTestCommand
         var client = services.GetRequiredService<SmartXSmsClient>();
         try
         {
+            // recipientId is derived from the mobile inside SmartXSmsClient (national long > 0).
             var result = await client.SendAsync([new SmsRecipient(0, mobile, "آرته سرویس\nپیام آزمایشی اتصال به اسمارت.")]);
             foreach (var b in result.Batches)
                 Console.WriteLine($"batch {b.BatchId}: {b.State}, HTTP {b.HttpStatus?.ToString() ?? "-"}, attempts {b.Attempts}{(b.Error is null ? "" : ", " + b.Error)}");
