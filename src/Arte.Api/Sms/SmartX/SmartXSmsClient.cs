@@ -49,12 +49,11 @@ public sealed class SmartXSmsClient
         var invalid = new List<SmsRecipient>();
         foreach (var r in recipients)
         {
-            // Mobile.TryNormalize → 09…; SmartX contactInfo wants 98…; recipientId must be long > 0
-            // (national digits without leading 0 — docs/21). Zero made Accept-without-SmsMessages.
-            if (Mobile.TryNormalize(r.Mobile, out var local)
-                && Mobile.TryToNationalLong(local, out var recipientId)
-                && !string.IsNullOrWhiteSpace(r.Body))
-                valid.Add(r with { Mobile = "98" + local[1..], RecipientId = recipientId });
+            // Mobile.TryNormalize → 09…; SmartX contactInfo wants 98….
+            // TEMP: recipientId hardcoded to 1 (>0) so SmartX builds SmsMessages. Replace with
+            // Mobile.TryToNationalLong when confirmed on the wire (docs/21 option B).
+            if (Mobile.TryNormalize(r.Mobile, out var local) && !string.IsNullOrWhiteSpace(r.Body))
+                valid.Add(r with { Mobile = "98" + local[1..], RecipientId = 1 });
             else
                 invalid.Add(r);
         }
