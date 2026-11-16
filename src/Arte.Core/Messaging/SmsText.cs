@@ -53,19 +53,19 @@ public static class SmsTemplates
     public static readonly IReadOnlyList<Definition> Branch =
     [
         new(MessageKeys.CaseOpened, "هنگام پذیرش",
-            "{{WorkshopName}}\n{{CustomerName}} عزیز\n{{Vehicle}} پذیرش شد.\nپیگیری: {{CustomerLink}}", true),
+            "🚗 اطلاعیه پذیرش خودرو\n\n{{CustomerName}} عزیز،\nخودروی {{Vehicle}} در {{WorkshopName}} پذیرش شد.\n\nبرای مشاهده وضعیت پذیرش و پیگیری مراحل سرویس و تعمیر، از لینک زیر استفاده کنید:\n\n{{CustomerLink}}", true),
         new(MessageKeys.CaseReady, "آماده‌ی تحویل",
-            "{{WorkshopName}}\nهمراه گرامی\n{{Vehicle}} آماده‌ی تحویل است.\nجزئیات: {{CustomerLink}}", true),
+            "✅ خودرو آماده تحویل است\n\n{{CustomerName}} عزیز،\nخودروی {{Vehicle}} پس از انجام خدمات موردنظر، در {{WorkshopName}} آماده تحویل است.\n\nبرای مشاهده جزئیات خدمات انجام‌شده:\n\n{{CustomerLink}}", true),
         new(MessageKeys.CaseDelivered, "هنگام تحویل",
-            "{{WorkshopName}}\n{{Vehicle}} تحویل شد.\nسابقه و ضمانت: {{CustomerLink}}", true),
+            "📋 اطلاعیه تحویل خودرو\n\n{{CustomerName}} عزیز،\nخودروی {{Vehicle}} به شما تحویل داده شد.\n\nسوابق خدمات، جزئیات تعمیرات و اطلاعات ضمانت از طریق لینک زیر در دسترس شماست:\n\n{{CustomerLink}}", true),
         new(MessageKeys.CaseLink, "ارسال دوباره‌ی لینک (از پرونده)",
-            "{{WorkshopName}}\nلینک پیگیری {{Vehicle}}:\n{{CustomerLink}}", true),
+            "🚗 پیگیری وضعیت خودرو\n\n{{CustomerName}} عزیز،\nبرای مشاهده آخرین وضعیت خودروی {{Vehicle}} و جزئیات خدمات ثبت‌شده در {{WorkshopName}}، از لینک زیر استفاده کنید:\n\n{{CustomerLink}}", true),
         new(MessageKeys.CaseWaitingPart, "منتظر قطعه‌ی مشتری",
-            "{{WorkshopName}}\nبرای ادامه‌ی کار {{Vehicle}} منتظر قطعه‌ی شما هستیم.\n{{CustomerLink}}", true),
+            "🔧 اطلاعیه وضعیت تعمیر خودرو\n\n{{CustomerName}} عزیز،\nادامه مراحل تعمیر خودروی {{Vehicle}} در انتظار تأمین قطعه است.\n\nپس از فراهم شدن قطعه، مراحل کار ادامه خواهد یافت.\n\nبرای مشاهده آخرین وضعیت:\n\n{{CustomerLink}}", true),
         new(MessageKeys.SurveyRequest, "نظرسنجی بعد از تحویل",
-            "{{WorkshopName}}\nنظر شما برای ما مهم است.\nثبت نظر: {{CustomerLink}}", true),
+            "⭐ ثبت نظر درباره خدمات\n\n{{CustomerName}} عزیز،\nاز انتخاب {{WorkshopName}} سپاسگزاریم.\n\nلطفاً تجربه خود از خدمات ارائه‌شده را از طریق لینک زیر با ما به اشتراک بگذارید. نظرات شما به بهبود کیفیت خدمات کمک می‌کند.\n\n{{CustomerLink}}", true),
         new(MessageKeys.StaffWorkFinished, "به استادکار: کار در انتظار بازبینی",
-            "{{WorkshopName}}\n{{CaseCode}} ({{Vehicle}}) تمام شد؛ منتظر بازبینی شماست.", false),
+            "🔔 اعلام اتمام عملیات\n\nخودروی {{Vehicle}} با کد پذیرش {{CaseCode}}، مراحل سرویس و تعمیر را به پایان رسانده است.\n\nلطفاً جهت بررسی و بازبینی نهایی اقدام کنید.\n\n{{WorkshopName}}", false),
     ];
 
     public const string OtpDefault = "آرته سرویس\nکد ورود: {{Code}}\nدر اختیار کسی نگذارید.";
