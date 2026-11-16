@@ -74,6 +74,7 @@ public sealed class SmartXSmsProvider(
         // 4) Send. Any failure hands the parts back.
         try
         {
+            // recipientId is set inside SmartXSmsClient from the mobile (national long > 0).
             var result = await client.SendAsync(
                 [new SmsRecipient(0, request.Mobile, body)],
                 null,

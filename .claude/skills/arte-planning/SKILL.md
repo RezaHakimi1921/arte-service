@@ -35,3 +35,5 @@ in Persian, short sentences, no jargon. It must be complete enough that nothing 
    the recommended order, and the open questions. Do not start implementation.
 7. When approved: implement phase by phase; each phase follows the post-change checklist in `CLAUDE.md`
    (build → test → commit → push → deploy → health check → summary) and updates the plan's status line.
+8. End every implementation reply with the **وضعیت انتشار** block from skill `arte-ship-status`
+   (تست الان؟ / PR؟ / Deploy؟ / قدم بعدی) so the owner never has to guess.
