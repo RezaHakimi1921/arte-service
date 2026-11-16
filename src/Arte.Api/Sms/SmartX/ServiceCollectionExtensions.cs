@@ -7,7 +7,7 @@ namespace Arte.Api.Sms.SmartX;
 
 public static class SmartXSmsServiceCollectionExtensions
 {
-    /// builder.Services.AddSmartXSms(builder.Configuration);  (هنوز در Program.cs صدا زده نمی‌شود؛ فعلاً روی پنل قبلی هستیم)
+    /// Always register; RoutingSmsProvider sends only when SMARTX_ALL or SMARTX_KEYS is set.
     public static IServiceCollection AddSmartXSms(this IServiceCollection services, IConfiguration config)
     {
         services.AddOptions<SmartXSmsOptions>().Bind(config.GetSection(SmartXSmsOptions.Section));

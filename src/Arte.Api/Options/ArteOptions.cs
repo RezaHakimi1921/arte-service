@@ -46,10 +46,10 @@ public sealed class SmsOptions
     /// </summary>
     public bool AllowFakeInProduction { get; set; }
     public string[] FakeAllowedMobiles { get; set; } = [];
-    /// <summary>Paused: SmartX routing is off until delivery is fixed. Kept for a future re-enable.</summary>
+    /// <summary>Comma-separated message keys routed to SmartX (not with SmartXAll; never auth.otp).</summary>
     public string SmartXKeys { get; set; } = "";
 
-    /// <summary>Paused: must stay false; shop SMS goes through Faraz free-text + approved Arte templates.</summary>
+    /// <summary>When true, every message except auth.otp goes to SmartX. Flip via Sms__SmartXAll / SMARTX_ALL.</summary>
     public bool SmartXAll { get; set; }
 
     public string[] SmartXKeyList() =>
