@@ -151,7 +151,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         Assert.Equal(10 - parts, await rig.Inner.Wallet.BranchBalanceAsync(tenantId, default));
         Assert.Equal(before.CentralParts - parts, after.CentralParts);
         Assert.Equal(before.HeadroomParts, after.HeadroomParts);   // spending never changes the free amount
-        Assert.Contains("همراه گرامی", Sent(rig.Inner));
+        Assert.Contains("خودرو آماده تحویل است", Sent(rig.Inner));
         Assert.Contains("service.artepersia.com/t/abc234", Sent(rig.Inner));
     }
 
