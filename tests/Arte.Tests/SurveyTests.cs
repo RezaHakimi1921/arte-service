@@ -97,8 +97,9 @@ public sealed class SurveyTests(ArteApiFactory api)
         // 30 minutes after delivery by default, moved into sending hours.
         var due = survey.GetProperty("dueAt").GetDateTimeOffset();
         Assert.Equal(SurveyRules.IntoSendingHours(before.AddMinutes(30)), due, TimeSpan.FromMinutes(1));
-        // Who did the work: the assignee and the person who recorded the labor (the owner).
-        Assert.Equal(2, survey.GetProperty("responsible").GetArrayLength());
+        // Labor defaults to the case assignee, so only the technician is responsible (not the owner who typed the line).
+        Assert.Equal(1, survey.GetProperty("responsible").GetArrayLength());
+        Assert.Equal("حسین", survey.GetProperty("responsible")[0].GetString());
 
         // Nothing before it is due; once due, exactly one SMS with the tracking code (the pattern has no vehicle).
         await RunSender(due.AddMinutes(-5));
@@ -147,7 +148,7 @@ public sealed class SurveyTests(ArteApiFactory api)
         var (tech, _) = await api.LoginAsync(techMobile);
         Assert.Equal(0, (await Json(await tech.GetAsync("/api/v1/notifications"))).GetProperty("unread").GetInt32());
 
-        // The technician sees their own score; the report counts it for both responsible people.
+        // The technician sees their own score; the report counts it for the assignee (one responsible).
         var mine = await Json(await tech.GetAsync("/api/v1/surveys/mine"));
         Assert.Equal(1, mine.GetProperty("responses").GetInt32());
         var report = await Json(await owner.GetAsync($"/api/v1/reports/summary?from={Uri.EscapeDataString(before.AddDays(-1).ToString("O"))}&to={Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(1).ToString("O"))}"));
@@ -155,7 +156,7 @@ public sealed class SurveyTests(ArteApiFactory api)
         Assert.Equal(1, rs.GetProperty("responses").GetInt32());
         Assert.Equal(0, rs.GetProperty("satisfiedPercent").GetInt32());
         Assert.Equal(3, rs.GetProperty("questions").GetArrayLength());
-        Assert.Equal(2, rs.GetProperty("staff").GetArrayLength());
+        Assert.Equal(1, rs.GetProperty("staff").GetArrayLength());
         Assert.Single(rs.GetProperty("low").EnumerateArray());
 
         // Low satisfaction stays on the home screen until a manager follows it up.

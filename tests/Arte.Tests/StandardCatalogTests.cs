@@ -68,9 +68,9 @@ public sealed class StandardCatalogTests(ArteApiFactory api)
         var billing = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items/batch", body));
         Assert.Equal(2, billing.GetProperty("items").GetArrayLength());
         Assert.Equal(6_000_000, billing.GetProperty("money").GetProperty("totalRials").GetInt64());
-        // The work line counts for the person who recorded it.
+        // No assignee on this case → performer stays unset (defaults to assignee when one exists).
         var labor = billing.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("kind").GetString() == "labor");
-        Assert.NotEqual(JsonValueKind.Null, labor.GetProperty("performedBy").ValueKind);
+        Assert.Equal(JsonValueKind.Null, labor.GetProperty("performedBy").ValueKind);
 
         list = await Json(await owner.GetAsync("/api/v1/catalog/standard?vehicleKind=motorcycle"));
         Assert.Equal(4_500_000, Item(list, "روغن موتور").GetProperty("priceRials").GetInt64());
