@@ -16,6 +16,7 @@ public sealed class SmartXSmsProvider(
     SmartXSmsClient client,
     SmsWalletService wallet,
     SmsTemplateService templates,
+    SmsDeferredQueue deferred,
     ArteDbContext db,
     IClock clock,
     IOptions<SmartXSmsOptions> options,
@@ -67,7 +68,11 @@ public sealed class SmartXSmsProvider(
         var (reservation, error) = await wallet.ReserveAsync(request.TenantId, parts, request.MessageKey, ct);
         if (reservation is null)
         {
-            if (error == SmsWalletService.InsufficientCredit) return new SmsSendResult(false, null, SkippedNoCredit);
+            if (error == SmsWalletService.InsufficientCredit)
+            {
+                if (request.QueueIfNoCredit) await deferred.EnqueueAsync(request, ct);
+                return new SmsSendResult(false, null, SkippedNoCredit);
+            }
             return new SmsSendResult(false, null, error);
         }
 

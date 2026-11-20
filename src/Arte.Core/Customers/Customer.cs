@@ -50,3 +50,35 @@ public sealed class Asset : ITenantOwned, ISoftDeletable, IDisposable
 
     public void Dispose() => Attributes?.Dispose();
 }
+
+/// <summary>Keeps <see cref="Asset.Title"/> and brand/model attributes aligned when the user types off-catalog names.</summary>
+public static class VehicleAssetAttributes
+{
+    public static Dictionary<string, string>? EnsureBrandModel(string title, Dictionary<string, string>? attributes)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return attributes is { Count: > 0 } ? attributes : null;
+        attributes ??= new Dictionary<string, string>();
+        var t = title.Trim();
+        var hasBrand = attributes.TryGetValue("brand", out var brand) && !string.IsNullOrWhiteSpace(brand);
+        var hasModel = attributes.TryGetValue("model", out var model) && !string.IsNullOrWhiteSpace(model);
+        if (hasBrand && hasModel) return attributes;
+
+        if (hasBrand && !hasModel && t.StartsWith(brand!.Trim(), StringComparison.Ordinal))
+            attributes["model"] = t[brand.Trim().Length..].Trim();
+        else if (!hasBrand && hasModel && t.EndsWith(model!.Trim(), StringComparison.Ordinal) && t.Length > model.Trim().Length)
+            attributes["brand"] = t[..^model.Trim().Length].Trim();
+        else
+        {
+            var space = t.IndexOf(' ');
+            if (space > 0)
+            {
+                if (!hasBrand) attributes["brand"] = t[..space];
+                if (!hasModel) attributes["model"] = t[(space + 1)..];
+            }
+            else if (!hasModel)
+                attributes["model"] = t;
+        }
+
+        return attributes;
+    }
+}

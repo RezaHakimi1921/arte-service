@@ -56,7 +56,9 @@ public sealed class Membership : ITenantOwned
 
     public bool Has(string permission) =>
         Role == Roles.Owner || Permissions.Contains(permission)
-        || (permission == Identity.Permissions.CasesIntake && Permissions.Contains(Identity.Permissions.CasesCreate));
+        || (permission == Identity.Permissions.CasesIntake && Permissions.Contains(Identity.Permissions.CasesCreate))
+        // Legacy: masters who already had cases.create keep receiving staff SMS until permissions are re-saved.
+        || (permission == Identity.Permissions.SmsStaffNotify && Permissions.Contains(Identity.Permissions.CasesCreate));
 }
 
 public sealed class OtpChallenge

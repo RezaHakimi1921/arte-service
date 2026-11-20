@@ -90,7 +90,7 @@ public sealed class SmsWalletTests(ArteApiFactory api)
     private static readonly DateTimeOffset Daytime = new(2026, 11, 7, 6, 30, 0, TimeSpan.Zero);    // 10:00 Tehran
     private static readonly DateTimeOffset Night = new(2026, 11, 7, 21, 0, 0, TimeSpan.Zero);      // 00:30 Tehran
 
-    private sealed record Rig(SmartXSmsProvider Provider, SmsWalletService Wallet, SmsTemplateService Templates, Handler Http, AsyncServiceScope Scope);
+    private sealed record Rig(SmartXSmsProvider Provider, SmsWalletService Wallet, SmsTemplateService Templates, Handler Http, AsyncServiceScope Scope, SmsDeferredQueue Deferred, ArteDbContext Db);
 
     private Rig NewRig(Func<HttpResponseMessage>? directSend = null, DateTimeOffset? now = null, Action<SmartXSmsOptions>? tweak = null)
     {
@@ -104,8 +104,9 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         var factory = new Factory(http);
         var client = new SmartXSmsClient(factory, new SmartXTokenProvider(factory, opts), new InMemorySmsBatchLog(), opts, NullLogger<SmartXSmsClient>.Instance);
         var db = scope.ServiceProvider.GetRequiredService<ArteDbContext>();
-        var provider = new SmartXSmsProvider(client, wallet, templates, db, new FixedClock(now ?? Daytime), opts, NullLogger<SmartXSmsProvider>.Instance);
-        return new Rig(provider, wallet, templates, http, scope);
+        var deferred = new SmsDeferredQueue(db, new FixedClock(now ?? Daytime), NullLogger<SmsDeferredQueue>.Instance);
+        var provider = new SmartXSmsProvider(client, wallet, templates, deferred, db, new FixedClock(now ?? Daytime), opts, NullLogger<SmartXSmsProvider>.Instance);
+        return new Rig(provider, wallet, templates, http, scope, deferred, db);
     }
 
     /// <summary>Central balance = what the branches hold + <paramref name="free"/>; the given branch holds <paramref name="branchParts"/>.</summary>
@@ -184,6 +185,23 @@ public sealed class SmsWalletTests(ArteApiFactory api)
         Assert.False(res.Accepted);
         Assert.Equal(SmartXSmsProvider.SkippedNoCredit, res.Error);
         Assert.Empty(rig.Inner.Http.Bodies);
+        Assert.Equal(1, await rig.Inner.Db.SmsDeferred.CountAsync(m => m.TenantId == tenantId && m.Status == SmsDeferredStatuses.Pending));
+    }
+
+    [Fact]
+    public async Task After_credit_pending_sms_are_flushed()
+    {
+        var (_, tenantId) = await api.NewBusinessAsync();
+        using var rig = Wrap(NewRig());
+        await FundAsync(rig.Inner, tenantId, 0);
+
+        Assert.False((await rig.Inner.Provider.SendAsync(Case(tenantId), default)).Accepted);
+        await FundAsync(rig.Inner, tenantId, 5);
+        var flushed = await rig.Inner.Deferred.FlushAsync(tenantId, rig.Inner.Provider, ct: default);
+
+        Assert.Equal(1, flushed);
+        Assert.NotEmpty(rig.Inner.Http.Bodies);
+        Assert.Equal(0, await rig.Inner.Db.SmsDeferred.CountAsync(m => m.TenantId == tenantId && m.Status == SmsDeferredStatuses.Pending));
     }
 
     [Fact]

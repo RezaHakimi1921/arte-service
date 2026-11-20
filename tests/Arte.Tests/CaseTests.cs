@@ -227,6 +227,49 @@ public sealed class CaseTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Intake_persists_off_catalog_brand_and_model_in_attributes()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            request = "سرویس",
+            newAsset = new
+            {
+                title = "Honda CB 1300",
+                kind = "motorcycle",
+                attributes = new Dictionary<string, string> { ["brand"] = "Honda", ["model"] = "CB 1300" },
+            },
+        }));
+        var c = await Json(await owner.GetAsync($"/api/v1/cases/{created.GetProperty("id")}"));
+        var asset = c.GetProperty("asset");
+        Assert.Equal("Honda CB 1300", asset.GetProperty("title").GetString());
+        Assert.Equal("Honda", asset.GetProperty("attributes").GetProperty("brand").GetString());
+        Assert.Equal("CB 1300", asset.GetProperty("attributes").GetProperty("model").GetString());
+    }
+
+    [Fact]
+    public async Task Asset_patch_keeps_free_text_brand_and_model_attributes()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var mobile = ArteApiFactory.NewMobile();
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile, request = "x", newAsset = new { title = "Yamaha R1", kind = "motorcycle" },
+        }));
+        var assetId = (await Json(await owner.GetAsync($"/api/v1/cases/{created.GetProperty("id")}")))
+            .GetProperty("asset").GetProperty("id").GetGuid();
+        var updated = await Json(await owner.PatchAsJsonAsync($"/api/v1/assets/{assetId}", new
+        {
+            title = "Honda CB 1300",
+            kind = "motorcycle",
+            attributes = new Dictionary<string, string> { ["brand"] = "Honda", ["model"] = "CB 1300" },
+        }));
+        Assert.Equal("Honda", updated.GetProperty("attributes").GetProperty("brand").GetString());
+        Assert.Equal("CB 1300", updated.GetProperty("attributes").GetProperty("model").GetString());
+    }
+
+    [Fact]
     public async Task Intake_with_services_fuel_body_and_vehicle_details_but_no_plate()
     {
         var (owner, _) = await api.NewBusinessAsync();

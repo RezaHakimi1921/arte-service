@@ -65,6 +65,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<SmsLedgerEntry> SmsLedger => Set<SmsLedgerEntry>();
     public DbSet<SmsTemplate> SmsTemplates => Set<SmsTemplate>();
     public DbSet<SmsTemplateChangeRequest> SmsTemplateChangeRequests => Set<SmsTemplateChangeRequest>();
+    public DbSet<SmsDeferredMessage> SmsDeferred => Set<SmsDeferredMessage>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -116,6 +117,15 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.ReviewNote).HasMaxLength(500);
             e.HasIndex(x => new { x.Status, x.CreatedAt });
             e.HasIndex(x => new { x.TenantId, x.MessageKey, x.CreatedAt });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<SmsDeferredMessage>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Mobile).HasMaxLength(11);
+            e.Property(x => x.MessageKey).HasMaxLength(40);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.HasIndex(x => new { x.TenantId, x.Status, x.CreatedAt });
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
         });
 

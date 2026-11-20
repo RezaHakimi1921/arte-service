@@ -12,11 +12,13 @@ public static class Permissions
     public const string ReportsView = "reports.view";
     public const string StaffManage = "staff.manage";
     public const string SettingsManage = "settings.manage";
+    /// <summary>Receive staff SMS when a job is ready for master review / before customer delivery.</summary>
+    public const string SmsStaffNotify = "sms.staff_notify";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>
     {
         CasesCreate, CasesAssign, CasesViewAll, CasesWork, CasesIntake,
-        PaymentsRecord, ReportsView, StaffManage, SettingsManage,
+        PaymentsRecord, ReportsView, StaffManage, SettingsManage, SmsStaffNotify,
     };
 }
 
@@ -35,7 +37,7 @@ public static class Roles
     {
         Owner => [.. Permissions.All],
         // مکانیک ارشد: approves, sees every case and the reports; no settings, no staff management.
-        Supervisor => [Permissions.CasesCreate, Permissions.CasesAssign, Permissions.CasesViewAll, Permissions.CasesWork, Permissions.CasesIntake, Permissions.ReportsView],
+        Supervisor => [Permissions.CasesCreate, Permissions.CasesAssign, Permissions.CasesViewAll, Permissions.CasesWork, Permissions.CasesIntake, Permissions.ReportsView, Permissions.SmsStaffNotify],
         // مکانیک: takes cars in and does the work on his own jobs.
         Technician => [Permissions.CasesWork, Permissions.CasesIntake],
         Apprentice => [Permissions.CasesViewAll],

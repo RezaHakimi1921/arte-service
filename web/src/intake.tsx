@@ -12,7 +12,7 @@ import { IntakeChecklist, useIntakeOptions } from "./workshop";
 import { Combobox, Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import {
   ACCOMPANYING, COLORS, FUELS, GEARBOXES, VEHICLE_CATALOG, VEHICLE_KINDS, problemsFor,
-  formatMotoPlate, formatPlate, modelYears, type MotoPlateParts, type PlateParts, type VehicleKind,
+  formatMotoPlate, formatPlate, modelYears, vehicleBrandModelAttributes, type MotoPlateParts, type PlateParts, type VehicleKind,
 } from "./vehicles";
 
 type CustomerHit = { id: string; mobile: string; fullName: string | null };
@@ -279,9 +279,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       return;
     }
 
-    const attributes: Record<string, string> = {};
-    if (brand.trim()) attributes.brand = brand.trim();
-    if (model.trim()) attributes.model = model.trim();
+    const attributes: Record<string, string> = newVehicle && brand.trim() && model.trim()
+      ? vehicleBrandModelAttributes(null, brand, model) : {};
     if (year) { attributes.year = year; attributes.yearCalendar = calendar; }
     if (color) attributes.color = color;
     if (vin.trim()) attributes.vin = vin.trim().toUpperCase();
@@ -317,17 +316,25 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         },
       });
       clearDraft(draftScope);
-      let failed = 0;
-      for (const shot of shots) {
-        try {
-          const form = new FormData();
-          form.append("file", shot.blob, shot.video ? "video.mp4" : "photo.jpg");
-          await api(`/api/v1/cases/${created.id}/attachments`, { body: form });
-        } catch { failed++; }
-      }
-      if (failed > 0) notify(`${formatNumber(failed)} عکس بارگذاری نشد؛ از صفحه‌ی پرونده دوباره اضافه کنید`, "error");
-      else if (created.smsNotice) notify(created.smsNotice, "error");
+      // Navigate first so a large video does not hold the user on intake (CASE-12-style delay).
+      const pending = shots.map((s) => ({ blob: s.blob, video: !!s.video }));
+      if (created.smsNotice) notify(created.smsNotice, "error");
+      else if (pending.length > 0) notify(pending.some((p) => p.video) ? "پرونده ثبت شد؛ فیلم و عکس در حال بارگذاری است…" : "پرونده ثبت شد؛ عکس‌ها در حال بارگذاری است…");
       onCreated(created.id);
+      if (pending.length > 0) {
+        void (async () => {
+          let failed = 0;
+          for (const shot of pending) {
+            try {
+              const form = new FormData();
+              form.append("file", shot.blob, shot.video ? "video.mp4" : "photo.jpg");
+              await api(`/api/v1/cases/${created.id}/attachments`, { body: form });
+            } catch { failed++; }
+          }
+          if (failed > 0) notify(`${formatNumber(failed)} فایل بارگذاری نشد؛ از صفحه‌ی پرونده دوباره اضافه کنید`, "error");
+          else if (pending.length > 0) notify(pending.length > 1 ? `${formatNumber(pending.length)} فایل اضافه شد` : "فایل اضافه شد");
+        })();
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         const f = Object.fromEntries(Object.entries(err.fields).map(([k, v]) => [k === "assigneeId" ? "assignee" : k, v[0]]));
@@ -419,7 +426,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         )}
       </Section>
 
-      <Section icon="vehicle" title="وسیله نقلیه">
+      <Section icon="vehicle" title="وسیله نقلیه"
+        badge={(assetId || kind || brand.trim() || model.trim()) ? (
+          <button type="button" className="link" aria-label="پاک کردن وسیله"
+            onClick={() => {
+              setAssetId(""); setKind(null); setBrand(""); setModel(""); setYear(""); setYearText("");
+              setPlate(emptyPlate()); setMotoPlate(emptyMotoPlate()); setPlateOwner(null); setMotorType(null);
+            }}>پاک کردن</button>
+        ) : undefined}>
         {customer && customer.assets.length > 0 && (
           <div className="chips">
             {customer.assets.map((a) => (

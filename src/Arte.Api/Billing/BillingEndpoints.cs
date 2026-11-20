@@ -106,8 +106,8 @@ public static class BillingEndpoints
                 DiscountRials = req.DiscountRials ?? 0,
                 Supplier = kind == ItemKinds.Part ? req.Supplier ?? Suppliers.Shop : Suppliers.Shop,
                 Status = req.Status ?? ItemStatuses.Used,
-                // Work defaults to whoever records it, so commission reports work without extra taps.
-                PerformedBy = req.PerformedBy ?? (kind != ItemKinds.Part ? m.Id : null),
+                // Default performer is the case assignee (labor and shop parts); override when needed.
+                PerformedBy = req.PerformedBy ?? c.AssigneeId,
                 WarrantyDays = req.WarrantyDays ?? cat?.DefaultWarrantyDays,
                 CatalogItemId = cat?.Id,
                 AddedBy = me.RequiredUserId,

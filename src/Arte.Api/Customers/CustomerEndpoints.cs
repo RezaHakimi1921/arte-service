@@ -116,13 +116,14 @@ public static class CustomerEndpoints
             var errors = ValidateAsset(req, isNew: true);
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
+            var title = req.Title!.Trim();
             var asset = new Asset
             {
                 CustomerId = id,
                 Kind = req.Kind ?? AssetKinds.Vehicle,
-                Title = req.Title!.Trim(),
+                Title = title,
                 Identifier = Clean(req.Identifier),
-                Attributes = ToJson(req.Attributes),
+                Attributes = ToJson(VehicleAssetAttributes.EnsureBrandModel(title, req.Attributes)),
                 CreatedAt = clock.UtcNow,
             };
             db.Assets.Add(asset);
@@ -212,7 +213,10 @@ public static class CustomerEndpoints
             if (req.Title is not null) asset.Title = req.Title.Trim();
             if (req.Kind is not null) asset.Kind = req.Kind;
             if (req.Identifier is not null) asset.Identifier = Clean(req.Identifier);
-            if (req.Attributes is not null) asset.Attributes = ToJson(req.Attributes);
+            if (req.Attributes is not null)
+                asset.Attributes = ToJson(VehicleAssetAttributes.EnsureBrandModel(asset.Title, req.Attributes));
+            else if (req.Title is not null)
+                asset.Attributes = ToJson(VehicleAssetAttributes.EnsureBrandModel(asset.Title, FromJson(asset.Attributes)));
             await db.SaveChangesAsync(ct);
             return Results.Ok(AssetView(asset));
         });
@@ -309,6 +313,12 @@ public static class CustomerEndpoints
 
     private static JsonDocument? ToJson(Dictionary<string, string>? attributes) =>
         attributes is null or { Count: 0 } ? null : JsonSerializer.SerializeToDocument(attributes);
+
+    private static Dictionary<string, string>? FromJson(JsonDocument? json)
+    {
+        if (json is null) return null;
+        return JsonSerializer.Deserialize<Dictionary<string, string>>(json.RootElement.GetRawText());
+    }
 
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 

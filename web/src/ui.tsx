@@ -103,7 +103,13 @@ export function Combobox({ value, onChange, options, placeholder, disabled, labe
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, filtered.length - 1)); }
           else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-          else if (e.key === "Enter" && open && filtered[active]) { e.preventDefault(); pick(filtered[active]); }
+          else if (e.key === "Enter" && open) {
+            e.preventDefault();
+            // Keep free-text (e.g. CB 1300) when it is not an exact catalog match — do not steal the first filter hit.
+            const exact = filtered.find((o) => norm(toLatinDigits(o)) === q);
+            if (exact) pick(exact);
+            else setOpen(false);
+          }
           else if (e.key === "Escape") setOpen(false);
         }}
       />

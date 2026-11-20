@@ -166,7 +166,7 @@ public static class SmsEndpoints
         });
 
         // Parts or an amount (÷ sale price); a negative number takes credit back.
-        admin.MapPost("/businesses/{id:guid}/credit", async (Guid id, AmountInput req, SmsWalletService wallet, Audit audit, RequestUser me, ArteDbContext db, CancellationToken ct) =>
+        admin.MapPost("/businesses/{id:guid}/credit", async (Guid id, AmountInput req, SmsWalletService wallet, SmsDeferredQueue deferred, ISmsProvider sms, Audit audit, RequestUser me, ArteDbContext db, CancellationToken ct) =>
         {
             var st = await wallet.StatusAsync(ct);
             var parts = req.Parts ?? (req.AmountRial is { } a ? SmsWalletService.PartsFor(a, st.SalePricePerPartRial) : 0);
@@ -175,7 +175,8 @@ public static class SmsEndpoints
                 var balance = await wallet.CreditBranchAsync(id, parts, req.AmountRial, req.Note, me.RequiredUserId, ct);
                 audit.Record("admin.sms_credit", id, me.RequiredUserId, $"{parts} parts");
                 await db.SaveChangesAsync(ct);
-                return Results.Ok(new { Parts = balance, Status = await wallet.StatusAsync(ct) });
+                var flushed = parts > 0 ? await deferred.FlushAsync(id, sms, ct: ct) : 0;
+                return Results.Ok(new { Parts = balance, Flushed = flushed, Status = await wallet.StatusAsync(ct) });
             });
         });
 

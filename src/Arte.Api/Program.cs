@@ -83,6 +83,7 @@ builder.Services.AddSingleton<FakeSmsProvider>();
 builder.Services.AddSmartXSms(config);
 builder.Services.AddScoped<SmsWalletService>();
 builder.Services.AddScoped<SmsTemplateService>();
+builder.Services.AddScoped<SmsDeferredQueue>();
 builder.Services.AddScoped<SmartXSmsProvider>();
 var smartxKeys = smsOptions.SmartXKeyList().ToHashSet();
 var smartxEnabled = smsOptions.SmartXAll || smartxKeys.Count > 0;

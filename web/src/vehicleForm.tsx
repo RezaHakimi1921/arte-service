@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { MotoPlateInput, PlateInput, emptyMotoPlate, emptyPlate } from "./plate";
 import { Combobox, Field, toLatinDigits } from "./ui";
 import {
-  VEHICLE_CATALOG, VEHICLE_KINDS, formatMotoPlate, formatPlate, modelYears, parseMotoPlate, parsePlate, type VehicleKind,
+  VEHICLE_CATALOG, VEHICLE_KINDS, formatMotoPlate, formatPlate, modelYears, parseMotoPlate, parsePlate, vehicleBrandModel, vehicleBrandModelAttributes, type VehicleKind,
 } from "./vehicles";
 
 /** The vehicle kinds this business takes in; set once /me is loaded so every vehicle form can hide a pointless choice. */
@@ -12,14 +12,6 @@ export function setBusinessKinds(kinds: string[] | null) { businessKinds = kinds
 export type VehicleValue = { kind: string | null; title: string; identifier: string | null; attributes: Record<string, string> | null };
 
 const faYear = new Intl.NumberFormat("fa-IR", { useGrouping: false });
-
-/** Splits a stored title back into brand and model using the catalog («پژو ۲۰۶» → پژو / ۲۰۶). */
-function splitTitle(kind: VehicleKind | null, title: string): [string, string] {
-  if (!kind) return ["", title];
-  const brand = Object.keys(VEHICLE_CATALOG[kind]).filter((b) => b !== "سایر")
-    .sort((a, b) => b.length - a.length).find((b) => title === b || title.startsWith(`${b} `));
-  return brand ? [brand, title.slice(brand.length).trim()] : ["", title];
-}
 
 /**
  * Adding or editing a vehicle, in the same order as intake: type → brand → model → model year → plate.
@@ -31,7 +23,7 @@ export function VehicleForm({ value, busy, error, onSave, onCancel }: {
 }) {
   const allowed = VEHICLE_KINDS.filter((k) => !businessKinds || businessKinds.includes(k.key) || k.key === value?.kind);
   const startKind = (VEHICLE_KINDS.some((k) => k.key === value?.kind) ? value!.kind : allowed.length === 1 ? allowed[0].key : null) as VehicleKind | null;
-  const [startBrand, startModel] = splitTitle(startKind, value?.title ?? "");
+  const [startBrand, startModel] = vehicleBrandModel(startKind, value?.title ?? "", value?.attributes);
   const [kind, setKind] = useState<VehicleKind | null>(startKind);
   const [brand, setBrand] = useState(startBrand);
   const [model, setModel] = useState(startModel);
@@ -64,7 +56,7 @@ export function VehicleForm({ value, busy, error, onSave, onCancel }: {
     e.preventDefault();
     if (!kind || !brand.trim() || !model.trim()) { setLocal("نوع، برند و مدل را انتخاب کنید."); return; }
     if (plateStarted && !plateId) { setLocal("پلاک کامل نیست."); return; }
-    const attributes: Record<string, string> = { ...(value?.attributes ?? {}) };
+    const attributes = vehicleBrandModelAttributes(value?.attributes, brand, model);
     if (year) { attributes.year = year; attributes.yearCalendar = calendar; } else { delete attributes.year; delete attributes.yearCalendar; }
     onSave({ kind, title: `${brand.trim()} ${model.trim()}`, identifier: plateStarted ? plateId : value?.identifier && !parsePlate(value.identifier) && !parseMotoPlate(value.identifier) ? value.identifier : null, attributes });
   }

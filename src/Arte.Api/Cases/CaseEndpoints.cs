@@ -390,11 +390,12 @@ public static class CaseEndpoints
         }
         else if (req.NewAsset is { } newAsset)
         {
+            var assetTitle = newAsset.Title!.Trim();
             var asset = new Asset
             {
-                CustomerId = customer.Id, Kind = newAsset.Kind ?? AssetKinds.Vehicle, Title = newAsset.Title!.Trim(),
+                CustomerId = customer.Id, Kind = newAsset.Kind ?? AssetKinds.Vehicle, Title = assetTitle,
                 Identifier = string.IsNullOrWhiteSpace(newAsset.Identifier) ? null : newAsset.Identifier.Trim(),
-                Attributes = ToJson(newAsset.Attributes), CreatedAt = now,
+                Attributes = ToJson(VehicleAssetAttributes.EnsureBrandModel(assetTitle, newAsset.Attributes)), CreatedAt = now,
             };
             db.Assets.Add(asset);
             assetId = asset.Id;

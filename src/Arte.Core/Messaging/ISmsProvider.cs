@@ -20,7 +20,9 @@ public interface ISmsProvider
 }
 
 public sealed record SmsRequest(string Mobile, string MessageKey, IReadOnlyDictionary<string, string> Tokens,
-    Guid? TenantId = null, IReadOnlyDictionary<string, string>? Extra = null);
+    Guid? TenantId = null, IReadOnlyDictionary<string, string>? Extra = null,
+    /// <summary>When false, a no-credit skip is not written to the deferred queue (used while flushing that queue).</summary>
+    bool QueueIfNoCredit = true);
 
 public sealed record SmsSendResult(bool Accepted, string? ProviderMessageId, string? Error);
 

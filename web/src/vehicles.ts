@@ -135,7 +135,7 @@ export const VEHICLE_CATALOG: Record<VehicleKind, Record<string, ModelEntry[]>> 
     "مزایا": [["مزایا ۱۲۵"], ["مزایا ۱۵۰"]],
     // ── Japanese ──
     "هوندا": [
-      ["CG 125"], ["CDI 125"], ["CDI 150"], ["CB 125"], ["CB 150R"], ["CBR 150R"], ["CBR 250R"], ["CBR 300R"], ["CB 300R"],
+      ["CG 125"], ["CDI 125"], ["CDI 150"], ["CB 125"], ["CB 150R"], ["CB 1300"], ["CBR 150R"], ["CBR 250R"], ["CBR 300R"], ["CB 300R"],
       ["کلیک ۱۲۵"], ["کلیک ۱۵۰"], ["کلیک ۱۶۰"], ["PCX 125"], ["PCX 150"], ["PCX 160"], ["ADV 160"], ["ورتکس ۱۵۰"],
       ["ویو ۱۱۰"], ["ویو ۱۲۵"], ["سوپرکاب"], ["اکتیوا"], ["دیو"], ["فورزا ۳۰۰"], ["CRF 250"], ["آفریکا توئین"],
     ],
@@ -265,6 +265,37 @@ export function formatPlate(p: PlateParts): string | null {
 export function currentJalaliYear(): number {
   const y = new Intl.DateTimeFormat("en-US-u-ca-persian", { year: "numeric" }).format(new Date());
   return parseInt(y, 10);
+}
+
+/** Restore brand/model from stored attributes, or split the title using the catalog when attributes are missing. */
+export function vehicleBrandModel(
+  kind: VehicleKind | null,
+  title: string,
+  attributes?: Record<string, string> | null,
+): [string, string] {
+  const b = attributes?.brand?.trim();
+  const m = attributes?.model?.trim();
+  if (b && m) return [b, m];
+  if (!kind) return [b ?? "", m ?? title];
+  const catalog = VEHICLE_CATALOG[kind];
+  const brandKey = Object.keys(catalog).filter((x) => x !== "سایر")
+    .sort((a, b) => b.length - a.length)
+    .find((br) => title === br || title.startsWith(`${br} `));
+  if (brandKey) return [brandKey, title.slice(brandKey.length).trim()];
+  if (b) return [b, m ?? title];
+  return ["", title];
+}
+
+/** Brand/model always go into attributes so off-catalog Combobox text reloads correctly. */
+export function vehicleBrandModelAttributes(
+  base: Record<string, string> | null | undefined,
+  brand: string,
+  model: string,
+): Record<string, string> {
+  const attrs = { ...(base ?? {}) };
+  attrs.brand = brand.trim();
+  attrs.model = model.trim();
+  return attrs;
 }
 
 /** Years to offer for a model: its production range when known, otherwise the last 45 years. Newest first. */

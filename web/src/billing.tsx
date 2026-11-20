@@ -62,8 +62,9 @@ export function MoneyBar({ money }: { money: Billing["money"] }) {
 
 /* ───────── items + payments section ───────── */
 
-export function BillingSection({ caseId, billing, onChange, canAssignLabor, paySignal, vehicleKind }: {
+export function BillingSection({ caseId, billing, onChange, canAssignLabor, paySignal, vehicleKind, assigneeId }: {
   caseId: string; billing: Billing; onChange: (b: Billing) => void; canAssignLabor: boolean; paySignal: number; vehicleKind: string | null;
+  assigneeId?: string | null;
 }) {
   const [standard, setStandard] = useState<Standard | null>(null);
   const [packages, setPackages] = useState(false);
@@ -185,6 +186,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
 
       <ItemSheet
         open={!!editing} kind={editing?.kind ?? "part"} item={editing?.item} canSeeCost={billing.canSeeCost} canAssignLabor={canAssignLabor}
+        defaultPerformedBy={assigneeId ?? null}
         standard={standard?.items ?? []}
         busy={busy} onClose={() => setEditing(null)}
         onSave={(body, saveToCatalog) => run(async () => {
@@ -310,8 +312,8 @@ function PackageSheet({ open, packages, canSeeCost, busy, onClose, onAdd }: {
 }
 
 
-function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, standard, busy, onClose, onSave, onDelete }: {
-  open: boolean; kind: string; item?: Item; canSeeCost: boolean; canAssignLabor: boolean; standard: StdItem[]; busy: boolean;
+function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, defaultPerformedBy, standard, busy, onClose, onSave, onDelete }: {
+  open: boolean; kind: string; item?: Item; canSeeCost: boolean; canAssignLabor: boolean; defaultPerformedBy: string | null; standard: StdItem[]; busy: boolean;
   onClose: () => void; onSave: (body: Record<string, unknown>, saveToCatalog: boolean) => void; onDelete?: () => void;
 }) {
   const [kind, setKind] = useState(initialKind);
@@ -343,14 +345,14 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     setSupplier(item?.supplier ?? "shop");
     setStatus(item?.status ?? "used");
     setWarranty(item?.warrantyDays ?? 0);
-    setPerformedBy(item?.performedBy ?? "");
+    setPerformedBy(item?.performedBy ?? (item ? "" : defaultPerformedBy ?? ""));
     setCatalogId(null);
     setStandardId(null);
     setShowAll(false);
     setSaveToCatalog(false);
     setError(null);
     if (canAssignLabor) api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => {});
-  }, [open, item, initialKind, canAssignLabor]);
+  }, [open, item, initialKind, canAssignLabor, defaultPerformedBy]);
 
   useEffect(() => {
     if (!open || item || title.trim().length < 2 || catalogId) { setSuggestions([]); return; }
@@ -500,7 +502,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
         {kind !== "part" && canAssignLabor && staff.length > 0 && (
           <Field label="انجام‌دهنده">
             <select value={performedBy} onChange={(e) => setPerformedBy(e.target.value)}>
-              <option value="">خودم</option>
+              <option value="">{defaultPerformedBy ? "مسئول پرونده (پیش‌فرض)" : "بدون انجام‌دهنده (پیش‌فرض سرور)"}</option>
               {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </Field>

@@ -105,7 +105,7 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
     {
         { Accepted: true } => null,
         { Error: SmsSendErrors.SkippedNoCredit or SmsWalletService.InsufficientCredit } =>
-            "این عملیات بدون پیامک انجام شد. لطفاً پنل پیامک خود را شارژ کنید.",
+            "این عملیات بدون پیامک انجام شد. پس از شارژ اعتبار، پیامک‌های ارسال‌نشده خودکار فرستاده می‌شوند.",
         { Error: SmsSendErrors.SkippedLicense } =>
             "به‌خاطر اتمام پرونده‌های رایگان، پیامک ارسال نشد. برای فعال‌سازی اشتراک با پشتیبانی آرته تماس بگیرید.",
         _ => null,
@@ -120,7 +120,7 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
             var t = await db.Tenants.AsNoTracking().SingleAsync(x => x.Id == c.TenantId, ct);
             if (!t.SmsToMasterOnFinished) return;
             var members = await db.Memberships.AsNoTracking().Include(m => m.User).Where(m => m.IsActive && m.UserId != actorUserId).ToListAsync(ct);
-            var mobiles = members.Where(m => m.Has(Arte.Core.Identity.Permissions.CasesCreate) && m.User is not null).Select(m => m.User!.Mobile).Distinct().Take(3).ToList();
+            var mobiles = members.Where(m => m.Has(Arte.Core.Identity.Permissions.SmsStaffNotify) && m.User is not null).Select(m => m.User!.Mobile).Distinct().Take(3).ToList();
             if (mobiles.Count == 0) return;
             var asset = c.AssetId is null ? null : await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking().SingleOrDefaultAsync(x => x.Id == c.AssetId, ct);
             var tokens = new Dictionary<string, string>

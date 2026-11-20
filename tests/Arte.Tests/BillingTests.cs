@@ -46,9 +46,32 @@ public sealed class BillingTests(ArteApiFactory api)
         Assert.Equal(800_000, Money(billing, "laborRials"));
         Assert.Equal(6_000_000, Money(billing, "costRials"));
         Assert.Equal(2_800_000, Money(billing, "profitRials"));
-        // Labor defaults to the person who recorded it.
+        // Without a case assignee, performer stays unset until someone is chosen.
         var labor = billing.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("kind").GetString() == "labor");
-        Assert.NotEqual(JsonValueKind.Null, labor.GetProperty("performedBy").ValueKind);
+        Assert.Equal(JsonValueKind.Null, labor.GetProperty("performedBy").ValueKind);
+    }
+
+    [Fact]
+    public async Task Labor_and_part_default_performer_is_case_assignee()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var techMobile = ArteApiFactory.NewMobile();
+        var techId = (await Json(await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, role = "technician" }))).GetProperty("id").GetGuid();
+        var created = await OpenCase(owner, new
+        {
+            mobile = ArteApiFactory.NewMobile(), request = "سرویس", assigneeId = techId,
+            newAsset = new { title = "هوندا CDI", kind = "motorcycle" },
+        });
+        var id = created.GetProperty("id");
+        var billing = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items",
+            new { kind = "labor", title = "اجرت", unitPriceRials = 500_000 }));
+        var labor = billing.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("kind").GetString() == "labor");
+        Assert.Equal(techId, labor.GetProperty("performedBy").GetGuid());
+
+        billing = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items",
+            new { kind = "part", title = "فیلتر", unitPriceRials = 200_000 }));
+        var part = billing.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("kind").GetString() == "part");
+        Assert.Equal(techId, part.GetProperty("performedBy").GetGuid());
     }
 
     [Fact]
