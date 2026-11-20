@@ -35,6 +35,54 @@ public static class BodyStatuses
     public const string Damaged = "damaged";
 }
 
+/// <summary>Stable keys for case request kinds (product doc 25). Persian labels are for display only.</summary>
+public static class CaseRequestTypes
+{
+    public const string Wrenching = "wrenching";
+    public const string Diagnosis = "diagnosis";
+    public const string Repair = "repair";
+    public const string Other = "other";
+
+    public static readonly IReadOnlyList<(string Key, string TitleFa)> Catalog =
+    [
+        (Wrenching, "آچارکشی"),
+        (Diagnosis, "عیب‌یابی"),
+        (Repair, "درخواست فنی / تعمیرات"),
+        (Other, "سایر درخواست‌ها"),
+    ];
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(Catalog.Select(c => c.Key));
+
+    /// <summary>Stored empty (legacy) is shown and treated as «سایر».</summary>
+    public static string[] Effective(IReadOnlyList<string>? stored)
+    {
+        if (stored is null || stored.Count == 0) return [Other];
+        var types = Catalog.Select(c => c.Key).Where(stored.Contains).ToArray();
+        return types.Length > 0 ? types : [Other];
+    }
+
+    /// <summary>Validates and de-duplicates. Empty input is invalid for an explicit write.</summary>
+    public static bool TryNormalize(string[]? input, out string[] normalized, out string? error)
+    {
+        normalized = [];
+        error = null;
+        if (input is null) { error = "نوع درخواست لازم است."; return false; }
+        if (input.Length == 0) { error = "حداقل یک نوع درخواست انتخاب کنید."; return false; }
+        if (input.Length > All.Count) { error = "انواع درخواست نامعتبر است."; return false; }
+        var seen = new HashSet<string>();
+        var list = new List<string>();
+        foreach (var raw in input)
+        {
+            var key = raw?.Trim() ?? "";
+            if (!All.Contains(key)) { error = "نوع درخواست نامعتبر است."; return false; }
+            if (seen.Add(key)) list.Add(key);
+        }
+        // Stable product order.
+        normalized = Catalog.Select(c => c.Key).Where(seen.Contains).ToArray();
+        return true;
+    }
+}
+
 public static class CustodyStatuses
 {
     public const string InShop = "in_shop";
@@ -65,6 +113,11 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     public string[] RequestedServices { get; set; } = [];
     /// <summary>Problems the customer reported («ایراد اعلامی»), picked from a list; details go in Request.</summary>
     public string[] ReportedProblems { get; set; } = [];
+    /// <summary>
+    /// Top-level request kinds on this case (آچارکشی / عیب‌یابی / تعمیرات / سایر). Empty means pre-model data —
+    /// treat as <see cref="CaseRequestTypes.Other"/> via <see cref="CaseRequestTypes.Effective"/>.
+    /// </summary>
+    public string[] RequestTypes { get; set; } = [];
     /// <summary>0 empty … 4 full, null = not checked.</summary>
     public short? FuelLevel { get; set; }
     /// <summary>ok | damaged, null = not checked.</summary>

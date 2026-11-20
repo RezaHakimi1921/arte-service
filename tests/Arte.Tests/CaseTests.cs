@@ -418,4 +418,74 @@ public sealed class CaseTests(ArteApiFactory api)
         // But they can record the diagnosis on their own job.
         Assert.Equal(HttpStatusCode.OK, (await tech.PatchAsJsonAsync($"/api/v1/cases/{id}", new { diagnosis = "شمع خراب" })).StatusCode);
     }
+
+    [Fact]
+    public async Task Request_types_default_to_other_support_multi_and_reject_invalid()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+
+        var catalog = await Json(await owner.GetAsync("/api/v1/cases/request-types"));
+        Assert.Equal(4, catalog.GetArrayLength());
+        Assert.Equal("other", catalog.EnumerateArray().Last().GetProperty("key").GetString());
+
+        var legacy = await Open(owner);
+        Assert.Equal(1, legacy.GetProperty("requestTypes").GetArrayLength());
+        Assert.Equal("other", legacy.GetProperty("requestTypes")[0].GetString());
+        Assert.Equal("موتور هنگام گرم شدن خاموش می‌شود", legacy.GetProperty("request").GetString());
+
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            request = "آچارکشی و تعمیر",
+            requestTypes = new[] { "repair", "wrenching", "wrenching" },
+        }));
+        var multi = await Json(await owner.GetAsync($"/api/v1/cases/{created.GetProperty("id")}"));
+        Assert.Equal(2, multi.GetProperty("requestTypes").GetArrayLength());
+        Assert.Equal("wrenching", multi.GetProperty("requestTypes")[0].GetString());
+        Assert.Equal("repair", multi.GetProperty("requestTypes")[1].GetString());
+
+        var list = await Json(await owner.GetAsync("/api/v1/cases"));
+        var card = list.EnumerateArray().First(c => c.GetProperty("id").GetGuid() == created.GetProperty("id").GetGuid());
+        Assert.Equal(2, card.GetProperty("requestTypes").GetArrayLength());
+
+        var patched = await Json(await owner.PatchAsJsonAsync($"/api/v1/cases/{created.GetProperty("id")}",
+            new { requestTypes = new[] { "diagnosis", "other" } }));
+        Assert.Equal("diagnosis", patched.GetProperty("requestTypes")[0].GetString());
+        Assert.Equal("other", patched.GetProperty("requestTypes")[1].GetString());
+
+        var bad = await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(), request = "x", requestTypes = new[] { "not-a-type" },
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Contains("requestTypes", await bad.Content.ReadAsStringAsync());
+
+        var empty = await owner.PatchAsJsonAsync($"/api/v1/cases/{created.GetProperty("id")}", new { requestTypes = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+    }
+
+    [Fact]
+    public async Task Empty_stored_request_types_read_as_other_without_losing_details()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var c = await Open(owner, new { reportedProblems = new[] { "روشن نمی‌شود" }, requestedServices = new[] { "تعویض روغن" } });
+        var id = c.GetProperty("id").GetGuid();
+
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            scope.ServiceProvider.GetRequiredService<Arte.Core.Tenancy.TenantContext>().Set(tenantId);
+            var db = scope.ServiceProvider.GetRequiredService<Arte.Core.Data.ArteDbContext>();
+            var row = await db.Cases.SingleAsync(x => x.Id == id);
+            row.RequestTypes = [];
+            await db.SaveChangesAsync();
+        }
+
+        var again = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+        Assert.Equal("other", again.GetProperty("requestTypes")[0].GetString());
+        Assert.Equal("روشن نمی‌شود", again.GetProperty("reportedProblems")[0].GetString());
+        Assert.Equal("تعویض روغن", again.GetProperty("requestedServices")[0].GetString());
+
+        var (otherBiz, _) = await api.NewBusinessAsync();
+        Assert.Equal(HttpStatusCode.NotFound, (await otherBiz.GetAsync($"/api/v1/cases/{id}")).StatusCode);
+    }
 }

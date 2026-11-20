@@ -1985,6 +1985,10 @@ namespace Arte.Core.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.PrimitiveCollection<string[]>("RequestTypes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.PrimitiveCollection<string[]>("RequestedServices")
                         .IsRequired()
                         .HasColumnType("text[]");

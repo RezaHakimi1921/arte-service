@@ -24,12 +24,13 @@ public static class CaseEndpoints
         string? Request, int? OdometerKm, Guid? AssigneeId, Guid? ParentCaseId, string? Relation,
         Dictionary<string, string>? Intake, DateTimeOffset? PromisedAt, long? EstimatedAmountRials,
         string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems,
-        string? MotorType = null, WorkshopEndpoints.ChecklistTick[]? Checklist = null);
+        string[]? RequestTypes = null, string? MotorType = null, WorkshopEndpoints.ChecklistTick[]? Checklist = null);
 
     public sealed record UpdateCase(
         string? Request, string? Diagnosis, int? OdometerKm, long? EstimatedAmountRials,
         DateTimeOffset? PromisedAt, string? CustodyStatus, Dictionary<string, string>? Intake,
-        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems);
+        string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems,
+        string[]? RequestTypes = null);
 
     public sealed record RunTransition(string? Reason, string? WaitReason, bool? AllowCredit, DateTimeOffset? CreditDueAt);
     public sealed record SetWait(string? WaitReason);
@@ -43,6 +44,7 @@ public static class CaseEndpoints
         var g = app.MapGroup("/api/v1/cases").RequireTenant();
 
         g.MapGet("/", ListAsync);
+        g.MapGet("/request-types", () => Results.Ok(CaseRequestTypes.Catalog.Select(c => new { key = c.Key, title = c.TitleFa })));
         g.MapGet("/{id:guid}", DetailAsync);
         g.MapPost("/", CreateAsync).RequirePermission(Permissions.CasesIntake);
         g.MapPatch("/{id:guid}", UpdateAsync);
@@ -152,6 +154,7 @@ public static class CaseEndpoints
                 Stage = new { r.s.Id, r.s.Key, r.s.Name, r.s.Category, r.s.Color, r.s.IsTerminal },
                 AssetIdentifier = r.a == null ? null : r.a.Identifier,
                 r.AssigneeName, r.c.AssigneeId, r.c.StageEnteredAt, r.c.PromisedAt, r.c.OpenedAt, r.c.Request, r.c.RequestedServices, r.c.ReportedProblems,
+                r.c.RequestTypes,
                 r.c.WaitReason, r.c.OdometerKm, r.c.FuelLevel, r.c.CreditDueAt, AssetKind = r.a == null ? null : r.a.Kind,
                 LastEvent = db.CaseEvents.Where(e => e.CaseId == r.c.Id).OrderByDescending(e => e.Id)
                     .Select(e => new { e.Type, e.OccurredAt, e.Data }).FirstOrDefault(),
@@ -162,7 +165,9 @@ public static class CaseEndpoints
         return Results.Ok(items.Select(i => new
         {
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
-            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.OpenedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason,
+            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.OpenedAt, i.Request, i.RequestedServices, i.ReportedProblems,
+            RequestTypes = CaseRequestTypes.Effective(i.RequestTypes),
+            i.WaitReason,
             i.OdometerKm, i.FuelLevel, i.AssetKind,
             TotalRials = money.GetValueOrDefault(i.Id)?.TotalRials ?? 0,
             PaidRials = money.GetValueOrDefault(i.Id)?.PaidRials ?? 0,
@@ -231,7 +236,9 @@ public static class CaseEndpoints
 
         return new
         {
-            c.Id, c.Number, c.TrackingCode, c.IsSample, c.Request, c.RequestedServices, c.ReportedProblems, c.FuelLevel, c.BodyStatus, c.BodyNotes,
+            c.Id, c.Number, c.TrackingCode, c.IsSample, c.Request, c.RequestedServices, c.ReportedProblems,
+            RequestTypes = CaseRequestTypes.Effective(c.RequestTypes),
+            c.FuelLevel, c.BodyStatus, c.BodyNotes,
             c.Diagnosis, c.OdometerKm, c.EstimatedAmountRials, c.PromisedAt,
             c.CustodyStatus, Intake = c.IntakeChecklist?.RootElement, c.Relation, c.WaitReason,
             c.MotorType,
@@ -338,6 +345,15 @@ public static class CaseEndpoints
         }
         if (req.Relation is not null && !CaseRelations.All.Contains(req.Relation)) errors["relation"] = ["نوع ارتباط نامعتبر است."];
         if (ValidateIntake(req.Intake) is { } intakeError) errors["intake"] = [intakeError];
+        // Omit/empty requestTypes = legacy clients → store «سایر». Explicit values must be valid keys.
+        var requestTypes = new[] { CaseRequestTypes.Other };
+        if (req.RequestTypes is { Length: > 0 })
+        {
+            if (!CaseRequestTypes.TryNormalize(req.RequestTypes, out var normalized, out var typeErr))
+                errors["requestTypes"] = [typeErr!];
+            else
+                requestTypes = normalized;
+        }
         var motorType = string.IsNullOrWhiteSpace(req.MotorType) ? null : req.MotorType.Trim();
         if (motorType is not null && !MotorTypes.All.Contains(motorType)) errors["motorType"] = ["نوع موتور نامعتبر است."];
         if (req.Checklist is { } ticks && (ticks.Length > 100 || ticks.Any(t => t.Note is { Length: > 200 })))
@@ -428,7 +444,8 @@ public static class CaseEndpoints
         {
             Number = number, CustomerId = customer.Id, AssetId = assetId, WorkflowId = workflow.Id, StageId = firstStage.Id,
             AssigneeId = req.AssigneeId, Request = request, OdometerKm = req.OdometerKm,
-            RequestedServices = services ?? [], ReportedProblems = problems ?? [], FuelLevel = req.FuelLevel,
+            RequestedServices = services ?? [], ReportedProblems = problems ?? [], RequestTypes = requestTypes,
+            FuelLevel = req.FuelLevel,
             BodyStatus = req.BodyStatus, BodyNotes = NullIfEmpty(req.BodyNotes),
             EstimatedAmountRials = req.EstimatedAmountRials, PromisedAt = req.PromisedAt?.ToUniversalTime(),
             IntakeChecklist = ToJson(req.Intake), MotorType = motorType,
@@ -448,7 +465,7 @@ public static class CaseEndpoints
                 Note = NullIfEmpty(tick?.Note), SortOrder = ++order, CheckedBy = done ? userId : null, CheckedAt = done ? now : null,
             });
         }
-        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.ReportedProblems, c.OdometerKm, c.ParentCaseId });
+        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.ReportedProblems, c.RequestTypes, c.OdometerKm, c.ParentCaseId });
         if (c.AssigneeId is not null) AddEvent(db, c, CaseEventTypes.Assigned, userId, now, new { To = await MemberName(db, c.AssigneeId.Value, ct) });
 
         await db.SaveChangesAsync(ct);
@@ -479,12 +496,21 @@ public static class CaseEndpoints
         if (req.EstimatedAmountRials is < 0) errors["estimatedAmountRials"] = ["مبلغ نامعتبر است."];
         if (req.CustodyStatus is not null and not (CustodyStatuses.InShop or CustodyStatuses.WithCustomer)) errors["custodyStatus"] = ["وضعیت نامعتبر است."];
         if (ValidateIntake(req.Intake) is { } intakeError) errors["intake"] = [intakeError];
+        string[]? requestTypes = null;
+        if (req.RequestTypes is not null)
+        {
+            if (!CaseRequestTypes.TryNormalize(req.RequestTypes, out var normalized, out var typeErr))
+                errors["requestTypes"] = [typeErr!];
+            else
+                requestTypes = normalized;
+        }
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
         var changed = new Dictionary<string, object?>();
         if (req.Request is not null && req.Request.Trim() != c.Request) { c.Request = req.Request.Trim(); changed["request"] = c.Request; }
         if (req.RequestedServices is not null) { c.RequestedServices = CleanServices(req.RequestedServices) ?? []; changed["requestedServices"] = c.RequestedServices; }
         if (req.ReportedProblems is not null) { c.ReportedProblems = CleanServices(req.ReportedProblems) ?? []; changed["reportedProblems"] = c.ReportedProblems; }
+        if (requestTypes is not null && !requestTypes.SequenceEqual(c.RequestTypes)) { c.RequestTypes = requestTypes; changed["requestTypes"] = c.RequestTypes; }
         if (req.FuelLevel is not null && req.FuelLevel != c.FuelLevel) { c.FuelLevel = req.FuelLevel; changed["fuelLevel"] = c.FuelLevel; }
         if (req.BodyStatus is not null && req.BodyStatus != c.BodyStatus) { c.BodyStatus = req.BodyStatus; changed["bodyStatus"] = c.BodyStatus; }
         if (req.BodyNotes is not null && req.BodyNotes.Trim() != (c.BodyNotes ?? "")) { c.BodyNotes = NullIfEmpty(req.BodyNotes); changed["bodyNotes"] = c.BodyNotes; }
@@ -720,7 +746,7 @@ public static class CaseEndpoints
                 AssetTitle = a == null ? null : a.Title, AssetIdentifier = a == null ? null : a.Identifier,
                 Stage = new { s.Id, s.Key, s.Name, s.Category, s.Color, s.IsTerminal },
                 AssigneeName = mem == null ? null : mem.DisplayName ?? mem.User!.Mobile,
-                c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.ReportedProblems, c.WaitReason, c.OpenedAt,
+                c.AssigneeId, c.StageEnteredAt, c.PromisedAt, c.Request, c.RequestedServices, c.ReportedProblems, c.RequestTypes, c.WaitReason, c.OpenedAt,
                 c.OdometerKm, c.FuelLevel, AssetKind = a == null ? null : a.Kind,
                 LastEvent = db.CaseEvents.Where(e => e.CaseId == c.Id).OrderByDescending(e => e.Id)
                     .Select(e => new { e.Type, e.OccurredAt, e.Data }).FirstOrDefault(),
@@ -735,7 +761,9 @@ public static class CaseEndpoints
             PaidRials = totals.GetValueOrDefault(i.Id)?.PaidRials ?? 0,
             i.OdometerKm, i.FuelLevel, i.AssetKind,
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
-            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.ReportedProblems, i.WaitReason, i.OpenedAt,
+            i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.ReportedProblems,
+            RequestTypes = CaseRequestTypes.Effective(i.RequestTypes),
+            i.WaitReason, i.OpenedAt,
             Mine = i.AssigneeId == m.Id,
             LastEvent = i.LastEvent == null ? null : new { i.LastEvent.Type, i.LastEvent.OccurredAt, Data = i.LastEvent.Data?.RootElement },
             Reasons = CaseAlerts.All(i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now, seeAll, i.Stage.Key),
