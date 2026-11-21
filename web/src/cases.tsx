@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { api, ApiError } from "./api";
 import { BillingSection, CreditSheet, MoneyBar, toman as tomanFmt, type Billing } from "./billing";
 import { useFeedback } from "./feedback";
-import { MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, actorText, caseCode, eventText, statusText, type Alert } from "./labels";
+import { MANUAL_WAIT_REASONS, PARTS_OPTIONS, WAIT_REASONS, actorText, caseCode, eventText, requestTypeLabel, statusText, type Alert } from "./labels";
 import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
@@ -23,6 +23,7 @@ export type CaseCardData = {
   assetIdentifier: string | null; stage: StageRef; assigneeName: string | null; stageEnteredAt: string;
   promisedAt: string | null; request: string; requestedServices: string[]; waitReason: string | null; alert?: Alert | null;
   reasons?: Alert[]; balanceRials?: number; openedAt?: string; reportedProblems?: string[];
+  requestTypes?: string[];
   totalRials?: number; paidRials?: number; isCredit?: boolean; creditDueAt?: string | null;
   odometerKm?: number | null; fuelLevel?: number | null; assetKind?: string | null;
   lastEvent?: { type: string; occurredAt: string; data: Record<string, unknown> | null } | null;
@@ -30,7 +31,8 @@ export type CaseCardData = {
 type TransitionView = { id: string; label: string; isPrimary: boolean; requiresReason: boolean; toStage: { name: string; category: string; color: string } };
 type TimelineEntry = { id: number; type: string; occurredAt: string; actor: string | null; data: Record<string, unknown> | null };
 type CaseDetailView = {
-  id: string; number: number; request: string; requestedServices: string[]; reportedProblems: string[]; fuelLevel: number | null;
+  id: string; number: number; request: string; requestedServices: string[]; reportedProblems: string[]; requestTypes?: string[];
+  fuelLevel: number | null;
   bodyStatus: string | null; bodyNotes: string | null; diagnosis: string | null; odometerKm: number | null;
   estimatedAmountRials: number | null; promisedAt: string | null; custodyStatus: string; intake: Record<string, string> | null;
   relation: string | null; waitReason: string | null; openedAt: string; stageEnteredAt: string; closedAt: string | null;
@@ -126,6 +128,7 @@ export function CaseCard({ c, onOpen, compact = false }: { c: CaseCardData; onOp
   const balance = c.balanceRials ?? 0;
   const prog = wf && c.stage.category !== "cancelled" ? progressOf(wf.stages, c.stage) : null;
   const ready = c.stage.category === "done" && !c.stage.isTerminal;
+  const types = (c.requestTypes ?? []).map(requestTypeLabel);
   const problem = c.reportedProblems?.[0] ?? c.requestedServices?.[0] ?? (c.request ? c.request : null);
   const foot: { text: string; tone: "success" | "warn" | "danger" } | null =
     ready ? { text: "آماده تماس با مشتری", tone: "success" }
@@ -145,6 +148,9 @@ export function CaseCard({ c, onOpen, compact = false }: { c: CaseCardData; onOp
             {c.isCredit && <span className="status-pill credit">نسیه</span>}
           </div>
           <h3>{c.assetTitle ?? "بدون وسیله"}</h3>
+          {types.length > 0 && !compact && (
+            <p className="muted small">{types.join(" · ")}</p>
+          )}
           {c.assetIdentifier && !compact && <PlateView identifier={c.assetIdentifier} />}
           <p>
             {c.customerName ?? "بدون نام"}
@@ -425,6 +431,13 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         <p className={`status-line stage-${c.waitReason ? "orange" : c.stage.color}`}>
           {statusText(c.stage, c.waitReason, c.assignee?.name)} · {ago(c.stageEnteredAt)}
         </p>
+        {(c.requestTypes?.length ?? 0) > 0 && (
+          <div className="chips tight">
+            {c.requestTypes!.map((k) => (
+              <span key={k} className="chip-button active static">{requestTypeLabel(k)}</span>
+            ))}
+          </div>
+        )}
         <Progress stage={c.stage} />
         <div className="head-facts">
           <button className="fact" onClick={() => c.canAssign && setSheet("assign")} disabled={!c.canAssign}>
@@ -456,6 +469,16 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         {c.parentCase && <p className="muted small">برگشتی پرونده <span dir="ltr">{caseCode(c.parentCase.number)}</span></p>}
       </div>
 
+      {(() => {
+        const missing = (c.checklist ?? []).filter((r) => r.isRequired && !r.isChecked);
+        if (missing.length === 0 || c.stage.isTerminal || c.stage.category === "active") return null;
+        return (
+          <div className="notice warn" role="status">
+            چک‌لیست اجباری ناقص است ({formatNumber(missing.length)} مورد). قبل از شروع کار، موارد لازم را تیک بزنید.
+          </div>
+        );
+      })()}
+
       {/* Next action: one big button; everything else in a sheet. */}
       {c.transitions.length > 0 && (
         <div className="next-actions" data-tour="next-action">
@@ -486,6 +509,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
 
       {/* Secondary details, collapsible. */}
       <Collapsible title="درخواست مشتری" open>
+        <Detail label="نوع درخواست" value={(c.requestTypes?.length ? c.requestTypes.map(requestTypeLabel).join("، ") : "—")} />
         <Detail label="ایراد اعلامی" value={c.reportedProblems.length > 0 ? c.reportedProblems.join("، ") : "—"} />
         {c.request && <Detail label="شرح مشتری" value={c.request} />}
         <Detail label="خدمات درخواستی" value={c.requestedServices.length > 0 ? c.requestedServices.join("، ") : "—"} />
