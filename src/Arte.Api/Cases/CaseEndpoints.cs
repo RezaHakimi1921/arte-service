@@ -24,7 +24,8 @@ public static class CaseEndpoints
         string? Request, int? OdometerKm, Guid? AssigneeId, Guid? ParentCaseId, string? Relation,
         Dictionary<string, string>? Intake, DateTimeOffset? PromisedAt, long? EstimatedAmountRials,
         string[]? RequestedServices, short? FuelLevel, string? BodyStatus, string? BodyNotes, string[]? ReportedProblems,
-        string[]? RequestTypes = null, string? MotorType = null, WorkshopEndpoints.ChecklistTick[]? Checklist = null);
+        string[]? RequestTypes = null, string? MotorType = null, WorkshopEndpoints.ChecklistTick[]? Checklist = null,
+        bool? SendCustomerSms = null);
 
     public sealed record UpdateCase(
         string? Request, string? Diagnosis, int? OdometerKm, long? EstimatedAmountRials,
@@ -478,7 +479,10 @@ public static class CaseEndpoints
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        var smsNotice = await notifier.NotifyAsync(c, MessageKeys.CaseOpened, ct);
+        // Intake checkbox: omit or true → keep current behaviour; false skips CaseOpened SMS for this create.
+        string? smsNotice = null;
+        if (req.SendCustomerSms != false)
+            smsNotice = await notifier.NotifyAsync(c, MessageKeys.CaseOpened, ct);
         return Results.Created($"/api/v1/cases/{c.Id}", new { c.Id, c.Number, SmsNotice = smsNotice });
     }
 

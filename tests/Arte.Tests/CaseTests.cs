@@ -466,6 +466,24 @@ public sealed class CaseTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Create_accepts_sendCustomerSms_false_and_still_opens_the_case()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            request = "بدون پیامک",
+            requestTypes = new[] { "other" },
+            sendCustomerSms = false,
+        }));
+        Assert.True(created.TryGetProperty("id", out _));
+        Assert.True(!created.TryGetProperty("smsNotice", out var notice) || notice.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            || string.IsNullOrEmpty(notice.GetString()));
+        var detail = await Json(await owner.GetAsync($"/api/v1/cases/{created.GetProperty("id")}"));
+        Assert.Equal("بدون پیامک", detail.GetProperty("request").GetString());
+    }
+
+    [Fact]
     public async Task Empty_stored_request_types_read_as_other_without_losing_details()
     {
         var (owner, tenantId) = await api.NewBusinessAsync();

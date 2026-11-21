@@ -387,19 +387,37 @@ button.big { min-height: 52px; font-size: 1.05rem; margin-bottom: 1rem; }
 .intake-title { display: flex; justify-content: space-between; align-items: center; }
 .intake-title h2 { margin: 0; }
 .intake-steps {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem;
-  padding: 0.15rem; border-radius: var(--radius, 12px);
-  background: var(--surface-2, color-mix(in srgb, var(--border) 35%, transparent));
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 0;
+  padding: 0.25rem 0 0.5rem; background: transparent;
 }
 .intake-step {
-  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
-  min-height: 48px; padding: 0.4rem 0.25rem; border: 0; border-radius: 10px;
+  position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
+  min-height: 48px; padding: 0.25rem 0.2rem; border: 0; border-radius: 10px;
   background: transparent; color: var(--muted); font: inherit; cursor: default;
 }
-.intake-step.on { background: var(--card, #fff); color: var(--text); box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 8%, transparent); }
+.intake-step.on { color: var(--text); }
 .intake-step.done { color: var(--accent); cursor: pointer; }
-.intake-step-n { font-size: 0.85rem; font-weight: 700; }
-.intake-step-label { font-size: 0.72rem; line-height: 1.2; text-align: center; }
+.intake-step-n {
+  width: 1.85rem; height: 1.85rem; border-radius: 999px;
+  display: grid; place-items: center;
+  font-size: 0.8rem; font-weight: 700;
+  border: 1.5px solid var(--border); background: var(--surface); color: var(--muted);
+}
+.intake-step.on .intake-step-n {
+  border-color: transparent; background: var(--accent); color: var(--accent-text);
+}
+.intake-step.done .intake-step-n {
+  border-color: transparent; background: var(--accent); color: var(--accent-text);
+}
+.intake-step-label { font-size: 0.72rem; line-height: 1.25; text-align: center; }
+.intake-step-line {
+  position: absolute; top: 0.95rem; inset-inline-start: calc(50% + 1.05rem); inset-inline-end: calc(-50% + 1.05rem);
+  height: 2px; background: var(--border); pointer-events: none;
+}
+.intake-step.done .intake-step-line { background: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.intake-sms { align-items: flex-start; gap: 0.65rem; margin: 0.25rem 0 0.75rem; }
+.intake-sms b { display: block; font-weight: 700; }
+.intake-sms small { display: block; margin-top: 0.15rem; line-height: 1.4; }
 .intake-summary { margin: 0; padding-inline-start: 1.1rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .intake-summary .muted { margin-inline-end: 0.35rem; }
 .icon-button { min-width: 44px; padding: 0; background: none; border: none; font-size: 1.2rem; color: var(--muted); }
@@ -482,11 +500,15 @@ input.vin { text-transform: uppercase; letter-spacing: 0.08em; }
 .fuel-label { font-size: 0.75rem; color: var(--muted); }
 .fuel button[aria-checked="true"] .fuel-label { color: var(--text); font-weight: 700; }
 
-.toggle { flex: 1; }
+.toggle { flex: 1; min-height: 48px; }
+.toggle.on {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-soft);
+  font-weight: 700; outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
 .toggle.good { color: var(--stage-green); background: var(--good-bg); border-color: transparent; }
 .toggle.bad { color: var(--stage-red); background: var(--bad-bg); border-color: transparent; }
-.toggle.good.on { outline: 2px solid var(--stage-green); font-weight: 700; }
-.toggle.bad.on { outline: 2px solid var(--stage-red); font-weight: 700; }
+.toggle.good.on { outline: 2px solid var(--stage-green); font-weight: 700; color: var(--stage-green); background: var(--good-bg); }
+.toggle.bad.on { outline: 2px solid var(--stage-red); font-weight: 700; color: var(--stage-red); background: var(--bad-bg); }
 /* Not sticky: a floating footer covered the last chips on small screens. */
 .intake-footer { display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.5rem; }
 .intake-footer button { margin: 0; }
