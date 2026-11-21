@@ -394,8 +394,12 @@ public static class WorkshopEndpoints
                 item.Note = NullIfEmpty(req.Note);
                 changed = true;
             }
-            // Ticks stay on the checklist row (CheckedBy / CheckedAt); do not spam the case timeline.
-            if (changed) await db.SaveChangesAsync(ct);
+            // Owner wants ticks visible on the timeline again (storage concern was about volume, not hiding them).
+            if (changed)
+            {
+                AddEvent(db, c, CaseEventTypes.ChecklistChanged, me.RequiredUserId, now, new { item.Title, item.IsChecked, item.Note });
+                await db.SaveChangesAsync(ct);
+            }
             return Results.NoContent();
         }).RequireTenant();
 
