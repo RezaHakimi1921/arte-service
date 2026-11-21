@@ -94,6 +94,7 @@ export function CaseWorkshopSections({ caseId, checklist, findings, motorType, c
   const [title, setTitle] = useState("");
   const [source, setSource] = useState<"mechanic" | "customer">("mechanic");
   const done = checklist.filter((r) => r.isChecked).length;
+  const remaining = checklist.length - done;
   const date = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
 
   async function run(fn: () => Promise<unknown>, ok?: string) {
@@ -109,6 +110,15 @@ export function CaseWorkshopSections({ caseId, checklist, findings, motorType, c
       {checklist.length > 0 && (
         <details className="case-section" open={done < checklist.length}>
           <summary>چک‌لیست بازدید{motorType ? ` · ${MOTOR_TYPES.find((t) => t.key === motorType)?.label ?? ""}` : ""} <span className="badge font-num">{formatNumber(done)}/{formatNumber(checklist.length)}</span></summary>
+          {canEdit && remaining > 0 && (
+            <div className="row-between checklist-bulk">
+              <button type="button" className="link" disabled={busy} aria-busy={busy}
+                onClick={() => run(() => api(`/api/v1/cases/${caseId}/checklist/check-all`, { method: "POST", body: {} }), "همه موارد تیک خورد")}>
+                {busy ? "در حال انتخاب…" : "انتخاب همه"}
+              </button>
+              <span className="muted small font-num">{formatNumber(remaining)} مورد باقی‌مانده</span>
+            </div>
+          )}
           {groupRows(checklist).map((g) => (
             <div key={g.name}>
               {g.name && <h4>{g.name}</h4>}

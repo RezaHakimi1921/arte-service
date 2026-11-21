@@ -128,6 +128,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const [motorType, setMotorType] = useState<string | null>(null);
   const [sendCustomerSms, setSendCustomerSms] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  /** Assignee red border only after an explicit submit attempt on the review step. */
+  const [reviewTried, setReviewTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const { notify } = useFeedback();
   // Photos taken at intake stay on the phone (already compressed) until the case exists, then are uploaded.
@@ -318,12 +320,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       return;
     }
     setErrors({});
+    setReviewTried(false);
     setStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s));
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy || step !== 3) return;
+    setReviewTried(true);
     const local = validateStep(3);
     if (Object.keys(local).length) {
       setErrors(local);
@@ -410,13 +414,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const sameOwner = plateOwner && plateOwner.customer.mobile === mobile;
   const assigneeSection = canAssign && (
     <Section icon="user" title={requireAssignee ? "مسئول پرونده" : "مسئول پرونده (اختیاری)"}>
-      <SelectField label={staff?.find((s) => s.id === assigneeId)?.name} invalid={!!errors.assignee}
+      <SelectField label={staff?.find((s) => s.id === assigneeId)?.name}
+        invalid={reviewTried && !!errors.assignee}
         placeholder={staff === null ? "در حال بارگذاری…" : requireAssignee ? "انتخاب همکار" : "بعداً تعیین می‌کنم"} onOpen={() => setPickAssignee(true)} />
       <SelectSheet open={pickAssignee} title="مسئول پرونده" value={assigneeId} noneLabel="بعداً تعیین می‌کنم"
         items={(staff ?? []).map((s) => ({ value: s.id, label: s.name, group: ROLE_NAMES[s.role] ?? s.role }))}
         onClose={() => setPickAssignee(false)}
         onSelect={(v) => { setAssigneeId(v ?? ""); setPickAssignee(false); setErrors((e) => ({ ...e, assignee: "" })); }} />
-      {errors.assignee && <span className="error">{errors.assignee}</span>}
+      {reviewTried && errors.assignee && <span className="error">{errors.assignee}</span>}
       {staff && staff.filter((s) => s.role !== "owner").length === 0 && (
         <p className="hint">هنوز همکاری ثبت نکرده‌اید؛ می‌توانید پرونده را به خودتان بسپارید. <button type="button" className="link" onClick={onOpenStaff}>افزودن همکار</button></p>
       )}
@@ -770,9 +775,9 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
           </button>
         )}
         {step < 3 ? (
-          <button type="button" className="primary block big" onClick={goNext}>ادامه</button>
+          <button key="intake-next" type="button" className="primary block big" onClick={goNext}>ادامه</button>
         ) : (
-          <button className="primary block big" disabled={busy} aria-busy={busy}>
+          <button key="intake-submit" type="submit" className="primary block big" disabled={busy} aria-busy={busy}>
             {busy ? (shots.length > 0 ? "در حال ثبت پذیرش و عکس‌ها…" : "در حال ثبت پذیرش…") : "ثبت و ساخت پرونده"}
           </button>
         )}
