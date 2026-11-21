@@ -31,10 +31,9 @@ const STEPS = [
   { n: 3 as const, label: "مسئول و ثبت" },
 ];
 
-/** Prefer motorcycle when the shop takes several kinds; kind picker is hidden from intake. */
+/** Hide the kind picker only when the business has exactly one enabled kind. */
 function defaultVehicleKind(kinds: { key: VehicleKind }[]): VehicleKind | null {
-  if (kinds.length === 0) return null;
-  return kinds.find((k) => k.key === "motorcycle")?.key ?? kinds[0].key;
+  return kinds.length === 1 ? kinds[0].key : null;
 }
 
 const ICONS = {
@@ -164,7 +163,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   useEffect(() => {
     const d = loadDraft<Draft>(draftScope);
     if (d) {
-      setMobile(d.mobile); setCustomerName(d.customerName); setKind(d.kind ?? defaultVehicleKind(kinds)); setBrand(d.brand); setModel(d.model);
+      const restoredKind = d.kind && kinds.some((k) => k.key === d.kind) ? d.kind : defaultVehicleKind(kinds);
+      setMobile(d.mobile); setCustomerName(d.customerName); setKind(restoredKind); setBrand(d.brand); setModel(d.model);
       setCalendar(d.calendar); setYear(d.year); setYearText(d.yearText); setPlate(d.plate); setMotoPlate(d.motoPlate);
       setColor(d.color); setVin(d.vin); setFuelType(d.fuelType); setGearbox(d.gearbox); setOdometer(d.odometer); setFuel(d.fuel);
       setBody(d.body); setBodyNotes(d.bodyNotes); setItems(d.items); setProblems(d.problems); setNotes(d.notes); setServices(d.services);
@@ -257,9 +257,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const years = useMemo(() => modelYears(modelEntry, calendar, allYears), [modelEntry, calendar, allYears]);
 
   const newVehicle = assetId === "new";
-  // Existing vehicles: the kind is not loaded with the chip list, so treat an unknown as a car.
-  const vehicleKind = newVehicle ? kind : customer?.assets.find((a) => a.id === assetId)?.kind ?? null;
-  const isMoto = kind === "motorcycle" || vehicleKind === "motorcycle";
+  const vehicleKind = newVehicle ? kind : (customer?.assets.find((a) => a.id === assetId)?.kind as VehicleKind | undefined) ?? null;
+  const isMoto = vehicleKind === "motorcycle";
   const custom = useIntakeOptions();
   const needsMotorcycleChecklist = requestTypes.some((k) =>
     bindings.some((b) => b.requestTypeKey === k && b.source === "motorcycle"));
@@ -275,11 +274,22 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const toggle = (list: string[], set: (v: string[]) => void, v: string) =>
     set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
+  function pickKind(k: VehicleKind) {
+    setKind(k);
+    setBrand("");
+    setModel("");
+    setYear("");
+    setYearText("");
+    setAllYears(false);
+    setErrors((e) => ({ ...e, vehicle: "", plate: "" }));
+  }
+
   function validateStep(s: 1 | 2 | 3): Record<string, string> {
     const local: Record<string, string> = {};
     if (s >= 1) {
       if (mobile.length !== 11) local.mobile = "شماره همراه باید ۱۱ رقم باشد.";
-      if (newVehicle && !(kind && brand.trim() && model.trim())) local.vehicle = "برند و مدل را انتخاب کنید.";
+      if (newVehicle && !kind) local.vehicle = kinds.length > 1 ? "نوع وسیله را انتخاب کنید." : "در تنظیمات کسب‌وکار یک نوع وسیله را فعال کنید.";
+      else if (newVehicle && !(brand.trim() && model.trim())) local.vehicle = "برند و مدل را انتخاب کنید.";
       if (plateStarted && !plateId) local.plate = "پلاک کامل نیست.";
       if (plateOwner && plateOwner.customer.mobile !== mobile) local.plate = "این پلاک برای مشتری دیگری ثبت شده است.";
     }
@@ -487,6 +497,21 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
         {newVehicle && (
           <>
+            {kinds.length > 1 && (
+              <div className="field">
+                <span className="label">نوع وسیله</span>
+                <div className="kinds" role="radiogroup" aria-label="نوع وسیله">
+                  {kinds.map((k) => (
+                    <button type="button" key={k.key} role="radio" aria-checked={kind === k.key}
+                      className={`kind${kind === k.key ? " on" : ""}`} onClick={() => pickKind(k.key)}>
+                      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d={k.icon} /></svg>
+                      <span>{k.label}</span>
+                    </button>
+                  ))}
+                </div>
+                {!kind && errors.vehicle && <span className="error">{errors.vehicle}</span>}
+              </div>
+            )}
             {kind && (
               <div className="grid-2">
                 <Field label="برند" error={errors.vehicle}>
@@ -499,7 +524,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
                 </Field>
               </div>
             )}
-            {!kind && <p className="hint">در تنظیمات کسب‌وکار حداقل یک نوع وسیله را فعال کنید.</p>}
+            {kinds.length === 0 && <p className="hint">در تنظیمات کسب‌وکار حداقل یک نوع وسیله را فعال کنید.</p>}
 
             {kind && model.trim() && (
               <div className="field">
