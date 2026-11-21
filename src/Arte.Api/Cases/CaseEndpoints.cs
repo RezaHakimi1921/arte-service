@@ -578,6 +578,23 @@ public static class CaseEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["waitReason"] = ["علت انتظار نامعتبر است."] });
         }
 
+        // Entering active work requires every required checklist row on the case to be ticked.
+        // Cancel / waiting / staying in active are not blocked here (create already allowed incomplete).
+        if (to.Category == StageCategories.Active && from.Category != StageCategories.Active)
+        {
+            var missing = await db.CaseChecklistItems.AsNoTracking()
+                .Where(i => i.CaseId == c.Id && i.IsRequired && !i.IsChecked)
+                .OrderBy(i => i.SortOrder).Select(i => i.Title).Take(6).ToListAsync(ct);
+            if (missing.Count > 0)
+            {
+                var shown = missing.Take(5).ToList();
+                var more = missing.Count > 5 ? $" و {missing.Count - 5} مورد دیگر" : "";
+                return Results.Problem(statusCode: 409,
+                    title: $"چک‌لیست اجباری ناقص است؛ اول این موارد را تکمیل کنید: {string.Join("، ", shown)}{more}",
+                    extensions: new Dictionary<string, object?> { ["code"] = "checklist_incomplete", ["missing"] = shown });
+            }
+        }
+
         // When the business asks for payment first, work and buying parts wait until some payment is recorded.
         if (to.Key is "repairing" or "awaiting_parts"
             && await db.Tenants.Where(x => x.Id == c.TenantId).Select(x => x.RequirePaymentBeforeWork).SingleAsync(ct)
