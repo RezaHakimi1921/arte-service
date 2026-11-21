@@ -2395,7 +2395,8 @@ input[readonly] { opacity: 0.75; cursor: default; }
 .case-section { margin: 0.75rem 0; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--surface); }
 .case-section > summary { min-height: 44px; display: flex; align-items: center; gap: 0.5rem; font-weight: 700; cursor: pointer; }
 .case-section .checks, .case-section form { margin-top: 0.5rem; }
-.checklist-bulk { margin: 0.35rem 0 0.5rem; padding: 0; border: 0; min-height: 44px; }
+.checklist-bulk { margin: 0.5rem 0 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.checklist-bulk .hint { margin: 0; }
 
 /* ───────── customer page: pay, maps, instagram ───────── */
 .tk-pay { display: grid; gap: 0.75rem; }

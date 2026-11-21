@@ -416,7 +416,13 @@ public static class WorkshopEndpoints
                 item.CheckedBy = me.RequiredUserId;
                 item.CheckedAt = now;
             }
-            if (items.Count > 0) await db.SaveChangesAsync(ct);
+            if (items.Count > 0)
+            {
+                // One timeline line for the bulk action — not one event per row.
+                AddEvent(db, c, CaseEventTypes.ChecklistBulkChecked, me.RequiredUserId, now,
+                    new { Count = items.Count, Source = "check_all" });
+                await db.SaveChangesAsync(ct);
+            }
             return Results.Ok(new { checkedCount = items.Count });
         }).RequireTenant();
     }
