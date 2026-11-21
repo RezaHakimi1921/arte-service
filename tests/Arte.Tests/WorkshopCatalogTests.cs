@@ -101,11 +101,11 @@ public sealed class WorkshopCatalogTests(ArteApiFactory api)
         Assert.Equal(2, list.Count);
         Assert.True(list[0].GetProperty("isChecked").GetBoolean());
 
-        // Ticks update the row; they must not flood the case timeline.
+        // Single ticks are on the timeline again (one event per change).
         var rowId = list[1].GetProperty("id").GetGuid();
         (await owner.PutAsJsonAsync($"/api/v1/cases/{id}/checklist/{rowId}", new { isChecked = true })).EnsureSuccessStatusCode();
         var afterTick = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
-        Assert.DoesNotContain(afterTick.GetProperty("timeline").EnumerateArray(),
+        Assert.Contains(afterTick.GetProperty("timeline").EnumerateArray(),
             e => e.GetProperty("type").GetString() == "case.checklist_changed");
         Assert.All(afterTick.GetProperty("checklist").EnumerateArray(), r => Assert.True(r.GetProperty("isChecked").GetBoolean()));
         _ = b;
@@ -125,6 +125,7 @@ public sealed class WorkshopCatalogTests(ArteApiFactory api)
         var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
         Assert.All(detail.GetProperty("checklist").EnumerateArray(), r => Assert.True(r.GetProperty("isChecked").GetBoolean()));
         var timeline = detail.GetProperty("timeline").EnumerateArray().ToList();
+        // Bulk action: one bulk event, not N checklist_changed rows.
         Assert.DoesNotContain(timeline, e => e.GetProperty("type").GetString() == "case.checklist_changed");
         Assert.Contains(timeline, e => e.GetProperty("type").GetString() == "case.checklist_bulk_checked");
         Assert.Equal(1, timeline.Count(e => e.GetProperty("type").GetString() == "case.checklist_bulk_checked"));

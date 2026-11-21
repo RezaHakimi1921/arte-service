@@ -111,16 +111,23 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
         _ => null,
     };
 
-    /// <summary>SMS to the master(s) that a finished job waits for review. Who: members who can approve work (cases.create), except the one who finished it.</summary>
+    /// <summary>
+    /// SMS to masters that a finished job waits for review. Recipients: active members with
+    /// <see cref="Arte.Core.Identity.Permissions.CasesCreate"/> (owner + senior by default roles),
+    /// including the person who finished the work (solo shops must still get the notice).
+    /// </summary>
     public async Task NotifyMastersAsync(Case c, Guid actorUserId, CancellationToken ct)
     {
         try
         {
+            _ = actorUserId; // kept for call-site compatibility; recipients are permission-based, not "everyone except actor"
             if (c.IsSample) return;
             var t = await db.Tenants.AsNoTracking().SingleAsync(x => x.Id == c.TenantId, ct);
             if (!t.SmsToMasterOnFinished) return;
-            var members = await db.Memberships.AsNoTracking().Include(m => m.User).Where(m => m.IsActive && m.UserId != actorUserId).ToListAsync(ct);
-            var mobiles = members.Where(m => m.Has(Arte.Core.Identity.Permissions.CasesCreate) && m.User is not null).Select(m => m.User!.Mobile).Distinct().Take(3).ToList();
+            // Include the finisher: solo owner/master shops must still receive the notice.
+            var members = await db.Memberships.AsNoTracking().Include(m => m.User).Where(m => m.IsActive).ToListAsync(ct);
+            var mobiles = members.Where(m => m.Has(Arte.Core.Identity.Permissions.CasesCreate) && m.User is not null)
+                .Select(m => m.User!.Mobile).Distinct().Take(5).ToList();
             if (mobiles.Count == 0) return;
             var asset = c.AssetId is null ? null : await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking().SingleOrDefaultAsync(x => x.Id == c.AssetId, ct);
             var tokens = new Dictionary<string, string>
