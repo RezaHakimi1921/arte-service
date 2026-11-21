@@ -39,6 +39,37 @@ public sealed class IntakeOption : ITenantOwned
     public DateTimeOffset CreatedAt { get; set; }
 }
 
+/// <summary>
+/// Where a request type's checklist comes from for this business.
+/// <see cref="Motorcycle"/> = the existing geared/automatic template rows; <see cref="None"/> = no checklist.
+/// </summary>
+public static class ChecklistBindingSources
+{
+    public const string None = "none";
+    public const string Motorcycle = "motorcycle";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string> { None, Motorcycle };
+
+    public static readonly IReadOnlyList<(string Key, string TitleFa)> Catalog =
+    [
+        (Motorcycle, "چک‌لیست موتورسیکلت"),
+        (None, "بدون چک‌لیست"),
+    ];
+}
+
+/// <summary>
+/// Per-business map: which checklist (if any) applies when a case includes wrenching / diagnosis / repair.
+/// «سایر» never has a binding row — it never requires a checklist.
+/// </summary>
+public sealed class RequestTypeChecklistBinding : ITenantOwned
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid TenantId { get; set; }
+    public required string RequestTypeKey { get; set; }
+    public required string Source { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>One row of the intake checklist the business ticks when a motorcycle is received (one list per motor type).</summary>
 public sealed class ChecklistTemplateItem : ITenantOwned
 {

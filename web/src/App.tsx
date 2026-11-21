@@ -19,7 +19,7 @@ import { useFeedback } from "./feedback";
 import { setBusinessKinds } from "./vehicleForm";
 import { VideoTrashPage, WorkshopListsPage } from "./workshop";
 import { FinancePage } from "./finance";
-import { AccountPage, AppearancePage, BusinessPage, CustomerPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
+import { AccountPage, AppearancePage, BusinessPage, ChecklistBindingsPage, CustomerPage, IntakeRulesPage, ROLE_NAMES, SettingsHome, StaffPage, type SettingsPage } from "./settings";
 import { CatalogView, ReceivablesView } from "./billing";
 import { Customers } from "./customers";
 
@@ -414,6 +414,7 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
     else if (morePage === "intake") page = <IntakeRulesPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "finance") page = <FinancePage onBack={back} />;
     else if (morePage === "workshop") page = <WorkshopListsPage onBack={back} onOpenCatalog={() => setMorePage("catalog")} />;
+    else if (morePage === "checklistBindings") page = <ChecklistBindingsPage onBack={back} />;
     else if (morePage === "videotrash") page = <VideoTrashPage onBack={back} />;
     else if (morePage === "customer") page = <CustomerPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "staff") page = <StaffPage onBack={back} surveyEnabled={me.business!.surveyEnabled} />;

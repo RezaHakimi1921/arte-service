@@ -35,8 +35,49 @@ public static class WorkshopEndpoints
     {
         MapOptions(app);
         MapTemplates(app);
+        MapRequestTypeBindings(app);
         MapCaseChecklist(app);
         MapFindings(app);
+    }
+
+    /// <summary>
+    /// Ensures wrenching/diagnosis/repair each have a binding row (default: motorcycle checklist).
+    /// Returns the three rows keyed by request type.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<string, RequestTypeChecklistBinding>> EnsureRequestTypeBindingsAsync(
+        ArteDbContext db, IClock clock, CancellationToken ct)
+    {
+        var rows = await db.RequestTypeChecklistBindings.ToListAsync(ct);
+        var byKey = rows.ToDictionary(r => r.RequestTypeKey);
+        var now = clock.UtcNow;
+        var added = false;
+        foreach (var key in CaseRequestTypes.ChecklistBindable)
+        {
+            if (byKey.ContainsKey(key)) continue;
+            var row = new RequestTypeChecklistBinding
+            {
+                RequestTypeKey = key, Source = ChecklistBindingSources.Motorcycle, UpdatedAt = now,
+            };
+            db.RequestTypeChecklistBindings.Add(row);
+            byKey[key] = row;
+            added = true;
+        }
+        if (added) await db.SaveChangesAsync(ct);
+        return byKey;
+    }
+
+    /// <summary>
+    /// True when at least one selected request type is bound to the motorcycle template.
+    /// Legacy clients that omit requestTypes keep the old rule: motorType alone triggers the template.
+    /// </summary>
+    public static bool NeedsMotorcycleChecklist(
+        string[] requestTypes, bool requestTypesOmitted, IReadOnlyDictionary<string, RequestTypeChecklistBinding> bindings)
+    {
+        if (requestTypesOmitted) return true; // decided with motorType present by the caller
+        return requestTypes.Any(k =>
+            CaseRequestTypes.ChecklistBindable.Contains(k)
+            && bindings.TryGetValue(k, out var b)
+            && b.Source == ChecklistBindingSources.Motorcycle);
     }
 
     // ───────── reported problems and services ─────────
@@ -159,6 +200,74 @@ public static class WorkshopEndpoints
         if (req.SortOrder is < 0 or > 100_000) e["sortOrder"] = ["ترتیب نامعتبر است."];
         return e;
     }
+
+    // ───────── request-type → checklist bindings (settings) ─────────
+
+    private static void MapRequestTypeBindings(IEndpointRouteBuilder app)
+    {
+        var g = app.MapGroup("/api/v1/request-type-checklist-bindings").RequireTenant();
+
+        g.MapGet("/", async (ArteDbContext db, IClock clock, CancellationToken ct) =>
+        {
+            var byKey = await EnsureRequestTypeBindingsAsync(db, clock, ct);
+            var items = CaseRequestTypes.ChecklistBindable.Select(key =>
+            {
+                var row = byKey[key];
+                var title = CaseRequestTypes.Catalog.First(c => c.Key == key).TitleFa;
+                var sourceTitle = ChecklistBindingSources.Catalog.First(c => c.Key == row.Source).TitleFa;
+                return new
+                {
+                    requestTypeKey = key,
+                    requestTypeTitle = title,
+                    source = row.Source,
+                    sourceTitle,
+                    updatedAt = row.UpdatedAt,
+                };
+            });
+            return Results.Ok(new
+            {
+                bindings = items,
+                sources = ChecklistBindingSources.Catalog.Select(c => new { key = c.Key, title = c.TitleFa }),
+            });
+        });
+
+        g.MapPut("/", async (BindingsPut req, ArteDbContext db, IClock clock, CancellationToken ct) =>
+        {
+            var byKey = await EnsureRequestTypeBindingsAsync(db, clock, ct);
+            var errors = new Dictionary<string, string[]>();
+            var incoming = req.Bindings ?? [];
+            if (incoming.Length == 0 || incoming.Length > CaseRequestTypes.ChecklistBindable.Count)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["bindings"] = ["فهرست نگاشت نامعتبر است."] });
+
+            var seen = new HashSet<string>();
+            var now = clock.UtcNow;
+            foreach (var item in incoming)
+            {
+                var key = item.RequestTypeKey?.Trim() ?? "";
+                var source = item.Source?.Trim() ?? "";
+                if (!CaseRequestTypes.ChecklistBindable.Contains(key))
+                { errors["bindings"] = ["نوع درخواست نامعتبر است."]; break; }
+                if (!ChecklistBindingSources.All.Contains(source))
+                { errors["bindings"] = ["منبع چک‌لیست نامعتبر است."]; break; }
+                if (!seen.Add(key))
+                { errors["bindings"] = ["نوع درخواست تکراری است."]; break; }
+                byKey[key].Source = source;
+                byKey[key].UpdatedAt = now;
+            }
+            if (errors.Count > 0) return Results.ValidationProblem(errors);
+            if (seen.Count != CaseRequestTypes.ChecklistBindable.Count)
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["bindings"] = ["برای آچارکشی، عیب‌یابی و تعمیرات باید نگاشت کامل بفرستید."],
+                });
+
+            await db.SaveChangesAsync(ct);
+            return Results.NoContent();
+        }).RequirePermission(Permissions.SettingsManage);
+    }
+
+    private sealed record BindingItem(string? RequestTypeKey, string? Source);
+    private sealed record BindingsPut(BindingItem[]? Bindings);
 
     // ───────── checklist templates (one per motor type) ─────────
 

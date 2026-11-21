@@ -80,19 +80,19 @@ public sealed class WorkshopCatalogTests(ArteApiFactory api)
     }
 
     [Fact]
-    public async Task Required_checklist_rows_must_be_ticked_before_the_case_opens_and_are_saved_with_it()
+    public async Task Checklist_rows_are_snapshotted_on_create_and_can_be_ticked_later()
     {
         var (owner, _) = await api.NewBusinessAsync();
         var a = (await Json(await owner.PostAsJsonAsync("/api/v1/checklist-templates/automatic/items", new { title = "بررسی ترمز" }))).GetProperty("id").GetGuid();
         var b = (await Json(await owner.PostAsJsonAsync("/api/v1/checklist-templates/automatic/items", new { title = "بررسی چراغ", isRequired = false }))).GetProperty("id").GetGuid();
 
-        var bad = await owner.PostAsJsonAsync("/api/v1/cases", new
+        // Incomplete required rows no longer block create (work-start gate is a later slice).
+        var incomplete = await owner.PostAsJsonAsync("/api/v1/cases", new
         {
             mobile = ArteApiFactory.NewMobile(), customerName = "م", reportedProblems = new[] { "روشن نمی‌شود" },
-            newAsset = new { title = "کلیک", kind = "motorcycle" }, motorType = "automatic", checklist = new object[0],
+            newAsset = new { title = "کلیک", kind = "motorcycle" }, motorType = "automatic", checklist = Array.Empty<object>(),
         });
-        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
-        Assert.Contains("بررسی ترمز", await bad.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Created, incomplete.StatusCode);
 
         var id = await OpenCase(owner, new { MotorType = "automatic", Checklist = new[] { new { itemId = a, isChecked = true, note = "ok" } } });
         var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));

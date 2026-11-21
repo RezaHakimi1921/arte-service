@@ -3533,6 +3533,36 @@ namespace Arte.Core.Data.Migrations
                     b.ToTable("IntakeOptions");
                 });
 
+            modelBuilder.Entity("Arte.Core.Workshop.RequestTypeChecklistBinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestTypeKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "RequestTypeKey")
+                        .IsUnique();
+
+                    b.ToTable("RequestTypeChecklistBindings");
+                });
+
             modelBuilder.Entity("Arte.Core.Billing.CaseItem", b =>
                 {
                     b.HasOne("Arte.Core.Cases.Case", null)
