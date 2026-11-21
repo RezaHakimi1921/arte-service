@@ -28,7 +28,7 @@ const faYear = new Intl.NumberFormat("fa-IR", { useGrouping: false });
 const STEPS = [
   { n: 1 as const, label: "مشتری و وسیله" },
   { n: 2 as const, label: "شرح پذیرش" },
-  { n: 3 as const, label: "مسئول و ثبت" },
+  { n: 3 as const, label: "بازبینی" },
 ];
 
 /** Hide the kind picker only when the business has exactly one enabled kind. */
@@ -126,6 +126,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const [typeCatalog, setTypeCatalog] = useState<RequestTypeOpt[]>([]);
   const [bindings, setBindings] = useState<BindingRow[]>([]);
   const [motorType, setMotorType] = useState<string | null>(null);
+  const [sendCustomerSms, setSendCustomerSms] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const { notify } = useFeedback();
@@ -257,8 +258,13 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const years = useMemo(() => modelYears(modelEntry, calendar, allYears), [modelEntry, calendar, allYears]);
 
   const newVehicle = assetId === "new";
-  const vehicleKind = newVehicle ? kind : (customer?.assets.find((a) => a.id === assetId)?.kind as VehicleKind | undefined) ?? null;
-  const isMoto = vehicleKind === "motorcycle";
+  const assetKindRaw = newVehicle ? null : customer?.assets.find((a) => a.id === assetId)?.kind ?? null;
+  const vehicleKind = (newVehicle ? kind : (assetKindRaw as VehicleKind | null) ?? kind) ?? null;
+  // Legacy assets may be stored as "vehicle"; a motorcycle-only shop still needs motor-type + moto plate.
+  const shopMotoOnly = kinds.length === 1 && kinds[0].key === "motorcycle";
+  const isMoto = vehicleKind === "motorcycle"
+    || shopMotoOnly
+    || ((assetKindRaw === "vehicle" || assetKindRaw == null) && kind === "motorcycle");
   const custom = useIntakeOptions();
   const needsMotorcycleChecklist = requestTypes.some((k) =>
     bindings.some((b) => b.requestTypeKey === k && b.source === "motorcycle"));
@@ -296,7 +302,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     if (s >= 2) {
       if (requestTypes.length === 0) local.requestTypes = "حداقل یک نوع درخواست انتخاب کنید.";
       if (problems.length === 0 && services.length === 0 && !notes.trim()) local.problems = "حداقل یک ایراد یا خدمت انتخاب کنید یا شرح بنویسید.";
-      if (isMoto && needsMotorcycleChecklist && !motorType) local.motorType = "نوع موتور (دنده‌ای یا اتومات) را مشخص کنید.";
+      if (needsMotorcycleChecklist && !motorType) local.motorType = "نوع موتور (دنده‌ای یا اتومات) را مشخص کنید.";
     }
     if (s >= 3) {
       if (requireAssignee && canAssign && !assigneeId) local.assignee = "مسئول پرونده را انتخاب کنید.";
@@ -350,7 +356,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
             : undefined,
           requestTypes,
           reportedProblems: problems,
-          motorType: isMoto && needsMotorcycleChecklist && motorType ? motorType : undefined,
+          motorType: needsMotorcycleChecklist && motorType ? motorType : undefined,
+          sendCustomerSms,
           requestedServices: services,
           request: notes.trim(),
           odometerKm: odometer ? Number(odometer) : undefined,
@@ -425,7 +432,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         <button type="button" className="icon-button" onClick={onCancel} aria-label="بستن (پیش‌نویس می‌ماند)">✕</button>
       </div>
       <nav className="intake-steps" aria-label="مراحل پذیرش">
-        {STEPS.map((s) => (
+        {STEPS.map((s, i) => (
           <button
             key={s.n}
             type="button"
@@ -434,8 +441,11 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
             disabled={s.n > step}
             onClick={() => { if (s.n < step) setStep(s.n); }}
           >
-            <span className="intake-step-n font-num">{faYear.format(s.n)}</span>
+            <span className="intake-step-n font-num" aria-hidden="true">
+              {step > s.n ? "✓" : faYear.format(s.n)}
+            </span>
             <span className="intake-step-label">{s.label}</span>
+            {i < STEPS.length - 1 && <span className="intake-step-line" aria-hidden="true" />}
           </button>
         ))}
       </nav>
@@ -487,11 +497,16 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         {customer && customer.assets.length > 0 && (
           <div className="chips">
             {customer.assets.map((a) => (
-              <button type="button" key={a.id} className={`chip-button${assetId === a.id ? " active" : ""}`} onClick={() => setAssetId(a.id)}>
+              <button type="button" key={a.id} className={`chip-button${assetId === a.id ? " active" : ""}`}
+                onClick={() => {
+                  setAssetId(a.id);
+                  if (a.kind && kinds.some((k) => k.key === a.kind)) setKind(a.kind as VehicleKind);
+                }}>
                 {a.title}{a.identifier ? <> · <PlateView identifier={a.identifier} /></> : ""}
               </button>
             ))}
-            <button type="button" className={`chip-button${newVehicle ? " active" : ""}`} onClick={() => setAssetId("new")}>+ وسیله دیگر</button>
+            <button type="button" className={`chip-button${newVehicle ? " active" : ""}`}
+              onClick={() => { setAssetId("new"); setKind(defaultVehicleKind(kinds)); }}>+ وسیله دیگر</button>
           </div>
         )}
 
@@ -630,13 +645,16 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         {errors.requestTypes && <span className="error">{errors.requestTypes}</span>}
       </Section>
 
-      {isMoto && needsMotorcycleChecklist && (
+      {needsMotorcycleChecklist && (
         <Section icon="gauge" title="نوع موتور">
-          <div className="actions">
-            <button type="button" className={`toggle${motorType === "geared" ? " on" : ""}`}
+          {!isMoto && <p className="hint">برای چک‌لیست موتورسیکلت، نوع موتور را مشخص کنید.</p>}
+          <div className="actions" role="radiogroup" aria-label="نوع موتور">
+            <button type="button" role="radio" aria-checked={motorType === "geared"}
+              className={`toggle${motorType === "geared" ? " on" : ""}`}
               onClick={() => { setMotorType("geared"); setErrors((e) => ({ ...e, motorType: "" })); }}>دنده‌ای</button>
-            <button type="button" className={`toggle${motorType === "automatic" ? " on" : ""}`}
-              onClick={() => { setMotorType("automatic"); setErrors((e) => ({ ...e, motorType: "" })); }}>اتومات / کلیک</button>
+            <button type="button" role="radio" aria-checked={motorType === "automatic"}
+              className={`toggle${motorType === "automatic" ? " on" : ""}`}
+              onClick={() => { setMotorType("automatic"); setErrors((e) => ({ ...e, motorType: "" })); }}>اتومات</button>
           </div>
           {errors.motorType && <span className="error">{errors.motorType}</span>}
         </Section>
@@ -703,6 +721,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
       {assigneeSection}
 
+      <label className="check intake-sms">
+        <input type="checkbox" checked={sendCustomerSms} onChange={(e) => setSendCustomerSms(e.target.checked)} />
+        <span>
+          <b>ارسال پیامک پذیرش به مشتری</b>
+          <small className="muted"> لینک پیگیری پرونده هم فرستاده می‌شود (اگر پیامک کسب‌وکار فعال باشد).</small>
+        </span>
+      </label>
+
       <Section icon="gauge" title="وضعیت هنگام پذیرش (اختیاری)" badge={fuel === null && <span className="badge warn">سوخت مشخص نشده</span>}>
         <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
           <NumberInput value={odometer} onChange={setOdometer} max={7} suffix="کیلومتر" />
@@ -747,7 +773,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
           <button type="button" className="primary block big" onClick={goNext}>ادامه</button>
         ) : (
           <button className="primary block big" disabled={busy} aria-busy={busy}>
-            {busy ? (shots.length > 0 ? "در حال ثبت پذیرش و عکس‌ها…" : "در حال ثبت پذیرش…") : "ثبت پذیرش"}
+            {busy ? (shots.length > 0 ? "در حال ثبت پذیرش و عکس‌ها…" : "در حال ثبت پذیرش…") : "ثبت و ساخت پرونده"}
           </button>
         )}
       </div>
