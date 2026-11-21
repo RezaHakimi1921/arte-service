@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, apiBlob, ApiError } from "./api";
 import { useFeedback } from "./feedback";
-import { BottomSheet, SheetOption } from "./sheet";
+import { BottomSheet, SelectField, SelectSheet, SheetOption } from "./sheet";
 import { Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { resetWorkflow } from "./workflow";
 import { SMS_PATTERNS, fillSms, type SmsKey } from "./smsTexts";
 
-export type SettingsPage = "account" | "business" | "intake" | "workshop" | "videotrash" | "finance" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
+export type SettingsPage = "account" | "business" | "intake" | "workshop" | "checklistBindings" | "videotrash" | "finance" | "customer" | "catalog" | "receivables" | "staff" | "appearance" | "reports" | "license" | "admin";
 
 export { ROLE_NAMES } from "./labels";
 import { ROLE_NAMES } from "./labels";
@@ -77,6 +77,7 @@ export function SettingsHome({ name, mobile, role, can, onOpen, onSignOut, openM
           <Row icon="license" title="اشتراک" sub={licenseText} onClick={() => onOpen("license")} />
           <Row icon="credit" title="مالی: کارتخوان و کارت‌ها" sub="انتخاب کارتخوان در پرداخت، کارت نمایشی برای مشتری" onClick={() => onOpen("finance")} />
           <Row icon="rules" title="فهرست‌ها و چک‌لیست" sub="ایراد، خدمات و چک‌لیست بازدید موتور" onClick={() => onOpen("workshop")} />
+          <Row icon="rules" title="چک‌لیست نوع درخواست" sub="آچارکشی، عیب‌یابی و تعمیرات" onClick={() => onOpen("checklistBindings")} />
           <Row icon="rules" title="فیلم‌های حذف‌شده" sub="تا ۳ روز قابل دیدن و بازگردانی" onClick={() => onOpen("videotrash")} />
           <Row icon="sms" title="پیامک و پیگیری مشتری" sub="لینک وضعیت پرونده و پیامک به مشتری" onClick={() => onOpen("customer")} />
           <Row icon="rules" title="قوانین پذیرش و روند کار" sub="مسئول الزامی، بررسی استاد، تأیید مشتری" onClick={() => onOpen("intake")} />
@@ -118,6 +119,85 @@ export function SubPage({ title, onBack, children, backLabel = "تنظیمات" 
       <h2>{title}</h2>
       {children}
     </section>
+  );
+}
+
+type ChecklistBindingRow = { requestTypeKey: string; requestTypeTitle: string; source: string; sourceTitle: string };
+type ChecklistBindingsPayload = {
+  bindings: ChecklistBindingRow[];
+  sources: { key: string; title: string }[];
+};
+
+/** Map wrenching / diagnosis / repair to the motorcycle checklist or «none». */
+export function ChecklistBindingsPage({ onBack }: { onBack: () => void }) {
+  const { notify } = useFeedback();
+  const [data, setData] = useState<ChecklistBindingsPayload | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [pick, setPick] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api<ChecklistBindingsPayload>("/api/v1/request-type-checklist-bindings")
+      .then((d) => {
+        setData(d);
+        setDraft(Object.fromEntries(d.bindings.map((b) => [b.requestTypeKey, b.source])));
+      })
+      .catch(() => setError("بارگذاری نشد"));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!data) return;
+    setBusy(true); setError(null);
+    try {
+      await api("/api/v1/request-type-checklist-bindings", {
+        method: "PUT",
+        body: { bindings: data.bindings.map((b) => ({ requestTypeKey: b.requestTypeKey, source: draft[b.requestTypeKey] })) },
+      });
+      notify("ذخیره شد");
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "ذخیره نشد");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const picking = data?.bindings.find((b) => b.requestTypeKey === pick) ?? null;
+  const sourceTitle = (key: string) => data?.sources.find((s) => s.key === key)?.title ?? key;
+
+  return (
+    <SubPage title="چک‌لیست نوع درخواست" onBack={onBack}>
+      {!data ? <div className="splash" aria-busy="true" /> : (
+        <form className="plain-form" onSubmit={save}>
+          <p className="hint">برای آچارکشی، عیب‌یابی و تعمیرات مشخص کنید از چک‌لیست موتورسیکلت استفاده شود یا بدون چک‌لیست باشد. «سایر درخواست‌ها» چک‌لیست ندارد.</p>
+          {data.bindings.map((b) => (
+            <Field key={b.requestTypeKey} label={b.requestTypeTitle}>
+              <SelectField
+                label={sourceTitle(draft[b.requestTypeKey] ?? b.source)}
+                placeholder="انتخاب کنید"
+                onOpen={() => setPick(b.requestTypeKey)}
+              />
+            </Field>
+          ))}
+          {error && <span className="error" role="alert">{error}</span>}
+          <button className="primary" disabled={busy} aria-busy={busy}>{busy ? "در حال ذخیره…" : "ذخیره"}</button>
+        </form>
+      )}
+      <SelectSheet
+        open={!!picking}
+        title={picking?.requestTypeTitle ?? "منبع چک‌لیست"}
+        value={picking ? (draft[picking.requestTypeKey] ?? null) : null}
+        items={(data?.sources ?? []).map((s) => ({ value: s.key, label: s.title }))}
+        onClose={() => setPick(null)}
+        onSelect={(v) => {
+          if (picking && v) setDraft((d) => ({ ...d, [picking.requestTypeKey]: v }));
+          setPick(null);
+        }}
+      />
+    </SubPage>
   );
 }
 

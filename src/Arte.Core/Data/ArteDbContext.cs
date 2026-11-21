@@ -54,6 +54,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
     public DbSet<IntakeOption> IntakeOptions => Set<IntakeOption>();
     public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
+    public DbSet<RequestTypeChecklistBinding> RequestTypeChecklistBindings => Set<RequestTypeChecklistBinding>();
     public DbSet<CaseChecklistItem> CaseChecklistItems => Set<CaseChecklistItem>();
     public DbSet<CaseFinding> CaseFindings => Set<CaseFinding>();
     public DbSet<PaymentTerminal> PaymentTerminals => Set<PaymentTerminal>();
@@ -465,6 +466,13 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.Group).HasMaxLength(40);
             e.Property(x => x.Title).HasMaxLength(80);
             e.HasIndex(x => new { x.TenantId, x.MotorType, x.SortOrder });
+        });
+
+        b.Entity<RequestTypeChecklistBinding>(e =>
+        {
+            e.Property(x => x.RequestTypeKey).HasMaxLength(40);
+            e.Property(x => x.Source).HasMaxLength(40);
+            e.HasIndex(x => new { x.TenantId, x.RequestTypeKey }).IsUnique();
         });
 
         b.Entity<CaseChecklistItem>(e =>

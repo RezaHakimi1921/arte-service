@@ -438,6 +438,7 @@ public sealed class CaseTests(ArteApiFactory api)
             mobile = ArteApiFactory.NewMobile(),
             request = "آچارکشی و تعمیر",
             requestTypes = new[] { "repair", "wrenching", "wrenching" },
+            motorType = "geared",
         }));
         var multi = await Json(await owner.GetAsync($"/api/v1/cases/{created.GetProperty("id")}"));
         Assert.Equal(2, multi.GetProperty("requestTypes").GetArrayLength());

@@ -53,6 +53,10 @@ public static class CaseRequestTypes
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(Catalog.Select(c => c.Key));
 
+    /// <summary>Types that may be bound to a checklist in settings (not «سایر»).</summary>
+    public static readonly IReadOnlyList<string> ChecklistBindable =
+        [Wrenching, Diagnosis, Repair];
+
     /// <summary>Stored empty (legacy) is shown and treated as «سایر».</summary>
     public static string[] Effective(IReadOnlyList<string>? stored)
     {

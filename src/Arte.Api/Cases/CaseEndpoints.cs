@@ -346,6 +346,7 @@ public static class CaseEndpoints
         if (req.Relation is not null && !CaseRelations.All.Contains(req.Relation)) errors["relation"] = ["نوع ارتباط نامعتبر است."];
         if (ValidateIntake(req.Intake) is { } intakeError) errors["intake"] = [intakeError];
         // Omit/empty requestTypes = legacy clients → store «سایر». Explicit values must be valid keys.
+        var requestTypesOmitted = req.RequestTypes is null;
         var requestTypes = new[] { CaseRequestTypes.Other };
         if (req.RequestTypes is { Length: > 0 })
         {
@@ -358,24 +359,26 @@ public static class CaseEndpoints
         if (motorType is not null && !MotorTypes.All.Contains(motorType)) errors["motorType"] = ["نوع موتور نامعتبر است."];
         if (req.Checklist is { } ticks && (ticks.Length > 100 || ticks.Any(t => t.Note is { Length: > 200 })))
             errors["checklist"] = ["چک‌لیست نامعتبر است (حداکثر ۱۰۰ ردیف، توضیح هر ردیف تا ۲۰۰ حرف)."];
+
+        var bindings = await WorkshopEndpoints.EnsureRequestTypeBindingsAsync(db, clock, ct);
+        // Explicit types → settings bindings. Legacy omit → keep old intake: checklist when motorType is sent.
+        var useMotorcycleChecklist = requestTypesOmitted
+            ? motorType is not null
+            : WorkshopEndpoints.NeedsMotorcycleChecklist(requestTypes, requestTypesOmitted: false, bindings);
+        if (useMotorcycleChecklist && motorType is null)
+            errors["motorType"] = ["نوع موتور برای چک‌لیست لازم است."];
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
-        // The intake checklist of this motor type: every required row must be ticked before the case opens.
+        // Snapshot template rows onto the case. Incomplete required ticks no longer block create
+        // (work-start gate is a later slice).
         var template = new List<ChecklistTemplateItem>();
         var tickById = new Dictionary<Guid, WorkshopEndpoints.ChecklistTick>();
-        if (motorType is not null)
+        if (useMotorcycleChecklist && motorType is not null)
         {
             template = await db.ChecklistTemplateItems.AsNoTracking().Where(t => t.MotorType == motorType && t.IsActive)
                 .OrderBy(t => t.SortOrder).ThenBy(t => t.CreatedAt).ToListAsync(ct);
             foreach (var tick in req.Checklist ?? [])
                 if (tick.ItemId is { } tickId) tickById[tickId] = tick;
-            var missing = template.Where(t => t.IsRequired && !(tickById.TryGetValue(t.Id, out var tk) && tk.IsChecked == true))
-                .Select(t => t.Title).ToList();
-            if (missing.Count > 0)
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["checklist"] = [$"این موارد چک‌لیست هنوز بررسی نشده: {string.Join("، ", missing.Take(5))}{(missing.Count > 5 ? $" و {missing.Count - 5} مورد دیگر" : "")}"],
-                });
         }
 
         var now = clock.UtcNow;
@@ -465,7 +468,12 @@ public static class CaseEndpoints
                 Note = NullIfEmpty(tick?.Note), SortOrder = ++order, CheckedBy = done ? userId : null, CheckedAt = done ? now : null,
             });
         }
-        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new { c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.ReportedProblems, c.RequestTypes, c.OdometerKm, c.ParentCaseId });
+        AddEvent(db, c, CaseEventTypes.Opened, userId, now, new
+        {
+            c.Number, Stage = firstStage.Name, c.Request, c.RequestedServices, c.ReportedProblems, c.RequestTypes,
+            c.OdometerKm, c.ParentCaseId, ChecklistSource = useMotorcycleChecklist ? ChecklistBindingSources.Motorcycle : ChecklistBindingSources.None,
+            ChecklistRows = template.Count,
+        });
         if (c.AssigneeId is not null) AddEvent(db, c, CaseEventTypes.Assigned, userId, now, new { To = await MemberName(db, c.AssigneeId.Value, ct) });
 
         await db.SaveChangesAsync(ct);
