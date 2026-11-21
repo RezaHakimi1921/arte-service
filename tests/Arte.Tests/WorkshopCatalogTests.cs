@@ -101,12 +101,31 @@ public sealed class WorkshopCatalogTests(ArteApiFactory api)
         Assert.Equal(2, list.Count);
         Assert.True(list[0].GetProperty("isChecked").GetBoolean());
 
-        // The rest of the list can be ticked later, and it is on the timeline.
+        // Ticks update the row; they must not flood the case timeline.
         var rowId = list[1].GetProperty("id").GetGuid();
         (await owner.PutAsJsonAsync($"/api/v1/cases/{id}/checklist/{rowId}", new { isChecked = true })).EnsureSuccessStatusCode();
-        var timeline = (await Json(await owner.GetAsync($"/api/v1/cases/{id}"))).GetProperty("timeline").EnumerateArray();
-        Assert.Contains(timeline, e => e.GetProperty("type").GetString() == "case.checklist_changed");
+        var afterTick = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+        Assert.DoesNotContain(afterTick.GetProperty("timeline").EnumerateArray(),
+            e => e.GetProperty("type").GetString() == "case.checklist_changed");
+        Assert.All(afterTick.GetProperty("checklist").EnumerateArray(), r => Assert.True(r.GetProperty("isChecked").GetBoolean()));
         _ = b;
+    }
+
+    [Fact]
+    public async Task Checklist_check_all_ticks_remaining_rows_without_timeline_spam()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        await owner.PostAsJsonAsync("/api/v1/checklist-templates/geared/items", new { title = "آینه" });
+        await owner.PostAsJsonAsync("/api/v1/checklist-templates/geared/items", new { title = "چراغ" });
+        var id = await OpenCase(owner, new { MotorType = "geared", Checklist = Array.Empty<object>() });
+
+        var res = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/checklist/check-all", new { }));
+        Assert.True(res.GetProperty("checkedCount").GetInt32() >= 2);
+
+        var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+        Assert.All(detail.GetProperty("checklist").EnumerateArray(), r => Assert.True(r.GetProperty("isChecked").GetBoolean()));
+        Assert.DoesNotContain(detail.GetProperty("timeline").EnumerateArray(),
+            e => e.GetProperty("type").GetString() == "case.checklist_changed");
     }
 
     [Fact]

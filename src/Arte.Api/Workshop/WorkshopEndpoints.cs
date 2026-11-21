@@ -394,10 +394,30 @@ public static class WorkshopEndpoints
                 item.Note = NullIfEmpty(req.Note);
                 changed = true;
             }
-            if (changed)
-                AddEvent(db, c, CaseEventTypes.ChecklistChanged, me.RequiredUserId, now, new { item.Title, item.IsChecked, item.Note });
-            await db.SaveChangesAsync(ct);
+            // Ticks stay on the checklist row (CheckedBy / CheckedAt); do not spam the case timeline.
+            if (changed) await db.SaveChangesAsync(ct);
             return Results.NoContent();
+        }).RequireTenant();
+
+        app.MapPost("/api/v1/cases/{id:guid}/checklist/check-all", async (Guid id, RequestUser me,
+            ArteDbContext db, IClock clock, CancellationToken ct) =>
+        {
+            var m = me.RequiredMembership;
+            var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
+            if (!CaseAccess.CanWorkOn(m, c) && !m.Has(Permissions.CasesCreate))
+                return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
+
+            var now = clock.UtcNow;
+            var items = await db.CaseChecklistItems.Where(x => x.CaseId == id && !x.IsChecked).ToListAsync(ct);
+            foreach (var item in items)
+            {
+                item.IsChecked = true;
+                item.CheckedBy = me.RequiredUserId;
+                item.CheckedAt = now;
+            }
+            if (items.Count > 0) await db.SaveChangesAsync(ct);
+            return Results.Ok(new { checkedCount = items.Count });
         }).RequireTenant();
     }
 
