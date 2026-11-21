@@ -122,4 +122,53 @@ public sealed class RequestTypeChecklistBindingTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
         Assert.Contains("motorType", await res.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task Incomplete_required_checklist_blocks_start_of_work_but_not_cancel()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var a = (await Json(await owner.PostAsJsonAsync("/api/v1/checklist-templates/geared/items", new { title = "آینه" }))).GetProperty("id").GetGuid();
+        await owner.PostAsJsonAsync("/api/v1/checklist-templates/geared/items", new { title = "چراغ", isRequired = false });
+
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            request = "آچارکشی",
+            requestTypes = new[] { "wrenching" },
+            motorType = "geared",
+            checklist = Array.Empty<object>(),
+        }));
+        var id = created.GetProperty("id").GetGuid();
+        var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+        Assert.Equal("received", detail.GetProperty("stage").GetProperty("key").GetString());
+
+        var start = detail.GetProperty("transitions").EnumerateArray()
+            .First(t => t.GetProperty("toStage").GetProperty("name").GetString()!.Contains("عیب")
+                || t.GetProperty("isPrimary").GetBoolean()).GetProperty("id").GetGuid();
+        var blocked = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/transitions/{start}", new { });
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+        var body = await blocked.Content.ReadAsStringAsync();
+        Assert.Contains("آینه", body);
+        Assert.Contains("checklist_incomplete", body);
+
+        var cancel = detail.GetProperty("transitions").EnumerateArray()
+            .First(t => t.GetProperty("toStage").GetProperty("name").GetString()!.Contains("انصراف")
+                || t.GetProperty("label").GetString() == "انصراف").GetProperty("id").GetGuid();
+        // Cancel must still work with an incomplete checklist.
+        var cancelled = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/transitions/{cancel}", new { reason = "مشتری منصرف شد" });
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+
+        // Fresh case: tick required row, then start work succeeds.
+        var created2 = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            request = "آچارکشی",
+            requestTypes = new[] { "wrenching" },
+            motorType = "geared",
+            checklist = new[] { new { itemId = a, isChecked = true } },
+        }));
+        var d2 = await Json(await owner.GetAsync($"/api/v1/cases/{created2.GetProperty("id")}"));
+        var start2 = d2.GetProperty("transitions").EnumerateArray().First(t => t.GetProperty("isPrimary").GetBoolean()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsJsonAsync($"/api/v1/cases/{created2.GetProperty("id")}/transitions/{start2}", new { })).StatusCode);
+    }
 }
