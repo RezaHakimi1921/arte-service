@@ -322,6 +322,8 @@ button.big { min-height: 52px; font-size: 1.05rem; margin-bottom: 1rem; }
 .stage-teal { color: var(--stage-teal); }
 .stage-red { color: var(--stage-red); }
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+.chips.tight { margin-bottom: 0.5rem; gap: 0.3rem; }
+.chip-button.static { cursor: default; pointer-events: none; }
 .chip-button { min-height: 38px; padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.9rem; }
 .chip-button.active { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 700; }
 .case-row {

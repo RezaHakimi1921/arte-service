@@ -34,6 +34,18 @@ export const ALERT_ICON: Record<string, string> = { warn: "⚠", danger: "⏰" }
 /** Case number as used in search, messages and the API: CASE-1024 (Latin digits, never grouped). */
 export const caseCode = (n: number) => `CASE-${n}`;
 
+/** Stable request-type keys → Persian labels for case cards and detail. */
+export const REQUEST_TYPE_LABELS: Record<string, string> = {
+  wrenching: "آچارکشی",
+  diagnosis: "عیب‌یابی",
+  repair: "درخواست فنی / تعمیرات",
+  other: "سایر درخواست‌ها",
+};
+
+export function requestTypeLabel(key: string): string {
+  return REQUEST_TYPE_LABELS[key] ?? key;
+}
+
 const tomanText = (rials: unknown) => `${new Intl.NumberFormat("fa-IR").format(Math.round(Number(rials ?? 0) / 10))} تومان`;
 const ITEM_KIND: Record<string, string> = { part: "کالا", labor: "اجرت", service: "اجرت" };
 const METHOD: Record<string, string> = { cash: "نقد", card: "کارت‌خوان", transfer: "کارت به کارت", other: "سایر" };
