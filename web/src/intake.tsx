@@ -177,7 +177,11 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     if (!ready) return;
     const data: Draft = { mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
       odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, requestTypes, motorType };
-    const t = setTimeout(() => (isBlank({ ...data, assetId: "", calendar: "", step: 1, requestTypes: [], motorType: null }) ? clearDraft(draftScope) : saveDraft(draftScope, data)), 400);
+    const t = setTimeout(() => {
+      const { step: _step, ...rest } = data;
+      const blank = isBlank({ ...rest, assetId: "", calendar: "", requestTypes: [], motorType: null });
+      if (blank) clearDraft(draftScope); else saveDraft(draftScope, data);
+    }, 400);
     return () => clearTimeout(t);
   }, [ready, draftScope, mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
     odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, requestTypes, motorType]);
