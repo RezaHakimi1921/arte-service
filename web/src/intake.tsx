@@ -27,9 +27,15 @@ type BindingRow = { requestTypeKey: string; source: string };
 const faYear = new Intl.NumberFormat("fa-IR", { useGrouping: false });
 const STEPS = [
   { n: 1 as const, label: "مشتری و وسیله" },
-  { n: 2 as const, label: "نوع درخواست" },
+  { n: 2 as const, label: "شرح پذیرش" },
   { n: 3 as const, label: "مسئول و ثبت" },
 ];
+
+/** Prefer motorcycle when the shop takes several kinds; kind picker is hidden from intake. */
+function defaultVehicleKind(kinds: { key: VehicleKind }[]): VehicleKind | null {
+  if (kinds.length === 0) return null;
+  return kinds.find((k) => k.key === "motorcycle")?.key ?? kinds[0].key;
+}
 
 const ICONS = {
   phone: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z",
@@ -85,7 +91,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const [wantAssetId, setWantAssetId] = useState<string | null>(null);
   // vehicle
   const [assetId, setAssetId] = useState<string | "new">("new");
-  const [kind, setKind] = useState<VehicleKind | null>(kinds.length === 1 ? kinds[0].key : null);
+  const [kind, setKind] = useState<VehicleKind | null>(() => defaultVehicleKind(kinds));
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [calendar, setCalendar] = useState<"jalali" | "gregorian">("jalali");
@@ -158,7 +164,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   useEffect(() => {
     const d = loadDraft<Draft>(draftScope);
     if (d) {
-      setMobile(d.mobile); setCustomerName(d.customerName); setKind(d.kind); setBrand(d.brand); setModel(d.model);
+      setMobile(d.mobile); setCustomerName(d.customerName); setKind(d.kind ?? defaultVehicleKind(kinds)); setBrand(d.brand); setModel(d.model);
       setCalendar(d.calendar); setYear(d.year); setYearText(d.yearText); setPlate(d.plate); setMotoPlate(d.motoPlate);
       setColor(d.color); setVin(d.vin); setFuelType(d.fuelType); setGearbox(d.gearbox); setOdometer(d.odometer); setFuel(d.fuel);
       setBody(d.body); setBodyNotes(d.bodyNotes); setItems(d.items); setProblems(d.problems); setNotes(d.notes); setServices(d.services);
@@ -266,15 +272,6 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     api<PlateHit>(`/api/v1/assets/lookup?identifier=${encodeURIComponent(plateId)}`).then(setPlateOwner).catch(() => {});
   }, [assetId, plateId]);
 
-  function pickKind(k: VehicleKind) {
-    setKind(k);
-    setBrand("");
-    setModel("");
-    setYear("");
-    setYearText("");
-    setAllYears(false);
-  }
-
   const toggle = (list: string[], set: (v: string[]) => void, v: string) =>
     set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
@@ -282,7 +279,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     const local: Record<string, string> = {};
     if (s >= 1) {
       if (mobile.length !== 11) local.mobile = "شماره همراه باید ۱۱ رقم باشد.";
-      if (newVehicle && !(kind && brand.trim() && model.trim())) local.vehicle = "نوع، برند و مدل را انتخاب کنید.";
+      if (newVehicle && !(kind && brand.trim() && model.trim())) local.vehicle = "برند و مدل را انتخاب کنید.";
       if (plateStarted && !plateId) local.plate = "پلاک کامل نیست.";
       if (plateOwner && plateOwner.customer.mobile !== mobile) local.plate = "این پلاک برای مشتری دیگری ثبت شده است.";
     }
@@ -490,25 +487,11 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
 
         {newVehicle && (
           <>
-            {kinds.length > 1 && <div className="field">
-              <span className="label">نوع وسیله</span>
-              <div className="kinds" role="radiogroup" aria-label="نوع وسیله">
-                {kinds.map((k) => (
-                  <button type="button" key={k.key} role="radio" aria-checked={kind === k.key}
-                    className={`kind${kind === k.key ? " on" : ""}`} onClick={() => pickKind(k.key)}>
-                    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d={k.icon} /></svg>
-                    <span>{k.label}</span>
-                  </button>
-                ))}
-              </div>
-              {errors.vehicle && <span className="error">{errors.vehicle}</span>}
-            </div>}
-
             {kind && (
               <div className="grid-2">
-                <Field label="برند">
+                <Field label="برند" error={errors.vehicle}>
                   <Combobox label="برند" value={brand} options={brands} placeholder="جستجوی برند"
-                    onChange={(v) => { setBrand(v); setModel(""); setYear(""); setYearText(""); setAllYears(false); }} />
+                    onChange={(v) => { setBrand(v); setModel(""); setYear(""); setYearText(""); setAllYears(false); setErrors((e) => ({ ...e, vehicle: "" })); }} />
                 </Field>
                 <Field label="مدل">
                   <Combobox label="مدل" value={model} options={models} placeholder={brand.trim() ? "جستجوی مدل" : "اول برند"}
@@ -516,6 +499,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
                 </Field>
               </div>
             )}
+            {!kind && <p className="hint">در تنظیمات کسب‌وکار حداقل یک نوع وسیله را فعال کنید.</p>}
 
             {kind && model.trim() && (
               <div className="field">
@@ -607,8 +591,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       </>)}
 
       {step === 2 && (<>
-      <Section icon="list" title="نوع درخواست" badge={requestTypes.length > 0 && <span className="badge good">{formatNumber(requestTypes.length)} نوع</span>}>
-        <p className="hint">می‌توانید چند نوع را با هم انتخاب کنید. چک‌لیست بعد از ثبت روی صفحهٔ پرونده تکمیل می‌شود.</p>
+      <Section icon="list" title="حالت بررسی / نوع درخواست" badge={requestTypes.length > 0 && <span className="badge good">{formatNumber(requestTypes.length)} نوع</span>}>
+        <p className="hint">می‌توانید چند حالت را با هم انتخاب کنید. چک‌لیست اجباری بعد از ثبت، روی پرونده و قبل از شروع کار تکمیل می‌شود.</p>
         <div className="chips">
           {typeCatalog.map((t) => (
             <button type="button" key={t.key} aria-pressed={requestTypes.includes(t.key)}
@@ -648,22 +632,6 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       <Section icon="list" title="خدمات درخواستی" badge={services.length > 0 && <span className="badge good">{formatNumber(services.length)} خدمت</span>}>
         <ServicePicker value={services} onChange={setServices} kind={vehicleKind} custom={custom.serviceCategories} />
       </Section>
-      </>)}
-
-      {step === 3 && (<>
-      <Section icon="list" title="خلاصه پذیرش">
-        <ul className="intake-summary">
-          <li><span className="muted">مشتری</span> {customer?.fullName || customerName || mobile}</li>
-          <li><span className="muted">وسیله</span> {newVehicle ? (brand && model ? `${brand} ${model}` : "—") : (customer?.assets.find((a) => a.id === assetId)?.title ?? "—")}</li>
-          <li><span className="muted">نوع درخواست</span> {requestTypes.map(typeTitle).join("، ") || "—"}</li>
-          {(problems.length > 0 || services.length > 0) && (
-            <li><span className="muted">جزئیات</span> {[...problems.slice(0, 2), ...services.slice(0, 2)].join("، ")}{(problems.length + services.length) > 4 ? "…" : ""}</li>
-          )}
-        </ul>
-        <p className="hint">چک‌لیست و اقلام مصرفی را بعد از ثبت، روی صفحهٔ پرونده کامل کنید.</p>
-      </Section>
-
-      {assigneeSection}
 
       <Section icon="camera" title="عکس و فیلم وسیله" badge={shots.length > 0 && <span className="badge good">{formatNumber(shots.length)} مورد</span>}>
         <input ref={shotInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => addShots(e.target.files)} />
@@ -681,15 +649,34 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         {shots.length < 6 && (
           <div className="grid-2">
             <button type="button" className="block secondary" onClick={() => shotInput.current?.click()} disabled={shotBusy || busy} aria-busy={shotBusy}>
-              {shotBusy ? "در حال آماده‌سازی…" : "📷 عکس"}
+              {shotBusy ? "در حال آماده‌سازی…" : "عکس"}
             </button>
             <button type="button" className="block secondary" onClick={() => videoInput.current?.click()} disabled={shotBusy || busy} aria-busy={shotBusy}>
-              {shotBusy ? "در حال آماده‌سازی…" : "🎥 فیلم"}
+              {shotBusy ? "در حال آماده‌سازی…" : "فیلم"}
             </button>
           </div>
         )}
-        <p className="hint">وضعیت ظاهری وسیله هنگام تحویل؛ بعد از ثبت پذیرش در پرونده می‌ماند. فیلم فقط برای کارگاه است.</p>
+        <p className="hint">وضعیت ظاهری هنگام تحویل؛ بعد از ثبت در پرونده می‌ماند. فیلم فقط برای کارگاه است.</p>
       </Section>
+      </>)}
+
+      {step === 3 && (<>
+      <Section icon="list" title="خلاصه پذیرش">
+        <ul className="intake-summary">
+          <li><span className="muted">مشتری</span> {customer?.fullName || customerName || mobile}</li>
+          <li><span className="muted">وسیله</span> {newVehicle ? (brand && model ? `${brand} ${model}` : "—") : (customer?.assets.find((a) => a.id === assetId)?.title ?? "—")}</li>
+          <li><span className="muted">نوع درخواست</span> {requestTypes.map(typeTitle).join("، ") || "—"}</li>
+          {(problems.length > 0 || services.length > 0) && (
+            <li><span className="muted">جزئیات</span> {[...problems.slice(0, 2), ...services.slice(0, 2)].join("، ")}{(problems.length + services.length) > 4 ? "…" : ""}</li>
+          )}
+          {shots.length > 0 && (
+            <li><span className="muted">رسانه</span> {formatNumber(shots.length)} عکس/فیلم آمادهٔ بارگذاری</li>
+          )}
+        </ul>
+        <p className="hint">چک‌لیست و اقلام مصرفی را بعد از ثبت، روی صفحهٔ پرونده کامل کنید.</p>
+      </Section>
+
+      {assigneeSection}
 
       <Section icon="gauge" title="وضعیت هنگام پذیرش (اختیاری)" badge={fuel === null && <span className="badge warn">سوخت مشخص نشده</span>}>
         <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
