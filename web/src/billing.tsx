@@ -44,17 +44,26 @@ const faDate = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "long", da
 
 /* ───────── money bar ───────── */
 
-export function MoneyBar({ money }: { money: Billing["money"] }) {
+/** Compact finance strip. Call only when the viewer may see money (`canRecordPayments`). */
+export function MoneyBar({ money, onDetails }: { money: Billing["money"]; onDetails?: () => void }) {
   if (money.totalRials === 0 && money.paidRials === 0) return null;
   const settled = money.balanceRials <= 0;
   return (
-    <div className="money-bar" aria-label="وضعیت مالی">
-      {/* Unit in the label keeps each amount on one line on a phone. */}
-      <div><span className="muted small">جمع (تومان)</span><strong className="font-num">{formatNumber(Math.round(money.totalRials / 10))}</strong></div>
-      <div><span className="muted small">پرداخت‌شده</span><strong className="font-num">{formatNumber(Math.round(money.paidRials / 10))}</strong></div>
-      <div className={settled ? "good" : "due"}>
-        <span className="muted small">{money.balanceRials < 0 ? "بستانکار" : "مانده"}</span>
-        <strong className="font-num">{settled && money.balanceRials === 0 ? "تسویه" : formatNumber(Math.round(Math.abs(money.balanceRials) / 10))}</strong>
+    <div className="case-money-summary" aria-label="وضعیت مالی">
+      <div className="case-money-summary-head">
+        <span className="case-money-kicker">وضعیت مالی</span>
+        {onDetails && (
+          <button type="button" className="link" onClick={onDetails}>جزئیات</button>
+        )}
+      </div>
+      <div className="money-bar">
+        {/* Unit in the label keeps each amount on one line on a phone. */}
+        <div><span className="muted small">جمع (تومان)</span><strong className="font-num">{formatNumber(Math.round(money.totalRials / 10))}</strong></div>
+        <div><span className="muted small">پرداخت‌شده</span><strong className="font-num">{formatNumber(Math.round(money.paidRials / 10))}</strong></div>
+        <div className={settled ? "good" : "due"}>
+          <span className="muted small">{money.balanceRials < 0 ? "بستانکار" : "مانده"}</span>
+          <strong className="font-num">{settled && money.balanceRials === 0 ? "تسویه" : formatNumber(Math.round(Math.abs(money.balanceRials) / 10))}</strong>
+        </div>
       </div>
     </div>
   );
@@ -104,6 +113,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
   useEffect(() => { if (paySignal > 0 && billing.canRecordPayments) setPaying(true); }, [paySignal, billing.canRecordPayments]);
 
   const m = billing.money;
+  const showMoney = billing.canRecordPayments;
   return (
     <>
       <details className="card collapsible" open data-tour="billing">
@@ -116,16 +126,21 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                 <button className="item-row" onClick={() => setEditing({ kind: i.kind, item: i })} disabled={!billing.canEditItems}>
                   <span className="item-top">
                     <span><span className={`kind-badge ${i.kind}`}>{KIND_LABELS[i.kind]}</span> {i.title}</span>
-                    <strong className="font-num">{i.supplier === "customer" ? "کالای مشتری" : i.status === "needed" ? "—" : toman(i.lineTotalRials)}</strong>
+                    {showMoney ? (
+                      <strong className="font-num">{i.supplier === "customer" ? "کالای مشتری" : i.status === "needed" ? "—" : toman(i.lineTotalRials)}</strong>
+                    ) : (
+                      <span className="muted small">{i.supplier === "customer" ? "کالای مشتری" : i.status === "needed" ? "در انتظار" : "ثبت‌شده"}</span>
+                    )}
                   </span>
                   <span className="muted small">
-                    {formatNumber(i.quantity)} × {toman(i.unitPriceRials)}
-                    {i.discountRials > 0 && ` · تخفیف ${toman(i.discountRials)}`}
+                    {showMoney
+                      ? <>{formatNumber(i.quantity)} × {toman(i.unitPriceRials)}{i.discountRials > 0 && ` · تخفیف ${toman(i.discountRials)}`}</>
+                      : <>تعداد {formatNumber(i.quantity)}</>}
                     {i.status === "needed" && " · هنوز نصب نشده"}
                     {i.performedByName && ` · ${i.performedByName}`}
                     {!!i.warrantyDays && ` · ضمانت ${formatNumber(i.warrantyDays)} روز`}
                   </span>
-                  {billing.canSeeCost && i.unitCostRials != null && (
+                  {showMoney && billing.canSeeCost && i.unitCostRials != null && (
                     <span className="small cost-line">
                       خرید {toman(i.unitCostRials)} · {i.profitIsExpected ? "سود مورد انتظار" : "سود"} {toman(i.profitRials ?? 0)}
                     </span>
@@ -144,7 +159,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
               {standard && standard.packages.length > 0 && <button onClick={() => setPackages(true)}>+ بسته‌ی آماده</button>}
             </div>
           )}
-          {(m.totalRials > 0 || (m.pendingProfitRials ?? 0) > 0) && (
+          {showMoney && (m.totalRials > 0 || (m.pendingProfitRials ?? 0) > 0) && (
             <div className="totals">
               {(m.discountRials ?? 0) > 0 && <span>تخفیف: <span className="font-num">{toman(m.discountRials ?? 0)}</span></span>}
               {m.partsRials > 0 && <span>کالا: <span className="font-num">{toman(m.partsRials)}</span></span>}
@@ -158,30 +173,30 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
         </div>
       </details>
 
-      <details className="card collapsible" open={billing.payments.length > 0}>
-        <summary>پرداخت‌ها {billing.payments.length > 0 && <span className="count font-num">{formatNumber(billing.payments.length)}</span>}</summary>
-        <div className="collapsible-body">
-          {billing.payments.length === 0 && <p className="muted">پرداختی ثبت نشده. بیعانه یا پرداخت نهایی را این‌جا ثبت کنید.</p>}
-          <ul className="items">
-            {billing.payments.map((p) => (
-              <li key={p.id} className="row-static">
-                <span>
-                  <strong className="font-num">{toman(p.amountRials)}</strong> · {METHOD_LABELS[p.method] ?? p.method}
-                  <span className="muted small"> · {faDate.format(new Date(p.paidAt))}{p.note ? ` · ${p.note}` : ""}</span>
-                </span>
-                {p.receiptId && <button className="link" onClick={() => openReceipt(p.receiptId!)}>رسید</button>}
-                {billing.canRecordPayments && (
+      {showMoney && (
+        <details className="card collapsible" open={billing.payments.length > 0}>
+          <summary>پرداخت‌ها {billing.payments.length > 0 && <span className="count font-num">{formatNumber(billing.payments.length)}</span>}</summary>
+          <div className="collapsible-body">
+            {billing.payments.length === 0 && <p className="muted">پرداختی ثبت نشده. بیعانه یا پرداخت نهایی را این‌جا ثبت کنید.</p>}
+            <ul className="items">
+              {billing.payments.map((p) => (
+                <li key={p.id} className="row-static">
+                  <span>
+                    <strong className="font-num">{toman(p.amountRials)}</strong> · {METHOD_LABELS[p.method] ?? p.method}
+                    <span className="muted small"> · {faDate.format(new Date(p.paidAt))}{p.note ? ` · ${p.note}` : ""}</span>
+                  </span>
+                  {p.receiptId && <button className="link" onClick={() => openReceipt(p.receiptId!)}>رسید</button>}
                   <button className="link danger" disabled={busy}
                     onClick={() => run(() => api<Billing>(`/api/v1/cases/${caseId}/payments/${p.id}`, { method: "DELETE" }), "پرداخت باطل شد")}>
                     باطل
                   </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {billing.canRecordPayments && <button className="primary block" onClick={() => setPaying(true)}>ثبت پرداخت</button>}
-        </div>
-      </details>
+                </li>
+              ))}
+            </ul>
+            <button className="primary block" onClick={() => setPaying(true)}>ثبت پرداخت</button>
+          </div>
+        </details>
+      )}
 
       <ItemSheet
         open={!!editing} kind={editing?.kind ?? "part"} item={editing?.item} canSeeCost={billing.canSeeCost} canAssignLabor={canAssignLabor}

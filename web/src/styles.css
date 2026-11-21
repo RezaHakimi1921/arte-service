@@ -660,8 +660,33 @@ button.secondary { background: var(--accent-soft); color: var(--accent); border-
 .empty-state h3 { margin: 0; }
 
 /* ── case page ── */
-.case-head { gap: 0.45rem; }
-.asset-title { font-size: 1.1rem; }
+.case-hero,
+.case-head { gap: 0.55rem; }
+.case-hero .status-line { font-size: 1rem; margin: 0; line-height: 1.45; }
+.case-hero-vehicle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+}
+.asset-title { font-size: 1.15rem; line-height: 1.3; }
+.case-hero-customer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface-2);
+  border-radius: 12px;
+}
+.case-hero-customer-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.case-hero-customer-text strong { font-size: 1rem; }
 .customer-line { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
 .call-button {
   display: inline-flex;
@@ -673,11 +698,52 @@ button.secondary { background: var(--accent-soft); color: var(--accent); border-
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 700;
+  flex-shrink: 0;
 }
 .call-button svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .head-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
 .fact { display: flex; flex-direction: column; align-items: flex-start; gap: 0; text-align: start; padding: 0.5rem 0.75rem; }
 .fact:disabled { opacity: 1; cursor: default; }
+.case-action-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.case-action-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.case-action-hint { margin: 0; }
+.case-money-kicker {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.case-money-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.case-money-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.next-actions { margin-bottom: 1rem; }
 .quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; }
 .quick-actions button { min-height: 48px; white-space: nowrap; padding-inline: 0.5rem; font-size: 0.92rem; }
 .collapsible { padding: 0; gap: 0; }
