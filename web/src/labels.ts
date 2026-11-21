@@ -83,6 +83,14 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "survey.answered": (d) => `مشتری در نظرسنجی امتیاز ${new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(Number(d.score ?? 0))} از ۵ داد${d.isLow ? " (رضایت پایین)" : ""}`,
   "survey.followed_up": (d) => `نظر مشتری پیگیری شد${d.note ? `: ${d.note}` : ""}`,
   "case.credit": (d) => `تحویل به‌صورت نسیه؛ مانده ${tomanText(d.balanceRials)}`,
+  "case.checklist_bulk_checked": (d) =>
+    `انتخاب همهٔ چک‌لیست بازدید (${new Intl.NumberFormat("fa-IR").format(Number(d.count ?? 0))} مورد)`,
+  "case.checklist_changed": (d) =>
+    d.isChecked === false ? `برداشتن تیک چک‌لیست: ${d.title ?? ""}` : `تیک چک‌لیست: ${d.title ?? ""}`,
+  "staff.sms": (d) =>
+    d.sent
+      ? `پیامک به استاد: کار تمام شد`
+      : `پیامک به استاد ارسال نشد${d.error ? ` (${d.error})` : ""}`,
 };
 
 /** Who did a timeline step: the staff member's name, or «مشتری» / «سیستم» for steps nobody on staff took. */

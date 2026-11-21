@@ -196,6 +196,8 @@ public static class CaseEventTypes
     public const string PaymentVoided = "payment.voided";
     public const string Credit = "case.credit";
     public const string ChecklistChanged = "case.checklist_changed";
+    /// <summary>User pressed «انتخاب همه» on the case visit checklist (one timeline row, not per tick).</summary>
+    public const string ChecklistBulkChecked = "case.checklist_bulk_checked";
     public const string FindingAdded = "case.finding_added";
     public const string FindingRemoved = "case.finding_removed";
     public const string FindingRestored = "case.finding_restored";

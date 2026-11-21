@@ -124,8 +124,10 @@ public sealed class WorkshopCatalogTests(ArteApiFactory api)
 
         var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
         Assert.All(detail.GetProperty("checklist").EnumerateArray(), r => Assert.True(r.GetProperty("isChecked").GetBoolean()));
-        Assert.DoesNotContain(detail.GetProperty("timeline").EnumerateArray(),
-            e => e.GetProperty("type").GetString() == "case.checklist_changed");
+        var timeline = detail.GetProperty("timeline").EnumerateArray().ToList();
+        Assert.DoesNotContain(timeline, e => e.GetProperty("type").GetString() == "case.checklist_changed");
+        Assert.Contains(timeline, e => e.GetProperty("type").GetString() == "case.checklist_bulk_checked");
+        Assert.Equal(1, timeline.Count(e => e.GetProperty("type").GetString() == "case.checklist_bulk_checked"));
     }
 
     [Fact]
