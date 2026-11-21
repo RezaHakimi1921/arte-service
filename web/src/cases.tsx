@@ -405,32 +405,41 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
   const primary = c.transitions.find((t) => t.isPrimary);
   const others = c.transitions.filter((t) => t !== primary);
 
+  const canSeeMoney = c.billing.canRecordPayments;
+  const scrollToBilling = () => {
+    document.querySelector<HTMLElement>("[data-tour=billing]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <section className="case-page">
       <button className="link back" onClick={onBack}>→ پرونده‌ها</button>
 
-      {/* Header: only decision-making facts. */}
-      <div className="card case-head" data-tour="case-head">
+      {/* Hero: decision facts only — structure from Make/CaseDetail, tokens from Arte. */}
+      <header className="card case-hero" data-tour="case-head">
         <div className="case-row-top">
           <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
           <StageChip stage={c.stage} />
         </div>
+        <p className={`status-line stage-${c.waitReason ? "orange" : c.stage.color}`}>
+          {statusText(c.stage, c.waitReason, c.assignee?.name)} · {ago(c.stageEnteredAt)}
+        </p>
         {c.asset && (
-          <div className="asset-line">
+          <div className="case-hero-vehicle">
             <strong className="asset-title">{c.asset.title}</strong>
             {c.asset.identifier ? <PlateView identifier={c.asset.identifier} /> : <span className="badge warn">بدون پلاک</span>}
           </div>
         )}
-        <div className="customer-line">
-          <span>{c.customer.fullName ?? "بدون نام"}</span>
+        <div className="case-hero-customer">
+          <div className="case-hero-customer-text">
+            <span className="muted small">مشتری</span>
+            <strong>{c.customer.fullName ?? "بدون نام"}</strong>
+            <span className="font-num muted small" dir="ltr">{c.customer.mobile}</span>
+          </div>
           <a className="call-button" href={`tel:${c.customer.mobile}`} aria-label={`تماس با ${c.customer.mobile}`}>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z" /></svg>
-            <span className="font-num" dir="ltr">{c.customer.mobile}</span>
+            تماس
           </a>
         </div>
-        <p className={`status-line stage-${c.waitReason ? "orange" : c.stage.color}`}>
-          {statusText(c.stage, c.waitReason, c.assignee?.name)} · {ago(c.stageEnteredAt)}
-        </p>
         {(c.requestTypes?.length ?? 0) > 0 && (
           <div className="chips tight">
             {c.requestTypes!.map((k) => (
@@ -440,34 +449,22 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         )}
         <Progress stage={c.stage} />
         <div className="head-facts">
-          <button className="fact" onClick={() => c.canAssign && setSheet("assign")} disabled={!c.canAssign}>
+          <button type="button" className="fact" onClick={() => c.canAssign && setSheet("assign")} disabled={!c.canAssign}>
             <span className="muted small">مسئول</span>
             <span>{c.assignee?.name ?? "تعیین نشده"}</span>
           </button>
-          <button className="fact" onClick={() => c.canManage && setSheet("promise")} disabled={!c.canManage}>
+          <button type="button" className="fact" onClick={() => c.canManage && setSheet("promise")} disabled={!c.canManage}>
             <span className="muted small">قول تحویل</span>
             <span>{c.promisedAt ? promiseText(c.promisedAt) : "تعیین نشده"}</span>
           </button>
         </div>
-        <MoneyBar money={c.billing.money} />
-        {c.stage.key === "delivered" && c.billing.money.balanceRials > 0 && (
-          <div className="credit-bar" role="status">
-            <span>
-              <strong>نسیه</strong> · مانده <span className="font-num">{tomanFmt(c.billing.money.balanceRials)}</span>
-              {c.creditDueAt && <> · موعد {new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}</>}
-            </span>
-            {c.billing.canRecordPayments && <button className="primary" onClick={() => setPaySignal((n) => n + 1)}>ثبت پرداخت</button>}
-          </div>
-        )}
-        {(c.warrantyUntil || c.creditDueAt) && (
+        {c.warrantyUntil && (
           <p className="muted small">
-            {c.warrantyUntil && `ضمانت تا ${new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", year: "numeric" }).format(new Date(c.warrantyUntil))}`}
-            {c.warrantyUntil && c.creditDueAt && " · "}
-            {c.creditDueAt && `موعد پرداخت نسیه: ${new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}`}
+            ضمانت تا {new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", year: "numeric" }).format(new Date(c.warrantyUntil))}
           </p>
         )}
         {c.parentCase && <p className="muted small">برگشتی پرونده <span dir="ltr">{caseCode(c.parentCase.number)}</span></p>}
-      </div>
+      </header>
 
       {(() => {
         const missing = (c.checklist ?? []).filter((r) => r.isRequired && !r.isChecked);
@@ -479,19 +476,48 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         );
       })()}
 
-      {/* Next action: one big button; everything else in a sheet. */}
+      {/* Next action rail: one primary CTA; the rest in sheets. */}
       {c.transitions.length > 0 && (
-        <div className="next-actions" data-tour="next-action">
-          {primary && <button className="primary block big" disabled={busy} aria-busy={busy} onClick={() => run(primary)}>{primary.label}</button>}
+        <div className="case-action-rail" data-tour="next-action">
+          <span className="case-money-kicker">اقدام بعدی</span>
+          {primary && (
+            <>
+              <h2 className="case-action-title">{primary.label}</h2>
+              <p className="muted small case-action-hint">مرحله بعد: {primary.toStage.name}</p>
+              <button className="primary block big" disabled={busy} aria-busy={busy} onClick={() => run(primary)}>
+                {busy ? "در حال انجام…" : primary.label}
+              </button>
+            </>
+          )}
           <div className="quick-actions">
-            {others.length > 0 && <button onClick={() => setSheet("actions")}>اقدام‌های دیگر</button>}
+            {others.length > 0 && <button type="button" onClick={() => setSheet("actions")}>اقدام‌های دیگر</button>}
             {c.canEdit && !c.stage.isTerminal && (
-              <button onClick={() => setSheet("wait")}>{c.waitReason ? "رفع توقف" : "کار متوقف است"}</button>
+              <button type="button" onClick={() => setSheet("wait")}>{c.waitReason ? "رفع توقف" : "کار متوقف است"}</button>
             )}
-            <button onClick={() => setSheet("note")}>یادداشت</button>
-            {c.trackingCode && <button onClick={() => setSheet("link")}>لینک مشتری</button>}
+            <button type="button" onClick={() => setSheet("note")}>یادداشت</button>
+            {c.trackingCode && <button type="button" onClick={() => setSheet("link")}>لینک مشتری</button>}
           </div>
         </div>
+      )}
+
+      {canSeeMoney && (
+        <>
+          <MoneyBar money={c.billing.money} onDetails={scrollToBilling} />
+          {c.stage.key === "delivered" && c.billing.money.balanceRials > 0 && (
+            <div className="credit-bar" role="status">
+              <span>
+                <strong>نسیه</strong> · مانده <span className="font-num">{tomanFmt(c.billing.money.balanceRials)}</span>
+                {c.creditDueAt && <> · موعد {new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}</>}
+              </span>
+              <button type="button" className="primary" onClick={() => setPaySignal((n) => n + 1)}>ثبت پرداخت</button>
+            </div>
+          )}
+          {c.creditDueAt && (
+            <p className="muted small">
+              موعد پرداخت نسیه: {new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}
+            </p>
+          )}
+        </>
       )}
 
       {c.survey && <SurveySection caseId={c.id} survey={c.survey} canFollowUp={c.canFollowUp} focus={focusSurvey} onChange={load} />}
@@ -514,7 +540,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         {c.request && <Detail label="شرح مشتری" value={c.request} />}
         <Detail label="خدمات درخواستی" value={c.requestedServices.length > 0 ? c.requestedServices.join("، ") : "—"} />
         <Detail label="عیب‌یابی" value={c.diagnosis ?? "—"} />
-        {c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
+        {canSeeMoney && c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
         {c.canEdit && <button onClick={() => setEditing(true)}>ویرایش درخواست</button>}
       </Collapsible>
       <BottomSheet open={editing} title="ویرایش درخواست مشتری" onClose={() => setEditing(false)}>
