@@ -384,6 +384,22 @@ button.big { min-height: 52px; font-size: 1.05rem; margin-bottom: 1rem; }
 .intake { display: flex; flex-direction: column; gap: 0.75rem; }
 .intake-title { display: flex; justify-content: space-between; align-items: center; }
 .intake-title h2 { margin: 0; }
+.intake-steps {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem;
+  padding: 0.15rem; border-radius: var(--radius, 12px);
+  background: var(--surface-2, color-mix(in srgb, var(--border) 35%, transparent));
+}
+.intake-step {
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  min-height: 48px; padding: 0.4rem 0.25rem; border: 0; border-radius: 10px;
+  background: transparent; color: var(--muted); font: inherit; cursor: default;
+}
+.intake-step.on { background: var(--card, #fff); color: var(--text); box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 8%, transparent); }
+.intake-step.done { color: var(--accent); cursor: pointer; }
+.intake-step-n { font-size: 0.85rem; font-weight: 700; }
+.intake-step-label { font-size: 0.72rem; line-height: 1.2; text-align: center; }
+.intake-summary { margin: 0; padding-inline-start: 1.1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.intake-summary .muted { margin-inline-end: 0.35rem; }
 .icon-button { min-width: 44px; padding: 0; background: none; border: none; font-size: 1.2rem; color: var(--muted); }
 .intake-section {
   background: var(--surface);

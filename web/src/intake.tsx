@@ -8,7 +8,7 @@ import { useFeedback } from "./feedback";
 import { api, ApiError } from "./api";
 import { MotoPlateInput, PlateInput, PlateView, emptyMotoPlate, emptyPlate } from "./plate";
 import { ServicePicker } from "./services";
-import { IntakeChecklist, useIntakeOptions } from "./workshop";
+import { useIntakeOptions } from "./workshop";
 import { Combobox, Field, MobileInput, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import {
   ACCOMPANYING, COLORS, FUELS, GEARBOXES, VEHICLE_CATALOG, VEHICLE_KINDS, problemsFor,
@@ -21,8 +21,15 @@ type CustomerFull = { id: string; fullName: string | null; assets: AssetOption[]
 type ParentSuggestion = { id: string; number: number; closedAt: string; request: string } | null;
 type Assignable = { id: string; name: string; role: string };
 type PlateHit = { asset: { id: string; title: string; identifier: string }; customer: { id: string; fullName: string | null; mobile: string } };
+type RequestTypeOpt = { key: string; title: string };
+type BindingRow = { requestTypeKey: string; source: string };
 
 const faYear = new Intl.NumberFormat("fa-IR", { useGrouping: false });
+const STEPS = [
+  { n: 1 as const, label: "مشتری و وسیله" },
+  { n: 2 as const, label: "نوع درخواست" },
+  { n: 3 as const, label: "مسئول و ثبت" },
+];
 
 const ICONS = {
   phone: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z",
@@ -55,7 +62,7 @@ type Draft = {
   calendar: "jalali" | "gregorian"; year: string; yearText: string; plate: PlateParts; motoPlate: MotoPlateParts;
   color: string; vin: string; fuelType: string; gearbox: string; odometer: string; fuel: number | null;
   body: "ok" | "damaged" | null; bodyNotes: string; items: string[]; problems: string[]; notes: string; services: string[];
-  assigneeId: string; full: boolean;
+  assigneeId: string; step: 1 | 2 | 3; requestTypes: string[]; motorType: string | null;
 };
 
 export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKinds, onCreated, onCancel, onOpenStaff, seedMobile }: {
@@ -109,15 +116,11 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const [staff, setStaff] = useState<Assignable[] | null>(null);
   const [parent, setParent] = useState<ParentSuggestion>(null);
   const [linkParent, setLinkParent] = useState(false);
-
-  const [full, setFull] = useState(false);
-  // After «تکمیل پذیرش», land on the new part (vehicle condition), not wherever the button was.
-  const [jumpToCondition, setJumpToCondition] = useState(false);
-  useEffect(() => {
-    if (!jumpToCondition) return;
-    document.getElementById("intake-condition")?.scrollIntoView({ block: "start" });
-    setJumpToCondition(false);
-  }, [jumpToCondition]);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [requestTypes, setRequestTypes] = useState<string[]>([]);
+  const [typeCatalog, setTypeCatalog] = useState<RequestTypeOpt[]>([]);
+  const [bindings, setBindings] = useState<BindingRow[]>([]);
+  const [motorType, setMotorType] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const { notify } = useFeedback();
@@ -159,7 +162,10 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       setCalendar(d.calendar); setYear(d.year); setYearText(d.yearText); setPlate(d.plate); setMotoPlate(d.motoPlate);
       setColor(d.color); setVin(d.vin); setFuelType(d.fuelType); setGearbox(d.gearbox); setOdometer(d.odometer); setFuel(d.fuel);
       setBody(d.body); setBodyNotes(d.bodyNotes); setItems(d.items); setProblems(d.problems); setNotes(d.notes); setServices(d.services);
-      setAssigneeId(d.assigneeId); setFull(d.full);
+      setAssigneeId(d.assigneeId);
+      setStep(d.step === 2 || d.step === 3 ? d.step : 1);
+      setRequestTypes(d.requestTypes ?? []);
+      setMotorType(d.motorType ?? null);
       // An existing vehicle is picked again once the customer is looked up.
       if (d.assetId !== "new") setWantAssetId(d.assetId);
       setRestored(true);
@@ -170,11 +176,11 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   useEffect(() => {
     if (!ready) return;
     const data: Draft = { mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
-      odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, full };
-    const t = setTimeout(() => (isBlank({ ...data, assetId: "", calendar: "", full: false }) ? clearDraft(draftScope) : saveDraft(draftScope, data)), 400);
+      odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, requestTypes, motorType };
+    const t = setTimeout(() => (isBlank({ ...data, assetId: "", calendar: "", step: 1, requestTypes: [], motorType: null }) ? clearDraft(draftScope) : saveDraft(draftScope, data)), 400);
     return () => clearTimeout(t);
   }, [ready, draftScope, mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
-    odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, full]);
+    odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, requestTypes, motorType]);
 
   function discardDraft() {
     clearDraft(draftScope);
@@ -184,6 +190,11 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   useEffect(() => {
     if (canAssign) api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => setStaff([]));
   }, [canAssign]);
+  useEffect(() => {
+    api<RequestTypeOpt[]>("/api/v1/cases/request-types").then(setTypeCatalog).catch(() => setTypeCatalog([]));
+    api<{ bindings: BindingRow[] }>("/api/v1/request-type-checklist-bindings")
+      .then((d) => setBindings(d.bindings ?? [])).catch(() => setBindings([]));
+  }, []);
 
   useEffect(() => {
     setCustomer(null);
@@ -238,10 +249,10 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const newVehicle = assetId === "new";
   // Existing vehicles: the kind is not loaded with the chip list, so treat an unknown as a car.
   const vehicleKind = newVehicle ? kind : customer?.assets.find((a) => a.id === assetId)?.kind ?? null;
-  const isMoto = kind === "motorcycle";
+  const isMoto = kind === "motorcycle" || vehicleKind === "motorcycle";
   const custom = useIntakeOptions();
-  const [motorType, setMotorType] = useState<string | null>(null);
-  const [ticks, setTicks] = useState<Record<string, boolean>>({});
+  const needsMotorcycleChecklist = requestTypes.some((k) =>
+    bindings.some((b) => b.requestTypeKey === k && b.source === "motorcycle"));
   const plateId = isMoto ? formatMotoPlate(motoPlate) : formatPlate(plate);
   const plateStarted = isMoto ? !!(motoPlate.top || motoPlate.bottom) : !!(plate.two || plate.letter || plate.three || plate.region);
 
@@ -263,16 +274,40 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const toggle = (list: string[], set: (v: string[]) => void, v: string) =>
     set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
+  function validateStep(s: 1 | 2 | 3): Record<string, string> {
+    const local: Record<string, string> = {};
+    if (s >= 1) {
+      if (mobile.length !== 11) local.mobile = "شماره همراه باید ۱۱ رقم باشد.";
+      if (newVehicle && !(kind && brand.trim() && model.trim())) local.vehicle = "نوع، برند و مدل را انتخاب کنید.";
+      if (plateStarted && !plateId) local.plate = "پلاک کامل نیست.";
+      if (plateOwner && plateOwner.customer.mobile !== mobile) local.plate = "این پلاک برای مشتری دیگری ثبت شده است.";
+    }
+    if (s >= 2) {
+      if (requestTypes.length === 0) local.requestTypes = "حداقل یک نوع درخواست انتخاب کنید.";
+      if (problems.length === 0 && services.length === 0 && !notes.trim()) local.problems = "حداقل یک ایراد یا خدمت انتخاب کنید یا شرح بنویسید.";
+      if (isMoto && needsMotorcycleChecklist && !motorType) local.motorType = "نوع موتور (دنده‌ای یا اتومات) را مشخص کنید.";
+    }
+    if (s >= 3) {
+      if (requireAssignee && canAssign && !assigneeId) local.assignee = "مسئول پرونده را انتخاب کنید.";
+    }
+    return local;
+  }
+
+  function goNext() {
+    const local = validateStep(step);
+    if (Object.keys(local).length) {
+      setErrors(local);
+      requestAnimationFrame(() => document.querySelector(".intake .error")?.scrollIntoView({ block: "center" }));
+      return;
+    }
+    setErrors({});
+    setStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s));
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (busy) return;
-    const local: Record<string, string> = {};
-    if (mobile.length !== 11) local.mobile = "شماره همراه باید ۱۱ رقم باشد.";
-    if (newVehicle && (kind || brand.trim() || model.trim() || plateStarted) && !(kind && brand.trim() && model.trim())) local.vehicle = "نوع، برند و مدل را انتخاب کنید.";
-    if (plateStarted && !plateId) local.plate = "پلاک کامل نیست.";
-    if (plateOwner && plateOwner.customer.mobile !== mobile) local.plate = "این پلاک برای مشتری دیگری ثبت شده است.";
-    if (problems.length === 0 && services.length === 0 && !notes.trim()) local.problems = "حداقل یک ایراد یا خدمت انتخاب کنید.";
-    if (requireAssignee && canAssign && !assigneeId) local.assignee = "مسئول پرونده را انتخاب کنید.";
+    if (busy || step !== 3) return;
+    const local = validateStep(3);
     if (Object.keys(local).length) {
       setErrors(local);
       requestAnimationFrame(() => document.querySelector(".intake .error")?.scrollIntoView({ block: "center" }));
@@ -302,9 +337,9 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
           newAsset: newVehicle && kind && brand.trim() && model.trim()
             ? { title: `${brand.trim()} ${model.trim()}`, identifier: plateId, kind, attributes }
             : undefined,
+          requestTypes,
           reportedProblems: problems,
-          motorType: isMoto && motorType ? motorType : undefined,
-          checklist: isMoto && motorType ? Object.entries(ticks).filter(([, v]) => v).map(([itemId]) => ({ itemId, isChecked: true })) : undefined,
+          motorType: isMoto && needsMotorcycleChecklist && motorType ? motorType : undefined,
           requestedServices: services,
           request: notes.trim(),
           odometerKm: odometer ? Number(odometer) : undefined,
@@ -370,12 +405,29 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     </Section>
   );
 
+  const typeTitle = (key: string) => typeCatalog.find((t) => t.key === key)?.title ?? key;
+
   return (
     <form className="intake" onSubmit={submit} noValidate>
       <div className="intake-title">
         <h2>پذیرش جدید</h2>
         <button type="button" className="icon-button" onClick={onCancel} aria-label="بستن (پیش‌نویس می‌ماند)">✕</button>
       </div>
+      <nav className="intake-steps" aria-label="مراحل پذیرش">
+        {STEPS.map((s) => (
+          <button
+            key={s.n}
+            type="button"
+            className={`intake-step${step === s.n ? " on" : ""}${step > s.n ? " done" : ""}`}
+            aria-current={step === s.n ? "step" : undefined}
+            disabled={s.n > step}
+            onClick={() => { if (s.n < step) setStep(s.n); }}
+          >
+            <span className="intake-step-n font-num">{faYear.format(s.n)}</span>
+            <span className="intake-step-label">{s.label}</span>
+          </button>
+        ))}
+      </nav>
       {restored && (
         <div className="notice good draft-restored" role="status">
           <span>اطلاعاتی که قبلاً وارد کرده بودید برگشت.</span>
@@ -383,6 +435,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         </div>
       )}
 
+      {step === 1 && (<>
       <Section icon="phone" title={byPlate ? "جستجو با پلاک" : "شماره همراه مشتری"}>
         {byPlate ? (
           <>
@@ -506,7 +559,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
               </div>
             )}
 
-            {full && model.trim() && (
+            {model.trim() && (
               <details className="extra">
                 <summary>مشخصات تکمیلی وسیله</summary>
                 <div className="grid-2">
@@ -547,6 +600,34 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
           </label>
         )}
       </Section>
+      </>)}
+
+      {step === 2 && (<>
+      <Section icon="list" title="نوع درخواست" badge={requestTypes.length > 0 && <span className="badge good">{formatNumber(requestTypes.length)} نوع</span>}>
+        <p className="hint">می‌توانید چند نوع را با هم انتخاب کنید. چک‌لیست بعد از ثبت روی صفحهٔ پرونده تکمیل می‌شود.</p>
+        <div className="chips">
+          {typeCatalog.map((t) => (
+            <button type="button" key={t.key} aria-pressed={requestTypes.includes(t.key)}
+              className={`chip-button${requestTypes.includes(t.key) ? " active" : ""}`}
+              onClick={() => { toggle(requestTypes, setRequestTypes, t.key); setErrors((e) => ({ ...e, requestTypes: "" })); }}>
+              {t.title}
+            </button>
+          ))}
+        </div>
+        {errors.requestTypes && <span className="error">{errors.requestTypes}</span>}
+      </Section>
+
+      {isMoto && needsMotorcycleChecklist && (
+        <Section icon="gauge" title="نوع موتور">
+          <div className="actions">
+            <button type="button" className={`toggle${motorType === "geared" ? " on" : ""}`}
+              onClick={() => { setMotorType("geared"); setErrors((e) => ({ ...e, motorType: "" })); }}>دنده‌ای</button>
+            <button type="button" className={`toggle${motorType === "automatic" ? " on" : ""}`}
+              onClick={() => { setMotorType("automatic"); setErrors((e) => ({ ...e, motorType: "" })); }}>اتومات / کلیک</button>
+          </div>
+          {errors.motorType && <span className="error">{errors.motorType}</span>}
+        </Section>
+      )}
 
       <Section icon="problem" title="ایراد اعلامی مشتری">
         <div className="chips">
@@ -560,17 +641,25 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         {errors.problems && <span className="error">{errors.problems}</span>}
       </Section>
 
-      {vehicleKind === "motorcycle" && (
-        <Section icon="list" title="چک‌لیست بازدید موتور">
-          <IntakeChecklist motorType={motorType} onMotorType={setMotorType} ticks={ticks} onTicks={setTicks} error={errors.checklist} />
-        </Section>
-      )}
-
       <Section icon="list" title="خدمات درخواستی" badge={services.length > 0 && <span className="badge good">{formatNumber(services.length)} خدمت</span>}>
         <ServicePicker value={services} onChange={setServices} kind={vehicleKind} custom={custom.serviceCategories} />
       </Section>
+      </>)}
 
-      {requireAssignee && assigneeSection}
+      {step === 3 && (<>
+      <Section icon="list" title="خلاصه پذیرش">
+        <ul className="intake-summary">
+          <li><span className="muted">مشتری</span> {customer?.fullName || customerName || mobile}</li>
+          <li><span className="muted">وسیله</span> {newVehicle ? (brand && model ? `${brand} ${model}` : "—") : (customer?.assets.find((a) => a.id === assetId)?.title ?? "—")}</li>
+          <li><span className="muted">نوع درخواست</span> {requestTypes.map(typeTitle).join("، ") || "—"}</li>
+          {(problems.length > 0 || services.length > 0) && (
+            <li><span className="muted">جزئیات</span> {[...problems.slice(0, 2), ...services.slice(0, 2)].join("، ")}{(problems.length + services.length) > 4 ? "…" : ""}</li>
+          )}
+        </ul>
+        <p className="hint">چک‌لیست و اقلام مصرفی را بعد از ثبت، روی صفحهٔ پرونده کامل کنید.</p>
+      </Section>
+
+      {assigneeSection}
 
       <Section icon="camera" title="عکس و فیلم وسیله" badge={shots.length > 0 && <span className="badge good">{formatNumber(shots.length)} مورد</span>}>
         <input ref={shotInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => addShots(e.target.files)} />
@@ -598,50 +687,51 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         <p className="hint">وضعیت ظاهری وسیله هنگام تحویل؛ بعد از ثبت پذیرش در پرونده می‌ماند. فیلم فقط برای کارگاه است.</p>
       </Section>
 
-      {full && (
-        <>
-          <div id="intake-condition" aria-hidden="true" />
-          <Section icon="gauge" title="وضعیت هنگام پذیرش" badge={fuel === null && <span className="badge warn">سوخت مشخص نشده</span>}>
-            <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
-              <NumberInput value={odometer} onChange={setOdometer} max={7} suffix="کیلومتر" />
-            </Field>
-            <div className="field">
-              <span className="label">میزان سوخت</span>
-              <FuelGauge value={fuel} onChange={setFuel} />
-            </div>
-          </Section>
+      <Section icon="gauge" title="وضعیت هنگام پذیرش (اختیاری)" badge={fuel === null && <span className="badge warn">سوخت مشخص نشده</span>}>
+        <Field label="کیلومتر کارکرد" error={errors.odometerKm}>
+          <NumberInput value={odometer} onChange={setOdometer} max={7} suffix="کیلومتر" />
+        </Field>
+        <div className="field">
+          <span className="label">میزان سوخت</span>
+          <FuelGauge value={fuel} onChange={setFuel} />
+        </div>
+      </Section>
 
-          <Section icon="body" title="وضعیت بدنه" tone="warn" badge={body === null && <span className="badge warn">بررسی نشده</span>}>
-            <div className="actions">
-              <button type="button" className={`toggle good${body === "ok" ? " on" : ""}`} onClick={() => setBody("ok")}>بدنه سالم است</button>
-              <button type="button" className={`toggle bad${body === "damaged" ? " on" : ""}`} onClick={() => setBody("damaged")}>ثبت آسیب</button>
-            </div>
-            {body === "damaged" && (
-              <Field label="شرح آسیب (محل، نوع)" error={errors.bodyNotes}>
-                <textarea rows={2} value={bodyNotes} onChange={(e) => setBodyNotes(e.target.value)} maxLength={500} placeholder="مثلاً خط روی درب جلو راست" />
-              </Field>
-            )}
-            <div className="field">
-              <span className="label">همراه وسیله</span>
-              <div className="chips">
-                {ACCOMPANYING.map((i) => (
-                  <button type="button" key={i} aria-pressed={items.includes(i)} className={`chip-button${items.includes(i) ? " active" : ""}`}
-                    onClick={() => toggle(items, setItems, i)}>{i}</button>
-                ))}
-              </div>
-            </div>
-          </Section>
+      <Section icon="body" title="وضعیت بدنه" tone="warn" badge={body === null && <span className="badge warn">بررسی نشده</span>}>
+        <div className="actions">
+          <button type="button" className={`toggle good${body === "ok" ? " on" : ""}`} onClick={() => setBody("ok")}>بدنه سالم است</button>
+          <button type="button" className={`toggle bad${body === "damaged" ? " on" : ""}`} onClick={() => setBody("damaged")}>ثبت آسیب</button>
+        </div>
+        {body === "damaged" && (
+          <Field label="شرح آسیب (محل، نوع)" error={errors.bodyNotes}>
+            <textarea rows={2} value={bodyNotes} onChange={(e) => setBodyNotes(e.target.value)} maxLength={500} placeholder="مثلاً خط روی درب جلو راست" />
+          </Field>
+        )}
+        <div className="field">
+          <span className="label">همراه وسیله</span>
+          <div className="chips">
+            {ACCOMPANYING.map((i) => (
+              <button type="button" key={i} aria-pressed={items.includes(i)} className={`chip-button${items.includes(i) ? " active" : ""}`}
+                onClick={() => toggle(items, setItems, i)}>{i}</button>
+            ))}
+          </div>
+        </div>
+      </Section>
 
-          {!requireAssignee && assigneeSection}
-        </>
-      )}
+      </>)}
 
       {errors.form && <p className="error" role="alert">{errors.form}</p>}
       <div className="intake-footer">
-        <button className="primary block big" disabled={busy} aria-busy={busy}>{busy ? (shots.length > 0 ? "در حال ثبت پذیرش و عکس‌ها…" : "در حال ثبت پذیرش…") : full ? "ثبت پذیرش" : "ثبت سریع"}</button>
-        {!full && (
-          <button type="button" className="block secondary" onClick={() => { setFull(true); setJumpToCondition(true); }}>
-            تکمیل پذیرش (کیلومتر، سوخت، بدنه…)
+        {step > 1 && (
+          <button type="button" className="block secondary" disabled={busy} onClick={() => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))}>
+            مرحله قبل
+          </button>
+        )}
+        {step < 3 ? (
+          <button type="button" className="primary block big" onClick={goNext}>ادامه</button>
+        ) : (
+          <button className="primary block big" disabled={busy} aria-busy={busy}>
+            {busy ? (shots.length > 0 ? "در حال ثبت پذیرش و عکس‌ها…" : "در حال ثبت پذیرش…") : "ثبت پذیرش"}
           </button>
         )}
       </div>
