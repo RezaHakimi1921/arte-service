@@ -97,8 +97,9 @@ public sealed class SurveyTests(ArteApiFactory api)
         // 30 minutes after delivery by default, moved into sending hours.
         var due = survey.GetProperty("dueAt").GetDateTimeOffset();
         Assert.Equal(SurveyRules.IntoSendingHours(before.AddMinutes(30)), due, TimeSpan.FromMinutes(1));
-        // Who did the work: the assignee and the person who recorded the labor (the owner).
-        Assert.Equal(2, survey.GetProperty("responsible").GetArrayLength());
+        // Labor defaults to the case assignee, so the owner who only recorded the line is not a second responsible.
+        Assert.Equal(1, survey.GetProperty("responsible").GetArrayLength());
+        Assert.Equal("حسین", survey.GetProperty("responsible")[0].GetString());
 
         // Nothing before it is due; once due, exactly one SMS with the tracking code (the pattern has no vehicle).
         await RunSender(due.AddMinutes(-5));

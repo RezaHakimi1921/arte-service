@@ -255,6 +255,7 @@ public sealed class CaseTests(ArteApiFactory api)
         var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
         {
             mobile = ArteApiFactory.NewMobile(),
+            request = "تست برند آزاد",
             newAsset = new
             {
                 title = "Honda CB 125",
