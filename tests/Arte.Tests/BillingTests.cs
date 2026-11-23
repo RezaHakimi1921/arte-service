@@ -46,9 +46,29 @@ public sealed class BillingTests(ArteApiFactory api)
         Assert.Equal(800_000, Money(billing, "laborRials"));
         Assert.Equal(6_000_000, Money(billing, "costRials"));
         Assert.Equal(2_800_000, Money(billing, "profitRials"));
-        // Labor defaults to the person who recorded it.
+        // Without an assignee, labor defaults to whoever recorded it.
         var labor = billing.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("kind").GetString() == "labor");
         Assert.NotEqual(JsonValueKind.Null, labor.GetProperty("performedBy").ValueKind);
+    }
+
+    [Fact]
+    public async Task Labor_defaults_to_case_assignee_when_set()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var techMobile = ArteApiFactory.NewMobile();
+        var techId = (await Json(await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, displayName = "استاد تست", role = "technician" }))).GetProperty("id").GetGuid();
+        var c = await OpenCase(owner, new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            request = "اجرت",
+            assigneeId = techId,
+            newAsset = new { title = "پراید", kind = "car" },
+        });
+        var id = c.GetProperty("id");
+        var billing = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items",
+            new { kind = "labor", title = "اجرت تست", unitPriceRials = 500_000 }));
+        var labor = billing.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("kind").GetString() == "labor");
+        Assert.Equal(techId, labor.GetProperty("performedBy").GetGuid());
     }
 
     [Fact]

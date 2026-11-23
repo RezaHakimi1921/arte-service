@@ -249,6 +249,27 @@ public sealed class CaseTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Free_typed_brand_and_model_are_stored_on_the_asset()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(),
+            newAsset = new
+            {
+                title = "Honda CB 125",
+                kind = "motorcycle",
+                attributes = new Dictionary<string, string> { ["brand"] = "Honda", ["model"] = "CB 125" },
+            },
+        }));
+        var c = await Json(await owner.GetAsync($"/api/v1/cases/{created.GetProperty("id")}"));
+        var attrs = c.GetProperty("asset").GetProperty("attributes");
+        Assert.Equal("Honda", attrs.GetProperty("brand").GetString());
+        Assert.Equal("CB 125", attrs.GetProperty("model").GetString());
+        Assert.Equal("Honda CB 125", c.GetProperty("asset").GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task Waiting_for_parts_says_who_brings_them()
     {
         var (owner, _) = await api.NewBusinessAsync();

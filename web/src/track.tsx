@@ -305,7 +305,6 @@ function SurveyView({ code, survey, customer, vehicle, shop, instagram, onDone, 
 }) {
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comment, setComment] = useState("");
-  const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -349,17 +348,11 @@ function SurveyView({ code, survey, customer, vehicle, shop, instagram, onDone, 
   }
 
   const questions = survey.questions ?? [];
-  // One question per step, then a last step for the optional note.
-  const total = questions.length + 1;
-  const last = step >= questions.length;
   const answered = questions.filter((q) => ratings[q.id]).length;
-  const percent = Math.round((Math.min(step, questions.length) / total) * 100 + (last ? 100 / total : 0));
-  const q = questions[step];
-  const pick = (v: number) => {
-    setRatings((r) => ({ ...r, [q.id]: v }));
+  const percent = questions.length === 0 ? 0 : Math.round((answered / questions.length) * 100);
+  const pick = (id: string, v: number) => {
+    setRatings((r) => ({ ...r, [id]: v }));
     setError(null);
-    // Move on by itself shortly after the choice, so the answer is seen first.
-    window.setTimeout(() => setStep((x) => Math.min(x + 1, questions.length)), 260);
   };
   async function submit() {
     if (answered < questions.length) { setError("لطفاً به همه‌ی سؤال‌ها جواب دهید."); return; }
@@ -390,50 +383,43 @@ function SurveyView({ code, survey, customer, vehicle, shop, instagram, onDone, 
           <div className="tk-progress">
             <div className="tk-progress-top">
               <div>
-                <span>{last ? "آخرین مرحله" : `سؤال ${formatNumber(step + 1)} از ${formatNumber(questions.length)}`}</span>
-                <strong>{last ? "نکته‌ای برای گفتن دارید؟" : "یک گزینه را انتخاب کنید"}</strong>
+                <span>{formatNumber(answered)} از {formatNumber(questions.length)} سؤال</span>
+                <strong>همهٔ سؤال‌ها در یک صفحه</strong>
               </div>
               <span className="tk-progress-ring font-num">{formatNumber(percent)}٪</span>
             </div>
             <div className="tk-progress-bar" aria-hidden="true"><i style={{ width: `${percent}%` }} /></div>
           </div>
 
-          {!last && q && (
+          {questions.map((q, i) => (
             <div className="tk-q" key={q.id}>
               <div className="tk-q-head">
-                <span className="tk-q-num font-num">{formatNumber(step + 1)}</span>
+                <span className="tk-q-num font-num">{formatNumber(i + 1)}</span>
                 <p id={`q-${q.id}`}>{q.text}</p>
               </div>
               <div className="tk-scale" role="radiogroup" aria-labelledby={`q-${q.id}`}>
                 {[1, 2, 3, 4, 5].map((v) => (
-                  <button key={v} type="button" role="radio" aria-checked={ratings[q.id] === v} className={`r${v}${ratings[q.id] === v ? " on" : ""}`} onClick={() => pick(v)}>
+                  <button key={v} type="button" role="radio" aria-checked={ratings[q.id] === v} className={`r${v}${ratings[q.id] === v ? " on" : ""}`} onClick={() => pick(q.id, v)}>
                     <b className="font-num">{formatNumber(v)}</b><span>{RATING_WORDS[v]}</span>
                   </button>
                 ))}
               </div>
             </div>
-          )}
+          ))}
 
-          {last && (
-            <div className="tk-q">
-              <label className="tk-q-title" htmlFor="tk-comment">نکته‌ای هست که دوست دارید بدانیم؟</label>
-              <p className="tk-q-hint">این بخش اختیاری است و مستقیم برای مدیر تعمیرگاه فرستاده می‌شود.</p>
-              <textarea id="tk-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={4}
-                placeholder="مثلاً چه چیزی خوب بود یا چه چیزی می‌تواند بهتر شود…" />
-              <span className="tk-counter font-num" dir="ltr">{formatNumber(comment.length)} / ۵۰۰</span>
-            </div>
-          )}
+          <div className="tk-q">
+            <label className="tk-q-title" htmlFor="tk-comment">نکته‌ای هست که دوست دارید بدانیم؟</label>
+            <p className="tk-q-hint">این بخش اختیاری است و مستقیم برای مدیر تعمیرگاه فرستاده می‌شود.</p>
+            <textarea id="tk-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500} rows={4}
+              placeholder="مثلاً چه چیزی خوب بود یا چه چیزی می‌تواند بهتر شود…" />
+            <span className="tk-counter font-num" dir="ltr">{formatNumber(comment.length)} / ۵۰۰</span>
+          </div>
 
           <div className="tk-survey-foot">
             {error && <p className="tk-error" role="alert">{error}</p>}
-            {last ? (
-              <button type="button" className="tk-submit" onClick={submit} disabled={busy || answered < questions.length} aria-busy={busy}>
-                {busy ? "در حال ثبت نظر…" : "ثبت نظر"}
-              </button>
-            ) : (
-              <button type="button" className="tk-submit" onClick={() => setStep(step + 1)} disabled={!ratings[q?.id]}>بعدی</button>
-            )}
-            {step > 0 && <button type="button" className="tk-back" onClick={() => setStep(step - 1)} disabled={busy}>بازگشت</button>}
+            <button type="button" className="tk-submit" onClick={submit} disabled={busy || answered < questions.length} aria-busy={busy}>
+              {busy ? "در حال ثبت نظر…" : "ثبت نظر"}
+            </button>
             <p className="tk-privacy">پاسخ‌های شما فقط برای بهتر شدن خدمات این تعمیرگاه استفاده می‌شود.</p>
           </div>
         </section>
