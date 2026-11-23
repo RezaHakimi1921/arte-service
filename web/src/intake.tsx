@@ -254,7 +254,8 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   }, [assetId]);
 
   const catalog = kind ? VEHICLE_CATALOG[kind] : {};
-  const brands = Object.keys(catalog).filter((b) => b !== "سایر");
+  // Keep «سایر» and any free-typed brand/model — Enter in Combobox must not wipe them.
+  const brands = [...Object.keys(catalog).filter((b) => b !== "سایر"), "سایر"];
   const models = (catalog[brand.trim()] ?? []).map((m) => m[0]);
   const modelEntry = (catalog[brand.trim()] ?? []).find((m) => m[0] === model.trim());
   const years = useMemo(() => modelYears(modelEntry, calendar, allYears), [modelEntry, calendar, allYears]);
@@ -535,13 +536,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
             {kind && (
               <div className="grid-2">
                 <Field label="برند" error={errors.vehicle}>
-                  <Combobox label="برند" value={brand} options={brands} placeholder="جستجوی برند"
+                  <Combobox label="برند" value={brand} options={brands} placeholder="جستجوی برند یا تایپ آزاد"
                     onChange={(v) => { setBrand(v); setModel(""); setYear(""); setYearText(""); setAllYears(false); setErrors((e) => ({ ...e, vehicle: "" })); }} />
                 </Field>
                 <Field label="مدل">
-                  <Combobox label="مدل" value={model} options={models} placeholder={brand.trim() ? "جستجوی مدل" : "اول برند"}
+                  <Combobox label="مدل" value={model} options={models} placeholder={brand.trim() ? "جستجوی مدل یا تایپ آزاد" : "اول برند"}
                     disabled={!brand.trim()} onChange={(v) => { setModel(v); setYear(""); setYearText(""); setAllYears(false); }} />
                 </Field>
+                <p className="hint">اگر برند یا مدل در فهرست نبود، همان متن را بنویسید؛ با ثبت پذیرش ذخیره می‌شود.</p>
               </div>
             )}
             {kinds.length === 0 && <p className="hint">در تنظیمات کسب‌وکار حداقل یک نوع وسیله را فعال کنید.</p>}

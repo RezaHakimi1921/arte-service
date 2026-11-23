@@ -525,6 +525,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
       {/* In review the master looks at the work photos first; otherwise they sit below the bill. */}
       {c.stage.key === "review" && photoSection}
       <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal} vehicleKind={c.asset?.kind ?? null}
+        caseAssigneeId={c.assignee?.id}
         onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
 
       {c.stage.key !== "review" && photoSection}
