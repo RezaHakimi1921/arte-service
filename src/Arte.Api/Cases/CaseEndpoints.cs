@@ -329,7 +329,8 @@ public static class CaseEndpoints
         var services = CleanServices(req.RequestedServices);
         var problems = CleanServices(req.ReportedProblems);
         if (request.Length > 2000) errors["request"] = ["توضیحات حداکثر ۲۰۰۰ حرف."];
-        if (request.Length == 0 && services is not { Length: > 0 } && problems is not { Length: > 0 })
+        var explicitRequestTypes = req.RequestTypes is { Length: > 0 };
+        if (!explicitRequestTypes && request.Length == 0 && services is not { Length: > 0 } && problems is not { Length: > 0 })
             errors["request"] = ["حداقل یک ایراد یا خدمت انتخاب کنید یا توضیحی بنویسید."];
         if (problems is { Length: > 20 } || problems?.Any(x => x.Length > 60) == true) errors["reportedProblems"] = ["حداکثر ۲۰ ایراد، هر کدام تا ۶۰ حرف."];
         ValidateIntakeFields(errors, req.RequestedServices, req.FuelLevel, req.BodyStatus, req.BodyNotes);
