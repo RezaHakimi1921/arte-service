@@ -26,8 +26,10 @@ ARTE-SERVICE/
 │   └── Arte.Tests/          ← xUnit + Testcontainers (Postgres واقعی)
 ├── web/                     ← PWA (React + Vite)
 ├── deploy/                  ← docker-compose, Caddyfile
-└── Arte.sln
+└── Arte.slnx
 ```
+
+> بازبینی ۱۴۰۵/۰۹/۰۴ روی `main` `84da1b9`: فایل راه‌حل `Arte.slnx` است و `Arte.sln` در درخت نیست. گردش CI (`.github/workflows/ci.yml`) هم `dotnet restore` و `dotnet build` را روی `Arte.slnx` اجرا می‌کند. بقیهٔ این سند نمای اولیهٔ معماری است، نه فهرست زندهٔ endpointها.
 
 دو پروژه کافی است (Modular Monolith). جدا کردن لایه‌ها فقط وقتی که واقعاً درد داشته باشیم.
 داخل `Arte.Core` پوشه‌بندی بر اساس Feature: `Customers/`, `Cases/`, `Workflows/`, `Messaging/`, `Integrations/`.

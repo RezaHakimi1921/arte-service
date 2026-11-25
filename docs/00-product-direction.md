@@ -34,6 +34,8 @@ Generic Core  +  Vertical First (موتورسازی)
 | **نظرسنجی و باشگاه مشتریان: خارج از Arte** | از طریق API بیرونی؛ Arte فقط Event می‌فرستد ([05](05-integrations.md)) |
 | **SMS: مستقل از Provider** | Provider بعد از مقایسه انتخاب می‌شود ([04](04-sms-design.md)) |
 
+> بازبینی ۱۴۰۵/۰۹/۰۴: ردیف نظرسنجی تصمیم اولیهٔ همین جدول است و متنش عوض نشده. بعداً نظرسنجی داخلی به‌صورت افزونه در محصول آمده (`docs/11-plan-survey-and-fixes.md`، `web/src/track.tsx`، `tests/Arte.Tests/SurveyTests.cs`). سند ۰۵ هنوز مدل بیرونی را می‌گوید. این بازبینی یکی را بر دیگری ترجیح نمی‌دهد. «Survey داخلی» در بخش خارج از محدودهٔ MVP هم تصمیم همان زمان است و با وجود کد بعدی، اینجا حذف نشده است.
+
 ## خارج از محدوده MVP
 
 Accounting کامل، ERP، انبارداری پیچیده، CRM سازمانی، Marketing Automation، Loyalty Engine،

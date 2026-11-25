@@ -11,6 +11,7 @@ Later products are siblings, not new workshop templates. The sports club is the 
 `F:\reza\arte-spport` (own Postgres). Do not add gym entities to `Arte.Core`.
 Shared later: identity, SMS, licence, platform admin.
 Read `docs/18-plan-arte-groups.md` before any cross-product work.
+That file is not in the repository as of `main` `84da1b9` (no commit has ever added it). Until it exists, this paragraph is the direction: do not add gym entities to `Arte.Core`.
 
 ## Data rules (every entity)
 
