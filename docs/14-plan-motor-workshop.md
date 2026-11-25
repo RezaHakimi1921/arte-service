@@ -1,7 +1,9 @@
 # پلن توسعه Arte Service — ماژول موتورسازی (مکانیک موتور)
 
 > پروژه: arte-service (ASP.NET Core + React PWA)
-> وضعیت: همه‌ی موارد انجام‌شده در `main` هستند و روی سرور production دیپلوی شده‌اند (health check سالم). جدول وضعیت پایین را ببینید.
+> وضعیت تاریخی نویسنده: همه‌ی موارد انجام‌شده در `main` هستند و روی سرور production دیپلوی شده‌اند (health check سالم). جدول وضعیت پایین را ببینید.
+>
+> بازبینی ۱۴۰۵/۰۹/۰۴: ادعاهای «روی سرور» و health check در این نشست دوباره سنجیده نشدند. دو سلول با کد بعدی `main` `84da1b9` نمی‌خوانند و جدول تاریخی عوض نشده است: ردیف ۲ می‌گوید چک‌لیست ناقص مانع ثبت پذیرش است، ولی تصمیم بعدی و کد فعلی ثبت پرونده را باز می‌گذارند و شروع کار را می‌بندند (`tests/Arte.Tests/RequestTypeChecklistBindingTests.cs`: `Create_snapshots_checklist_without_blocking_on_incomplete_required_rows` و `Incomplete_required_checklist_blocks_start_of_work_but_not_cancel`). ردیف ۳۳ نظرسنجی را مرحله‌ای (یک سؤال در هر قدم) تمام‌شده می‌داند؛ UI فعلی مشتری در `web/src/track.tsx` سؤال‌ها را یکجا نشان می‌دهد (PR #37).
 
 ## وضعیت اجرا (به‌روز شده)
 
