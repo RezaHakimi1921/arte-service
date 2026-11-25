@@ -204,7 +204,8 @@ button.danger { color: var(--danger); }
 .content {
   max-width: 640px;
   margin: 0 auto;
-  padding: 1rem 16px calc(84px + env(safe-area-inset-bottom, 0px));
+  /* bottom-nav flush: ~64px chrome + safe-area padding inside the bar */
+  padding: 1rem 16px calc(72px + env(safe-area-inset-bottom, 0px));
 }
 .toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
 .toolbar input { flex: 1; }
@@ -228,40 +229,47 @@ button.danger { color: var(--danger); }
 .empty { padding: 1rem; text-align: center; }
 .back { margin-bottom: 0.5rem; }
 
+/* Flush to the bottom edge; safe-area is padding inside the bar (no floating gap). */
 .bottom-nav {
   position: fixed;
-  inset-inline: 9px;
-  bottom: max(9px, env(safe-area-inset-bottom, 9px));
+  inset-inline: 0;
+  bottom: 0;
   z-index: 10;
   display: flex;
   justify-content: space-around;
   align-items: center;
-  height: 64px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  background: rgba(18, 22, 30, 0.93);
+  gap: 2px;
+  min-height: 64px;
+  padding: 6px 6px max(8px, env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px 18px 0 0;
+  background: rgba(18, 22, 30, 0.96);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.18);
 }
 [data-theme="light"] .bottom-nav {
-  background: rgba(30, 35, 50, 0.92);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(30, 35, 50, 0.96);
+  border-top-color: rgba(255, 255, 255, 0.08);
 }
 .nav-item {
   flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   background: none;
   border: none;
+  border-radius: 14px;
   font-size: 0.68rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.5);
-  padding: 0.3rem 0;
-  min-height: 44px;
+  padding: 0.35rem 0.2rem;
+  min-height: 48px;
+  transition: color 0.18s var(--ease-out), background 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
 }
 .nav-item .nav-icon-wrap {
   display: grid;
@@ -269,23 +277,46 @@ button.danger { color: var(--danger); }
   width: 2.1rem;
   height: 2.1rem;
   border-radius: 10px;
-  transition: background 0.18s var(--ease-out), color 0.18s var(--ease-out);
+  transition: background 0.18s var(--ease-out), color 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
 }
 .nav-item svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.nav-item.active { color: rgba(255, 255, 255, 0.95); font-weight: 800; }
-.nav-item.active .nav-icon-wrap { background: var(--accent); color: #fff; }
+/* Soft accent “aura” around the whole active tab (icon + label), not only a solid icon chip. */
+.nav-item.active {
+  color: #fff;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 0 16px color-mix(in srgb, var(--accent) 40%, transparent),
+    0 0 28px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.nav-item.active .nav-icon-wrap {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  color: #fff;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent);
+}
 
 @media (prefers-reduced-motion: reduce) {
   button { transition: none; }
   button:active { transform: none; }
+  .nav-item, .nav-item .nav-icon-wrap { transition: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
   .bottom-nav { background: #12161e; backdrop-filter: none; -webkit-backdrop-filter: none; }
   [data-theme="light"] .bottom-nav { background: #1e2332; }
+  .nav-item.active {
+    background: var(--accent);
+    box-shadow: none;
+  }
+  .nav-item.active .nav-icon-wrap { background: transparent; box-shadow: none; }
 }
 @media (prefers-contrast: more) {
   :root { --border: #6b7280; }
-  .bottom-nav { background: #0a0d13; backdrop-filter: none; border: 2px solid rgba(255,255,255,0.3); }
+  .bottom-nav { background: #0a0d13; backdrop-filter: none; border-top: 2px solid rgba(255,255,255,0.3); }
+  .nav-item.active {
+    background: var(--accent);
+    box-shadow: inset 0 0 0 2px #fff;
+  }
 }
 
 textarea { resize: vertical; line-height: 1.7; }
@@ -834,7 +865,7 @@ button.secondary { background: var(--accent-soft); color: var(--accent); border-
 .toasts {
   position: fixed;
   inset-inline: 16px;
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -2223,8 +2254,8 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 }
 .btn-hamburger svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-/* pill nav height 64px + 9px gap + 9px above = ~82px total; add extra breathing room */
-.app2 .content { max-width: 40rem; padding-top: 1.25rem; padding-bottom: calc(82px + max(9px, env(safe-area-inset-bottom, 9px)) + 1rem); }
+/* Flush bottom-nav: bar height + safe-area (padding inside bar) + content breathing room */
+.app2 .content { max-width: 40rem; padding-top: 1.25rem; padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 1rem); }
 .page-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .page-intro > div > span { color: var(--accent); font-size: 0.78rem; font-weight: 800; }
 .page-intro h1 { margin: 0.2rem 0 0; font-size: 1.45rem; font-weight: 900; line-height: 1.5; }
