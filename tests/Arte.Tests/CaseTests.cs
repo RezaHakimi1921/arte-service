@@ -491,14 +491,16 @@ public sealed class CaseTests(ArteApiFactory api)
     public async Task Create_with_only_explicit_request_types_succeeds()
     {
         var (owner, _) = await api.NewBusinessAsync();
+        // Use «other» so default motorcycle checklist bindings do not require motorType;
+        // this test is about empty content + explicit types (decision A), not checklist gates.
         var created = await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
         {
             mobile = ArteApiFactory.NewMobile(),
-            requestTypes = new[] { "wrenching" },
+            requestTypes = new[] { "other" },
         }));
         var id = created.GetProperty("id").GetGuid();
         var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
-        Assert.Contains(detail.GetProperty("requestTypes").EnumerateArray(), x => x.GetString() == "wrenching");
+        Assert.Contains(detail.GetProperty("requestTypes").EnumerateArray(), x => x.GetString() == "other");
         Assert.Equal(0, detail.GetProperty("reportedProblems").GetArrayLength());
         Assert.Equal(0, detail.GetProperty("requestedServices").GetArrayLength());
         Assert.True(string.IsNullOrEmpty(detail.GetProperty("request").GetString()));
