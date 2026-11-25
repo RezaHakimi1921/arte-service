@@ -30,6 +30,8 @@ const STEPS = [
   { n: 2 as const, label: "شرح پذیرش" },
   { n: 3 as const, label: "بازبینی" },
 ];
+const WORK_REQUEST_TYPES = new Set(["wrenching", "diagnosis", "repair"]);
+type AcceptanceSub = "cards" | "details";
 
 /** Hide the kind picker only when the business has exactly one enabled kind. */
 function defaultVehicleKind(kinds: { key: VehicleKind }[]): VehicleKind | null {
@@ -67,7 +69,7 @@ type Draft = {
   calendar: "jalali" | "gregorian"; year: string; yearText: string; plate: PlateParts; motoPlate: MotoPlateParts;
   color: string; vin: string; fuelType: string; gearbox: string; odometer: string; fuel: number | null;
   body: "ok" | "damaged" | null; bodyNotes: string; items: string[]; problems: string[]; notes: string; services: string[];
-  assigneeId: string; step: 1 | 2 | 3; requestTypes: string[]; motorType: string | null;
+  assigneeId: string; step: 1 | 2 | 3; acceptanceSub: AcceptanceSub; requestTypes: string[]; motorType: string | null;
 };
 
 export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKinds, onCreated, onCancel, onOpenStaff, seedMobile }: {
@@ -122,6 +124,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const [parent, setParent] = useState<ParentSuggestion>(null);
   const [linkParent, setLinkParent] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [acceptanceSub, setAcceptanceSub] = useState<AcceptanceSub>("cards");
   const [requestTypes, setRequestTypes] = useState<string[]>([]);
   const [typeCatalog, setTypeCatalog] = useState<RequestTypeOpt[]>([]);
   const [bindings, setBindings] = useState<BindingRow[]>([]);
@@ -173,6 +176,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       setBody(d.body); setBodyNotes(d.bodyNotes); setItems(d.items); setProblems(d.problems); setNotes(d.notes); setServices(d.services);
       setAssigneeId(d.assigneeId);
       setStep(d.step === 2 || d.step === 3 ? d.step : 1);
+      setAcceptanceSub(d.acceptanceSub === "details" ? "details" : "cards");
       setRequestTypes(d.requestTypes ?? []);
       setMotorType(d.motorType ?? null);
       // An existing vehicle is picked again once the customer is looked up.
@@ -185,15 +189,15 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   useEffect(() => {
     if (!ready) return;
     const data: Draft = { mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
-      odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, requestTypes, motorType };
+      odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, acceptanceSub, requestTypes, motorType };
     const t = setTimeout(() => {
-      const { step: _step, ...rest } = data;
+      const { step: _step, acceptanceSub: _sub, ...rest } = data;
       const blank = isBlank({ ...rest, assetId: "", calendar: "", requestTypes: [], motorType: null });
       if (blank) clearDraft(draftScope); else saveDraft(draftScope, data);
     }, 400);
     return () => clearTimeout(t);
   }, [ready, draftScope, mobile, customerName, assetId, kind, brand, model, calendar, year, yearText, plate, motoPlate, color, vin, fuelType, gearbox,
-    odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, requestTypes, motorType]);
+    odometer, fuel, body, bodyNotes, items, problems, notes, services, assigneeId, step, acceptanceSub, requestTypes, motorType]);
 
   function discardDraft() {
     clearDraft(draftScope);
@@ -271,6 +275,9 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   const custom = useIntakeOptions();
   const needsMotorcycleChecklist = requestTypes.some((k) =>
     bindings.some((b) => b.requestTypeKey === k && b.source === "motorcycle"));
+  const wantsProblems = requestTypes.some((k) => WORK_REQUEST_TYPES.has(k));
+  const wantsOther = requestTypes.includes("other");
+  const wantsServices = wantsProblems;
   const plateId = isMoto ? formatMotoPlate(motoPlate) : formatPlate(plate);
   const plateStarted = isMoto ? !!(motoPlate.top || motoPlate.bottom) : !!(plate.two || plate.letter || plate.three || plate.region);
 
@@ -304,8 +311,9 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     }
     if (s >= 2) {
       if (requestTypes.length === 0) local.requestTypes = "حداقل یک نوع درخواست انتخاب کنید.";
-      if (problems.length === 0 && services.length === 0 && !notes.trim()) local.problems = "حداقل یک ایراد یا خدمت انتخاب کنید یا شرح بنویسید.";
-      if (needsMotorcycleChecklist && !motorType) local.motorType = "نوع موتور (دنده‌ای یا اتومات) را مشخص کنید.";
+      if (s >= 3 || acceptanceSub === "details") {
+        if (needsMotorcycleChecklist && !motorType) local.motorType = "نوع موتور (دنده‌ای یا اتومات) را مشخص کنید.";
+      }
     }
     if (s >= 3) {
       if (requireAssignee && canAssign && !assigneeId) local.assignee = "مسئول پرونده را انتخاب کنید.";
@@ -314,6 +322,18 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
   }
 
   function goNext() {
+    if (step === 2 && acceptanceSub === "cards") {
+      const local = validateStep(2);
+      delete local.motorType;
+      if (Object.keys(local).length) {
+        setErrors(local);
+        requestAnimationFrame(() => document.querySelector(".intake .error")?.scrollIntoView({ block: "center" }));
+        return;
+      }
+      setErrors({});
+      setAcceptanceSub("details");
+      return;
+    }
     const local = validateStep(step);
     if (Object.keys(local).length) {
       setErrors(local);
@@ -322,7 +342,25 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
     }
     setErrors({});
     setReviewTried(false);
-    setStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s));
+    if (step === 1) {
+      setStep(2);
+      setAcceptanceSub("cards");
+      return;
+    }
+    if (step === 2) {
+      setStep(3);
+      return;
+    }
+  }
+
+  function goBack() {
+    if (step === 2 && acceptanceSub === "details") {
+      setAcceptanceSub("cards");
+      setErrors({});
+      return;
+    }
+    setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s));
+    if (step === 2) setAcceptanceSub("cards");
   }
 
   async function submit(e: FormEvent) {
@@ -445,7 +483,12 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
             className={`intake-step${step === s.n ? " on" : ""}${step > s.n ? " done" : ""}`}
             aria-current={step === s.n ? "step" : undefined}
             disabled={s.n > step}
-            onClick={() => { if (s.n < step) setStep(s.n); }}
+            onClick={() => {
+              if (s.n < step) {
+                setStep(s.n);
+                if (s.n === 2) setAcceptanceSub(step > 2 || requestTypes.length > 0 ? "details" : "cards");
+              }
+            }}
           >
             <span className="intake-step-n font-num" aria-hidden="true">
               {step > s.n ? "✓" : faYear.format(s.n)}
@@ -638,20 +681,29 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       </>)}
 
       {step === 2 && (<>
-      <Section icon="list" title="حالت بررسی / نوع درخواست" badge={requestTypes.length > 0 && <span className="badge good">{formatNumber(requestTypes.length)} نوع</span>}>
-        <p className="hint">می‌توانید چند حالت را با هم انتخاب کنید. چک‌لیست اجباری بعد از ثبت، روی پرونده و قبل از شروع کار تکمیل می‌شود.</p>
-        <div className="chips">
-          {typeCatalog.map((t) => (
-            <button type="button" key={t.key} aria-pressed={requestTypes.includes(t.key)}
-              className={`chip-button${requestTypes.includes(t.key) ? " active" : ""}`}
-              onClick={() => { toggle(requestTypes, setRequestTypes, t.key); setErrors((e) => ({ ...e, requestTypes: "" })); }}>
-              {t.title}
-            </button>
-          ))}
-        </div>
-        {errors.requestTypes && <span className="error">{errors.requestTypes}</span>}
-      </Section>
+      <p className="intake-substep" role="status">
+        {acceptanceSub === "cards"
+          ? "زیرمرحله ۱ از ۲ — نوع درخواست را انتخاب کنید"
+          : "زیرمرحله ۲ از ۲ — جزئیات پذیرش"}
+      </p>
 
+      {acceptanceSub === "cards" && (
+        <Section icon="list" title="نوع درخواست" badge={requestTypes.length > 0 && <span className="badge good">{formatNumber(requestTypes.length)} نوع</span>}>
+          <p className="hint">می‌توانید چند نوع را با هم انتخاب کنید. با «ادامه» وارد جزئیات می‌شوید؛ انتخاب کارت خودکار جابه‌جا نمی‌کند.</p>
+          <div className="request-type-cards" role="group" aria-label="نوع درخواست">
+            {typeCatalog.map((t) => (
+              <button type="button" key={t.key} aria-pressed={requestTypes.includes(t.key)}
+                className={`request-type-card${requestTypes.includes(t.key) ? " on" : ""}`}
+                onClick={() => { toggle(requestTypes, setRequestTypes, t.key); setErrors((e) => ({ ...e, requestTypes: "" })); }}>
+                {t.title}
+              </button>
+            ))}
+          </div>
+          {errors.requestTypes && <span className="error">{errors.requestTypes}</span>}
+        </Section>
+      )}
+
+      {acceptanceSub === "details" && (<>
       {needsMotorcycleChecklist && (
         <Section icon="gauge" title="نوع موتور">
           {!isMoto && <p className="hint">برای چک‌لیست موتورسیکلت، نوع موتور را مشخص کنید.</p>}
@@ -667,23 +719,34 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         </Section>
       )}
 
-      <Section icon="problem" title="ایراد اعلامی مشتری">
-        <div className="chips">
-          {(custom.problems ?? problemsFor(vehicleKind)).map((p) => (
-            <button type="button" key={p} aria-pressed={problems.includes(p)} className={`chip-button${problems.includes(p) ? " active" : ""}`}
-              onClick={() => toggle(problems, setProblems, p)}>{p}</button>
-          ))}
-        </div>
-        <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000}
-          placeholder="شرح مشتری به زبان خودش (اختیاری)" aria-label="شرح ایراد" />
-        {errors.problems && <span className="error">{errors.problems}</span>}
-      </Section>
+      {wantsProblems && (
+        <Section icon="problem" title="ایراد اعلامی مشتری">
+          <p className="hint">برای آچارکشی، عیب‌یابی و تعمیرات؛ تشخیص فنی بعداً روی پرونده ثبت می‌شود.</p>
+          <div className="chips">
+            {(custom.problems ?? problemsFor(vehicleKind)).map((p) => (
+              <button type="button" key={p} aria-pressed={problems.includes(p)} className={`chip-button${problems.includes(p) ? " active" : ""}`}
+                onClick={() => toggle(problems, setProblems, p)}>{p}</button>
+            ))}
+          </div>
+          <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000}
+            placeholder="شرح مشتری به زبان خودش (اختیاری)" aria-label="شرح ایراد" />
+        </Section>
+      )}
 
-      <Section icon="list" title="خدمات درخواستی" badge={services.length > 0 && <span className="badge good">{formatNumber(services.length)} خدمت</span>}>
-        <ServicePicker value={services} onChange={setServices} kind={vehicleKind} custom={custom.serviceCategories} />
-      </Section>
+      {wantsOther && !wantsProblems && (
+        <Section icon="list" title="شرح درخواست (سایر)">
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000}
+            placeholder="مثلاً تعویض چرخ یا درخواستی که در فهرست نیست (اختیاری)" aria-label="شرح درخواست سایر" />
+        </Section>
+      )}
 
-      <Section icon="camera" title="عکس و فیلم وسیله" badge={shots.length > 0 && <span className="badge good">{formatNumber(shots.length)} مورد</span>}>
+      {wantsServices && (
+        <Section icon="list" title="خدمات درخواستی" badge={services.length > 0 && <span className="badge good">{formatNumber(services.length)} خدمت</span>}>
+          <ServicePicker value={services} onChange={setServices} kind={vehicleKind} custom={custom.serviceCategories} />
+        </Section>
+      )}
+
+      <Section icon="camera" title="عکس و فیلم وسیله (اختیاری)" badge={shots.length > 0 && <span className="badge good">{formatNumber(shots.length)} مورد</span>}>
         <input ref={shotInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => addShots(e.target.files)} />
         <input ref={videoInput} type="file" accept="video/*" capture="environment" hidden onChange={(e) => addShots(e.target.files)} />
         {shots.length > 0 && (
@@ -709,6 +772,7 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
         <p className="hint">وضعیت ظاهری هنگام تحویل؛ بعد از ثبت در پرونده می‌ماند. فیلم فقط برای کارگاه است.</p>
       </Section>
       </>)}
+      </>)}
 
       {step === 3 && (<>
       <Section icon="list" title="خلاصه پذیرش">
@@ -716,8 +780,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
           <li><span className="muted">مشتری</span> {customer?.fullName || customerName || mobile}</li>
           <li><span className="muted">وسیله</span> {newVehicle ? (brand && model ? `${brand} ${model}` : "—") : (customer?.assets.find((a) => a.id === assetId)?.title ?? "—")}</li>
           <li><span className="muted">نوع درخواست</span> {requestTypes.map(typeTitle).join("، ") || "—"}</li>
-          {(problems.length > 0 || services.length > 0) && (
-            <li><span className="muted">جزئیات</span> {[...problems.slice(0, 2), ...services.slice(0, 2)].join("، ")}{(problems.length + services.length) > 4 ? "…" : ""}</li>
+          {problems.length > 0 && (
+            <li><span className="muted">ایراد اعلامی</span> {problems.join("، ")}</li>
+          )}
+          {services.length > 0 && (
+            <li><span className="muted">خدمات</span> {services.join("، ")}</li>
+          )}
+          {notes.trim() && (
+            <li><span className="muted">{wantsOther && !wantsProblems ? "شرح" : "توضیح مشتری"}</span> {notes.trim()}</li>
           )}
           {shots.length > 0 && (
             <li><span className="muted">رسانه</span> {formatNumber(shots.length)} عکس/فیلم آمادهٔ بارگذاری</li>
@@ -772,12 +842,14 @@ export function NewCaseView({ draftScope, canAssign, requireAssignee, vehicleKin
       {errors.form && <p className="error" role="alert">{errors.form}</p>}
       <div className="intake-footer">
         {step > 1 && (
-          <button type="button" className="block secondary" disabled={busy} onClick={() => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))}>
+          <button type="button" className="block secondary" disabled={busy} onClick={goBack}>
             مرحله قبل
           </button>
         )}
         {step < 3 ? (
-          <button key="intake-next" type="button" className="primary block big" onClick={goNext}>ادامه</button>
+          <button key="intake-next" type="button" className="primary block big" onClick={goNext}>
+            {step === 2 && acceptanceSub === "cards" ? "ادامه به جزئیات" : "ادامه"}
+          </button>
         ) : (
           <button key="intake-submit" type="submit" className="primary block big" disabled={busy} aria-busy={busy}>
             {busy ? (shots.length > 0 ? "در حال ثبت پذیرش و عکس‌ها…" : "در حال ثبت پذیرش…") : "ثبت و ساخت پرونده"}
