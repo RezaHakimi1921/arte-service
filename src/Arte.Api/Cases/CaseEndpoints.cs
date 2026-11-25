@@ -607,6 +607,14 @@ public static class CaseEndpoints
             return Results.Problem(statusCode: 409, title: "طبق تنظیمات، شروع کار و تهیه قطعه بعد از ثبت پرداخت مشتری است.",
                 extensions: new Dictionary<string, object?> { ["code"] = "payment_required" });
 
+        // Reopen label is «در ضمانت»: when WarrantyUntil is set and already past, block. Null = allow (no warranty recorded).
+        if (from.Key == "delivered" && !to.IsTerminal)
+        {
+            if (c.WarrantyUntil is { } until && clock.UtcNow > until)
+                return Results.Problem(statusCode: 409, title: "مدت ضمانت این پرونده تمام شده است؛ بازگشایی در ضمانت ممکن نیست.",
+                    extensions: new Dictionary<string, object?> { ["code"] = "warranty_expired", ["warrantyUntil"] = until });
+        }
+
         // Delivery with money still owed must be an explicit decision (نسیه), and starts the warranty.
         long creditRials = 0;
         DateTimeOffset? warrantyUntil = null;
