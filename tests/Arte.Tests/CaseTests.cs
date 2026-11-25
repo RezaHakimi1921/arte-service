@@ -496,10 +496,12 @@ public sealed class CaseTests(ArteApiFactory api)
             mobile = ArteApiFactory.NewMobile(),
             requestTypes = new[] { "wrenching" },
         }));
-        Assert.True(created.TryGetProperty("id", out _));
-        Assert.Equal(0, created.GetProperty("reportedProblems").GetArrayLength());
-        Assert.Equal(0, created.GetProperty("requestedServices").GetArrayLength());
-        Assert.True(string.IsNullOrEmpty(created.GetProperty("request").GetString()));
+        var id = created.GetProperty("id").GetGuid();
+        var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+        Assert.Contains(detail.GetProperty("requestTypes").EnumerateArray(), x => x.GetString() == "wrenching");
+        Assert.Equal(0, detail.GetProperty("reportedProblems").GetArrayLength());
+        Assert.Equal(0, detail.GetProperty("requestedServices").GetArrayLength());
+        Assert.True(string.IsNullOrEmpty(detail.GetProperty("request").GetString()));
     }
 
     [Fact]
