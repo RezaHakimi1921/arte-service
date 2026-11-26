@@ -609,6 +609,9 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
       <BottomSheet open={sheet === "actions"} title={pending ? `دلیل «${pending.label}»` : "اقدام‌های دیگر"} onClose={close}>
         {pending ? (
           <form onSubmit={(e) => { e.preventDefault(); if (reason.trim()) run(pending, { reason: reason.trim() }); }}>
+            {pending.label.includes("ضمانت") && c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now() && (
+              <p className="notice warn" role="status">مدت ضمانت این پرونده تمام شده؛ سرور بازگشایی در ضمانت را نمی‌پذیرد.</p>
+            )}
             <Field label="دلیل">
               <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
             </Field>
@@ -616,7 +619,11 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
           </form>
         ) : (
           others.map((t) => (
-            <SheetOption key={t.id} label={t.label} hint={`مرحله بعد: ${t.toStage.name}`} disabled={busy}
+            <SheetOption key={t.id} label={t.label}
+              hint={t.label.includes("ضمانت") && c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now()
+                ? "ضمانت تمام شده — قابل اجرا نیست"
+                : `مرحله بعد: ${t.toStage.name}`}
+              disabled={busy || (t.label.includes("ضمانت") && !!c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now())}
               tone={t.toStage.category === "cancelled" ? "danger" : undefined} onClick={() => run(t)} />
           ))
         )}

@@ -208,6 +208,35 @@ public sealed class CaseTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Reopen_is_blocked_when_warranty_until_has_passed()
+    {
+        var (owner, tenantId) = await api.NewBusinessAsync();
+        var c = await Open(owner);
+        var id = c.GetProperty("id").GetGuid();
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items",
+            new { kind = "labor", title = "تعمیر", unitPriceRials = 1_000_000, warrantyDays = 30 }));
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments",
+            new { amountRials = 1_000_000, method = "cash" }));
+        while (StageKey(c) != "delivered") c = await Run(owner, c, Primary(c));
+        Assert.NotEqual(JsonValueKind.Null, c.GetProperty("warrantyUntil").ValueKind);
+
+        await using (var scope = api.Services.CreateAsyncScope())
+        {
+            scope.ServiceProvider.GetRequiredService<Arte.Core.Tenancy.TenantContext>().Set(tenantId);
+            var db = scope.ServiceProvider.GetRequiredService<Arte.Core.Data.ArteDbContext>();
+            var row = await db.Cases.SingleAsync(x => x.Id == id);
+            row.WarrantyUntil = DateTimeOffset.UtcNow.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+
+        var reopen = TransitionTo(await Json(await owner.GetAsync($"/api/v1/cases/{id}")), "پذیرش شد");
+        var res = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/transitions/{reopen}", new { reason = "بعد از ضمانت" });
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        Assert.Contains("warranty_expired", await res.Content.ReadAsStringAsync());
+        Assert.Equal("delivered", StageKey(await Json(await owner.GetAsync($"/api/v1/cases/{id}"))));
+    }
+
+    [Fact]
     public async Task New_case_can_point_to_a_recent_case_of_the_same_motorcycle()
     {
         var (owner, _) = await api.NewBusinessAsync();
