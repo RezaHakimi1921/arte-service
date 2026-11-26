@@ -56,6 +56,14 @@ public sealed class CaseItem : ITenantOwned, ISoftDeletable
     public Guid? PerformedBy { get; set; }
     public int? WarrantyDays { get; set; }
     public Guid? CatalogItemId { get; set; }
+    /// <summary>Compensation for customer damage credit; only applied when Status is used.</summary>
+    public Guid? CustomerDamageId { get; set; }
+    /// <summary>When sale price exceeds remaining credit: customer_purchase or shop_loss.</summary>
+    public string? CompensationExcessMode { get; set; }
+    /// <summary>How much of this line reduced customer damage credit (rials).</summary>
+    public long CompensationCreditRials { get; set; }
+    /// <summary>Shop loss row created for excess under shop_loss mode (upsert on edit).</summary>
+    public Guid? CompensationShopLossId { get; set; }
     public Guid AddedBy { get; set; }
     public DateTimeOffset AddedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

@@ -130,9 +130,27 @@ public static class TrackingEndpoints
                 }
             }
 
-            // Only the photos the shop marked for the customer.
-            var photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.VisibleToCustomer && a.Purpose == AttachmentPurposes.Photo)
+            // Only the photos the shop marked for the customer (gallery; not damage-only rows until flags allow).
+            var photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.VisibleToCustomer && a.Purpose == AttachmentPurposes.Photo
+                    && a.DamageReportId == null)
                 .OrderBy(a => a.CreatedAt).Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt, IsVideo = a.ContentType.StartsWith("video/") }).ToListAsync(ct);
+
+            var damageReports = await db.CustomerDamageReports.AsNoTracking()
+                .Where(d => d.CaseId == c.Id && d.VoidedAt == null && d.ShowReportToCustomer).OrderBy(d => d.CreatedAt).ToListAsync(ct);
+            var customerDamages = new List<object>();
+            foreach (var d in damageReports)
+            {
+                var linked = await db.CaseItems.AsNoTracking().Where(i => i.CustomerDamageId == d.Id).ToListAsync(ct);
+                var remaining = DamageCompensation.RemainingCreditRials(d.AmountRials, linked);
+                object? media = null;
+                if (d.ShowMediaToCustomer)
+                {
+                    media = await db.CaseAttachments.AsNoTracking()
+                        .Where(a => a.DamageReportId == d.Id && a.DeletedAt == null)
+                        .OrderBy(a => a.CreatedAt).Select(a => new { a.Id, IsVideo = a.ContentType.StartsWith("video/") }).ToListAsync(ct);
+                }
+                customerDamages.Add(new { d.Id, d.AmountRials, RemainingRials = remaining, Media = media });
+            }
 
             // The satisfaction survey, once the vehicle is delivered (the SMS links here too).
             object? survey = null;
@@ -185,6 +203,7 @@ public static class TrackingEndpoints
                 Stages = timeline,
                 Items = items,
                 Money = money,
+                CustomerDamages = customerDamages,
             });
         }).AllowAnonymous().RequireRateLimiting("session");
 

@@ -151,6 +151,10 @@ public sealed class Case : ITenantOwned, ISoftDeletable
     /// <summary>Delivered with a balance (نسیه): when the customer promised to pay.</summary>
     public DateTimeOffset? CreditDueAt { get; set; }
 
+    /// <summary>Returned after delivery; does not change workflow stage.</summary>
+    public DateTimeOffset? ReturnMarkedAt { get; set; }
+    public string? ReturnReason { get; set; }
+
     public DateTimeOffset OpenedAt { get; set; }
     public DateTimeOffset StageEnteredAt { get; set; }
     public DateTimeOffset? ClosedAt { get; set; }
@@ -205,4 +209,13 @@ public static class CaseEventTypes
     public const string VideoPurged = "case.video_purged";
     public const string VideoRestored = "case.video_restored";
     public const string ReceiptReviewed = "case.receipt_reviewed";
+    public const string CustomerDamageCreated = "case.customer_damage_created";
+    public const string CustomerDamageUpdated = "case.customer_damage_updated";
+    public const string CustomerDamageVoided = "case.customer_damage_voided";
+    public const string CustomerDamageRestored = "case.customer_damage_restored";
+    public const string ShopLossCreated = "case.shop_loss_created";
+    public const string ShopLossUpdated = "case.shop_loss_updated";
+    public const string ShopLossRemoved = "case.shop_loss_removed";
+    public const string ShopLossRestored = "case.shop_loss_restored";
+    public const string ReturnMarked = "case.return_marked";
 }

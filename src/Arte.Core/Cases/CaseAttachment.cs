@@ -28,6 +28,8 @@ public sealed class CaseAttachment : ITenantOwned, ISoftDeletable
     public bool VisibleToCustomer { get; set; }
     /// <summary>photo (the case gallery) or receipt (a payment's bank receipt; never shown to the customer).</summary>
     public string Purpose { get; set; } = AttachmentPurposes.Photo;
+    /// <summary>When set, media belongs to a customer damage report on the case.</summary>
+    public Guid? DamageReportId { get; set; }
     public Guid CreatedBy { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

@@ -28,6 +28,7 @@ type Track = {
   stages: { name: string; key: string; state: "done" | "current" | "todo"; at: string | null }[] | null;
   items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null; discountRials?: number | null; image?: string | null }[] | null;
   money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number; payments?: { amountRials: number; method: string; paidAt: string }[] } | null;
+  customerDamages?: { id: string; amountRials: number; remainingRials: number; media?: { id: string; isVideo: boolean }[] | null }[];
 };
 
 type IconName = "calendar" | "camera" | "car" | "moto" | "check" | "plus" | "clock" | "close" | "document" | "moon" | "phone" | "sparkle" | "star" | "sun" | "wrench" | "wallet" | "box" | "chevron" | "back" | "copy" | "pin" | "play";
@@ -640,6 +641,33 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
             </ol>
           )}
         </Section>
+
+        {(t.customerDamages?.length ?? 0) > 0 && (
+          <Section icon="document" eyebrow="خسارت" title="بستانکاری خسارت">
+            <ul className="inv-list">
+              {t.customerDamages!.map((d) => (
+                <li className="inv-row" key={d.id}>
+                  <span className="inv-body">
+                    <span className="inv-title">خسارت ثبت‌شده</span>
+                    <span className="inv-sub">ماندهٔ بستانکاری شما</span>
+                  </span>
+                  <span className="inv-amount font-num">{formatNumber(Math.round(d.remainingRials / 10))}</span>
+                </li>
+              ))}
+            </ul>
+            {t.customerDamages!.some((d) => (d.media?.length ?? 0) > 0) && (
+              <div className="tk-photos" style={{ marginTop: "0.75rem" }}>
+                {t.customerDamages!.flatMap((d) => (d.media ?? []).map((m) => (
+                  <a className="tk-photo" key={m.id} href={photoUrl(m.id)} target="_blank" rel="noreferrer">
+                    {m.isVideo
+                      ? <><video src={photoUrl(m.id)} muted playsInline preload="metadata" /><span className="tk-play" aria-hidden="true"><Icon name="play" /></span></>
+                      : <img src={photoUrl(m.id)} alt="رسانه خسارت" loading="lazy" />}
+                  </a>
+                )))}
+              </div>
+            )}
+          </Section>
+        )}
 
         {t.photos.length > 0 && (
           <Section icon="camera" eyebrow="گزارش تصویری" title="تصاویر و فیلم کار" action={<span className="tk-count">{formatNumber(t.photos.length)} مورد</span>}>

@@ -251,9 +251,12 @@ public static class CaseEndpoints
             Asset = asset is null ? null : new { asset.Id, asset.Title, asset.Identifier, asset.Kind, Attributes = asset.Attributes?.RootElement },
             Assignee = assignee, ParentCase = parent,
             c.WarrantyUntil, c.CreditDueAt,
+            c.ReturnMarkedAt, c.ReturnReason,
             Billing = await BillingEndpoints.MoneyView(db, c.Id, me, ct),
             PhotosVisibleByDefault = await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct),
-            Photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.Purpose == AttachmentPurposes.Photo).OrderBy(a => a.CreatedAt)
+            Photos = await db.CaseAttachments.AsNoTracking()
+                .Where(a => a.CaseId == c.Id && a.Purpose == AttachmentPurposes.Photo && a.DamageReportId == null)
+                .OrderBy(a => a.CreatedAt)
                 .Select(a => new { a.Id, a.StageKey, a.Caption, a.CreatedAt, a.VisibleToCustomer, IsVideo = a.ContentType.StartsWith("video/") }).ToListAsync(ct),
             Survey = await Arte.Api.Surveys.SurveyEndpoints.CaseViewAsync(db, c, ct),
             CanFollowUp = CaseAccess.CanSeeAll(me),
@@ -606,6 +609,9 @@ public static class CaseEndpoints
             && !await db.Payments.AnyAsync(p => p.CaseId == c.Id, ct))
             return Results.Problem(statusCode: 409, title: "طبق تنظیمات، شروع کار و تهیه قطعه بعد از ثبت پرداخت مشتری است.",
                 extensions: new Dictionary<string, object?> { ["code"] = "payment_required" });
+
+        if (to.Category == StageCategories.Cancelled && from.Key == "delivered")
+            return Results.Problem(statusCode: 409, title: "لغو پرونده بعد از تحویل ممکن نیست.");
 
         // Reopen label is «در ضمانت»: when WarrantyUntil is set and already past, block. Null = allow (no warranty recorded).
         if (from.Key == "delivered" && !to.IsTerminal)
