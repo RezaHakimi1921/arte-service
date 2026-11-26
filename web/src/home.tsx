@@ -133,8 +133,8 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
           sub={manager && st.unassigned > 0 ? `${formatNumber(st.unassigned)} بدون مسئول` : "در دست تعمیرکاران"} onClick={() => onOpenCases({ category: "active" })} />
         <Stat icon="check" tone="green" value={st.ready} label="آماده تحویل"
           sub={st.readyBalanceRials > 0 ? `${toman(st.readyBalanceRials)} مانده` : `${formatNumber(st.deliveredToday)} تحویل امروز`} onClick={() => onOpenCases({ category: "done" })} />
-        <Stat icon="clock" tone="orange" value={st.waiting} label="منتظر یا متوقف"
-          sub={st.blocked > 0 ? `${formatNumber(st.blocked)} مورد متوقف` : "کاری متوقف نیست"} onClick={() => onOpenCases({ category: "waiting" })} />
+        <Stat icon="clock" tone="orange" value={st.waiting} label="منتظر"
+          sub={st.blocked > 0 ? `${formatNumber(st.blocked)} متوقف با دلیل (جدا از صف انتظار)` : "منتظر قطعه یا تأیید مشتری"} onClick={() => onOpenCases({ category: "waiting" })} />
       </div>
 
       {st.open === 0 && (

@@ -200,6 +200,12 @@ public static class TrackingEndpoints
                     c.ReportedProblems, c.RequestedServices, ServiceChanges = serviceChanges, ProblemChanges = problemChanges,
                 },
                 Status = new { shown.Name, shown.Key, shown.Category, c.WaitReason, c.StageEnteredAt },
+                // Doc 33: return marker vs reopen — never expose internal return reason on the public link.
+                CustomerNotice = c.ReturnMarkedAt is null ? null
+                    : current.Key == "delivered"
+                        ? new { Kind = "return_review", StageName = (string?)null }
+                        : new { Kind = "reopened", StageName = (string?)shown.Name },
+                ReturnMarked = c.ReturnMarkedAt is not null,
                 Stages = timeline,
                 Items = items,
                 Money = money,

@@ -14,9 +14,9 @@ export type CustomerDamage = {
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
 const faShort = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
-/** ALERT + اقدام فوری برای پروندهٔ تحویل‌شده — بالای صفحه، نه ته لیست. */
-export function ReturnBanner({ caseId, canManage, returnMarkedAt, returnReason, onDone }: {
-  caseId: string; canManage: boolean;
+/** ALERT بالای صفحه: برگشتی فعال روی تحویل، یا پیام بازگشایی پس از reopen (سابقه پاک نمی‌شود). */
+export function ReturnBanner({ caseId, canManage, stageKey, stageName, returnMarkedAt, returnReason, onDone }: {
+  caseId: string; canManage: boolean; stageKey: string; stageName: string;
   returnMarkedAt?: string | null; returnReason?: string | null;
   onDone: () => void;
 }) {
@@ -25,21 +25,34 @@ export function ReturnBanner({ caseId, canManage, returnMarkedAt, returnReason, 
   const [reason, setReason] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const delivered = stageKey === "delivered";
 
-  if (returnMarkedAt) {
+  if (returnMarkedAt && delivered) {
     return (
       <div className="notice warn return-alert" role="alert">
-        <strong className="notice-title">این پرونده برگشتی است</strong>
+        <strong className="notice-title">در دست بررسی مجدد</strong>
         <span className="notice-body">
-          کار به‌صورت خودکار باز نمی‌شود.
-          {returnReason ? <> دلیل: {returnReason}</> : null}
+          نشانگر برگشتی ثبت شده؛ کار خودکار باز نمی‌شود — از «بازگشایی در ضمانت» استفاده کنید.
+          {returnReason ? <> دلیل داخلی: {returnReason}</> : null}
           {" · "}{faShort.format(new Date(returnMarkedAt))}
         </span>
       </div>
     );
   }
 
-  if (!canManage) return null;
+  if (returnMarkedAt && !delivered) {
+    return (
+      <div className="notice good return-alert" role="status">
+        <strong className="notice-title">پرونده بازگشایی شد</strong>
+        <span className="notice-body">
+          مرحلهٔ فعلی: {stageName}. سابقهٔ برگشتی در تاریخچه مانده است
+          {returnReason ? <> (دلیل برگشتی: {returnReason})</> : null}.
+        </span>
+      </div>
+    );
+  }
+
+  if (!canManage || !delivered) return null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -69,13 +82,13 @@ export function ReturnBanner({ caseId, canManage, returnMarkedAt, returnReason, 
         </button>
       </div>
       <BottomSheet open={open} title="ثبت برگشتی" onClose={() => !busy && setOpen(false)}>
-        <form className="stack" onSubmit={submit}>
+        <form className="stack" onSubmit={(e) => { void submit(e); }}>
           <p className="muted small">مرحلهٔ پرونده عوض نمی‌شود و کار خودکار باز نمی‌شود. برای ادامهٔ کار بعداً از بازگشایی در ضمانت استفاده کنید.</p>
           <Field label="دلیل برگشتی" error={err}>
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={3}
-              placeholder="مثلاً صدای غیرعادی بعد از تحویل" required />
+              placeholder="مثلاً صدای غیرعادی بعد از تحویل" />
           </Field>
-          <button type="submit" className="primary block" disabled={busy} aria-busy={busy}>
+          <button type="submit" className="primary block" disabled={busy || !reason.trim()} aria-busy={busy}>
             {busy ? "در حال ثبت…" : "ثبت برگشتی"}
           </button>
         </form>
@@ -121,7 +134,9 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
           showMediaToCustomer: showReport && showMedia,
         },
       });
-      notify("خسارت ثبت شد");
+      notify(showReport
+        ? "خسارت ثبت شد و در لینک مشتری (وجود و مانده) دیده می‌شود"
+        : "خسارت ثبت شد — در لینک مشتری دیده نمی‌شود مگر «نمایش در لینک» را روشن کنید");
       setOpen(false);
       setAmount(""); setNote(""); setShowReport(false); setShowMedia(false);
       await load();
@@ -197,6 +212,9 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
                 {" · "}رسانه: {r.showMediaToCustomer ? "روشن" : "خاموش"}
                 {" · "}فایل: {formatNumber(r.media?.length ?? 0)}
               </p>
+              {!r.showReportToCustomer && (
+                <p className="hint">برای دیدن مشتری در لینک پیگیری، هنگام ویرایش «نمایش در لینک مشتری» را روشن کنید. یادداشت داخلی هرگز عمومی نمی‌شود.</p>
+              )}
               {canManage && (
                 <div className="quick-actions">
                   <label className="btn-file">
@@ -216,9 +234,9 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
       )}
 
       <BottomSheet open={open} title="ثبت خسارت به مشتری" onClose={() => !busy && setOpen(false)}>
-        <form className="stack" onSubmit={submit}>
+        <form className="stack" onSubmit={(e) => { void submit(e); }}>
           <Field label="مبلغ بستانکاری مشتری (تومان)" error={err}>
-            <NumberInput value={amount} onChange={setAmount} inputMode="numeric" />
+            <NumberInput value={amount} onChange={(v) => { setAmount(v); if (err) setErr(null); }} inputMode="numeric" />
           </Field>
           <label>
             <span>یادداشت داخلی (به مشتری نشان داده نمی‌شود)</span>
@@ -231,24 +249,28 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
             }} />
             <span>نمایش در لینک مشتری (فقط وجود و مانده — بدون شرح)</span>
           </label>
+          {!showReport && (
+            <p className="hint">پیش‌فرض خاموش است؛ تا وقتی روشن نکنید مشتری در لینک چیزی از خسارت نمی‌بیند.</p>
+          )}
           <label className="check">
             <input type="checkbox" checked={showMedia} disabled={!showReport}
               onChange={(e) => setShowMedia(e.target.checked)} />
             <span>نمایش عکس/فیلم در لینک مشتری</span>
           </label>
-          <button type="submit" className="primary block" disabled={busy} aria-busy={busy}>
+          <button type="submit" className="primary block"
+            disabled={busy || !onlyDigits(toLatinDigits(amount))} aria-busy={busy}>
             {busy ? "در حال ثبت…" : "ثبت خسارت"}
           </button>
         </form>
       </BottomSheet>
 
       <BottomSheet open={!!voidId} title="ابطال گزارش خسارت" onClose={() => !busy && setVoidId(null)}>
-        <form className="stack" onSubmit={confirmVoid}>
+        <form className="stack" onSubmit={(e) => { void confirmVoid(e); }}>
           <p className="muted small">گزارش از لیست فعال خارج می‌شود؛ علت برای سابقه لازم است.</p>
           <Field label="علت ابطال" error={voidErr}>
-            <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} maxLength={500} rows={3} required />
+            <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} maxLength={500} rows={3} />
           </Field>
-          <button type="submit" className="danger block" disabled={busy} aria-busy={busy}>
+          <button type="submit" className="danger block" disabled={busy || !voidReason.trim()} aria-busy={busy}>
             {busy ? "در حال ابطال…" : "ابطال گزارش"}
           </button>
         </form>

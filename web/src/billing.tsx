@@ -96,6 +96,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
     }
   }
   const [busy, setBusy] = useState(false);
+  const [voidPayment, setVoidPayment] = useState<PaymentRow | null>(null);
 
   async function run(work: () => Promise<Billing>, ok: string, undo?: () => Promise<Billing>) {
     if (busy) return;
@@ -190,10 +191,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                     <span className="muted small"> · {faDate.format(new Date(p.paidAt))}{p.note ? ` · ${p.note}` : ""}</span>
                   </span>
                   {p.receiptId && <button className="link" onClick={() => openReceipt(p.receiptId!)}>رسید</button>}
-                  <button className="link danger" disabled={busy}
-                    onClick={() => run(() => api<Billing>(`/api/v1/cases/${caseId}/payments/${p.id}`, { method: "DELETE" }), "پرداخت باطل شد")}>
-                    باطل
-                  </button>
+                  <button className="link danger" disabled={busy} onClick={() => setVoidPayment(p)}>باطل</button>
                 </li>
               ))}
             </ul>
@@ -236,6 +234,27 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
 
       <BottomSheet open={!!receiptUrl} title="رسید پرداخت" onClose={() => { if (receiptUrl) URL.revokeObjectURL(receiptUrl); setReceiptUrl(null); }}>
         {receiptUrl && <img className="receipt-image" src={receiptUrl} alt="رسید پرداخت" />}
+      </BottomSheet>
+
+      <BottomSheet open={!!voidPayment} title="باطل کردن پرداخت" onClose={() => !busy && setVoidPayment(null)}>
+        {voidPayment && (
+          <div className="stack">
+            <p>
+              پرداخت <strong className="font-num">{toman(voidPayment.amountRials)}</strong>
+              {" "}({METHOD_LABELS[voidPayment.method] ?? voidPayment.method}) باطل شود؟
+            </p>
+            <p className="muted small">اگر پرونده تسویه باشد، ممکن است دوباره نسیه شود. این کار از تاریخچه پاک نمی‌شود.</p>
+            <button type="button" className="danger block" disabled={busy} aria-busy={busy}
+              onClick={() => {
+                const id = voidPayment.id;
+                setVoidPayment(null);
+                run(() => api<Billing>(`/api/v1/cases/${caseId}/payments/${id}`, { method: "DELETE" }), "پرداخت باطل شد");
+              }}>
+              {busy ? "در حال ابطال…" : "بله، باطل شود"}
+            </button>
+            <button type="button" className="block" disabled={busy} onClick={() => setVoidPayment(null)}>انصراف</button>
+          </div>
+        )}
       </BottomSheet>
 
       <PaymentSheet open={paying} caseId={caseId} requireReceipt={billing.requireTransferReceipt} terminals={billing.terminals ?? []} cards={billing.cards ?? []} suggested={Math.max(0, m.balanceRials)} busy={busy} onClose={() => setPaying(false)}

@@ -87,6 +87,16 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
     `انتخاب همهٔ چک‌لیست بازدید (${new Intl.NumberFormat("fa-IR").format(Number(d.count ?? 0))} مورد)`,
   "case.checklist_changed": (d) =>
     d.isChecked === false ? `برداشتن تیک چک‌لیست: ${d.title ?? ""}` : `تیک چک‌لیست: ${d.title ?? ""}`,
+  "case.customer_damage_created": (d) =>
+    `خسارت مشتری ثبت شد${d.amountRials != null ? ` · ${tomanText(d.amountRials)}` : ""}`,
+  "case.customer_damage_updated": () => "گزارش خسارت مشتری ویرایش شد",
+  "case.customer_damage_voided": (d) =>
+    `گزارش خسارت ابطال شد${d.reason ? ` (علت: ${d.reason})` : ""}`,
+  "case.customer_damage_restored": () => "گزارش خسارت بازگردانی شد",
+  "case.return_marked": (d) =>
+    `برگشتی ثبت شد${d.reason ? ` (دلیل: ${d.reason})` : ""} — کار خودکار باز نشد`,
+  "case.shop_loss_created": (d) =>
+    `زیان مجموعه ثبت شد${d.amountRials != null ? ` · ${tomanText(d.amountRials)}` : ""}`,
   "staff.sms": (d) =>
     d.sent
       ? `پیامک به استاد: کار تمام شد`
