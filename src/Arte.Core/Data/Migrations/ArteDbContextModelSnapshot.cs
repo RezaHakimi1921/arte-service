@@ -148,6 +148,8 @@ namespace Arte.Core.Data.Migrations
 
                     b.HasIndex("CatalogItemId");
 
+                    b.HasIndex("CompensationShopLossId");
+
                     b.HasIndex("CustomerDamageId");
 
                     b.HasIndex("PerformedBy");
@@ -3707,6 +3709,11 @@ namespace Arte.Core.Data.Migrations
                         .WithMany()
                         .HasForeignKey("CatalogItemId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Arte.Core.Cases.ShopLossReport", null)
+                        .WithMany()
+                        .HasForeignKey("CompensationShopLossId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Arte.Core.Cases.CustomerDamageReport", null)
                         .WithMany()
