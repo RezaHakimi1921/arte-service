@@ -174,4 +174,52 @@ public sealed class DamageTests(ArteApiFactory api)
         Assert.Equal(stageId, after.GetProperty("stage").GetProperty("id").GetGuid());
         Assert.Equal("delivered", after.GetProperty("stage").GetProperty("key").GetString());
     }
+
+    [Fact]
+    public async Task Tracking_hides_damage_when_show_flag_off_and_never_leaks_note()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (id, code) = await OpenCase(owner);
+        var secret = "یادداشت محرمانه پنل";
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/customer-damages",
+            new { amountRials = 2_500_000, internalNote = secret, showReportToCustomer = false }));
+
+        var body = await api.Client().GetStringAsync($"/api/v1/track/{code}");
+        Assert.DoesNotContain(secret, body);
+        var track = JsonDocument.Parse(body).RootElement;
+        Assert.Empty(track.GetProperty("customerDamages").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Tracking_return_review_then_reopened_notice_without_reason_leak()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (id, code) = await OpenCase(owner);
+        await DeliverAsync(owner, id);
+        var secret = "دلیل داخلی برگشتی مخفی";
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/mark-returned", new { reason = secret }));
+
+        var track = JsonDocument.Parse(await api.Client().GetStringAsync($"/api/v1/track/{code}")).RootElement;
+        Assert.DoesNotContain(secret, track.GetRawText());
+        Assert.Equal("return_review", track.GetProperty("customerNotice").GetProperty("kind").GetString());
+        Assert.True(track.GetProperty("returnMarked").GetBoolean());
+
+        var detail = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+        var reopen = detail.GetProperty("transitions").EnumerateArray()
+            .First(t => t.GetProperty("label").GetString()!.Contains("ضمانت"));
+        await Json(await owner.PostAsJsonAsync(
+            $"/api/v1/cases/{id}/transitions/{reopen.GetProperty("id").GetGuid()}",
+            new { reason = "باز برای تست" }));
+
+        var after = await Json(await owner.GetAsync($"/api/v1/cases/{id}"));
+        Assert.NotEqual("delivered", after.GetProperty("stage").GetProperty("key").GetString());
+        Assert.False(string.IsNullOrEmpty(after.GetProperty("returnMarkedAt").GetString()));
+        Assert.Contains(after.GetProperty("timeline").EnumerateArray(),
+            e => e.GetProperty("type").GetString() == "case.return_marked");
+
+        track = JsonDocument.Parse(await api.Client().GetStringAsync($"/api/v1/track/{code}")).RootElement;
+        Assert.DoesNotContain(secret, track.GetRawText());
+        Assert.Equal("reopened", track.GetProperty("customerNotice").GetProperty("kind").GetString());
+        Assert.False(string.IsNullOrEmpty(track.GetProperty("customerNotice").GetProperty("stageName").GetString()));
+    }
 }

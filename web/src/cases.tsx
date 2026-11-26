@@ -219,9 +219,9 @@ function FuelMini({ level }: { level: number }) {
 
 const FILTERS: { label: string; filter: CaseFilter }[] = [
   { label: "باز", filter: {} },
-  { label: "در حال کار", filter: { category: "active" } },
+  { label: "کار", filter: { category: "active" } },
   { label: "منتظر", filter: { category: "waiting" } },
-  { label: "آماده تحویل", filter: { category: "done" } },
+  { label: "آماده", filter: { category: "done" } },
   { label: "مال من", filter: { mine: true } },
   { label: "همه", filter: { all: true } },
 ];
@@ -469,10 +469,12 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
       </header>
 
       {/* برگشتی: ALERT بالای صفحه تا همان اول اقدام شود (سند ۳۲ + الگوی نسیه/هشدار). */}
-      {c.stage.key === "delivered" && (
+      {(c.stage.key === "delivered" || c.returnMarkedAt) && (
         <ReturnBanner
           caseId={c.id}
           canManage={c.canManage}
+          stageKey={c.stage.key}
+          stageName={c.stage.name}
           returnMarkedAt={c.returnMarkedAt}
           returnReason={c.returnReason}
           onDone={load}

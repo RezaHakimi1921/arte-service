@@ -25,6 +25,8 @@ type Track = {
     problemChanges?: Change[];
   };
   status: { name: string; key: string; category: string; waitReason: string | null; stageEnteredAt: string };
+  customerNotice?: { kind: "return_review" | "reopened"; stageName: string | null } | null;
+  returnMarked?: boolean;
   stages: { name: string; key: string; state: "done" | "current" | "todo"; at: string | null }[] | null;
   items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null; discountRials?: number | null; image?: string | null }[] | null;
   money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number; payments?: { amountRials: number; method: string; paidAt: string }[] } | null;
@@ -269,6 +271,21 @@ function when(iso: string) {
 /** One plain sentence for where the vehicle is now, and what happens next. */
 function now(t: Track): { title: string; note: string } {
   const s = t.status;
+  const notice = t.customerNotice;
+  if (notice?.kind === "return_review") {
+    return {
+      title: "در دست بررسی مجدد",
+      note: "درخواست شما ثبت شد و تعمیرگاه در حال بررسی است. جزئیات داخلی نمایش داده نمی‌شود.",
+    };
+  }
+  if (notice?.kind === "reopened") {
+    return {
+      title: "پرونده بازگشایی شد",
+      note: notice.stageName
+        ? `پروندهٔ شما دوباره در تعمیرگاه باز شد. مرحلهٔ فعلی: ${notice.stageName}.`
+        : "پروندهٔ شما دوباره در تعمیرگاه باز شد و کار ادامه دارد.",
+    };
+  }
   if (s.key === "delivered") return { title: "وسیله‌ی شما تحویل داده شد", note: "از اعتمادتان سپاسگزاریم. سابقه‌ی کار و ضمانت همین‌جا می‌ماند." };
   if (s.category === "cancelled") return { title: "این پرونده لغو شده است", note: "برای جزئیات با تعمیرگاه تماس بگیرید." };
   if (s.key === "ready") return { title: "وسیله‌ی شما آماده‌ی تحویل است", note: "می‌توانید برای تحویل مراجعه کنید." };

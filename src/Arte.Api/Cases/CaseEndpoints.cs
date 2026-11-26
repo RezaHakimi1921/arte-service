@@ -113,15 +113,15 @@ public static class CaseEndpoints
         if (!string.IsNullOrEmpty(category))
         {
             if (!StageCategories.All.Contains(category)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["category"] = ["دسته نامعتبر است."] });
-            // The home cards and these filters mean the same thing: every open case is in exactly one of
-            // «منتظر / متوقف» (stopped by a reason or in a waiting stage), «آماده تحویل» or «در حال کار».
+            // Doc 33: «در حال کار» = diagnosing/repairing/review only (not received).
+            // Keys inlined so EF can translate (CaseQueue helpers stay for inbox in-memory).
             rows = category switch
             {
                 StageCategories.Done => rows.Where(r => r.s.Category == StageCategories.Done && !r.s.IsTerminal),
-                StageCategories.Waiting => rows.Where(r => !r.s.IsTerminal && r.s.Category != StageCategories.Done
+                StageCategories.Waiting => rows.Where(r => !r.s.IsTerminal
                     && (r.c.WaitReason != null || r.s.Category == StageCategories.Waiting)),
-                StageCategories.Active => rows.Where(r => !r.s.IsTerminal && r.s.Category != StageCategories.Done
-                    && r.c.WaitReason == null && r.s.Category != StageCategories.Waiting && r.s.Category != StageCategories.Cancelled),
+                StageCategories.Active => rows.Where(r => !r.s.IsTerminal && r.c.WaitReason == null
+                    && (r.s.Key == "diagnosing" || r.s.Key == "repairing" || r.s.Key == "review")),
                 _ => rows.Where(r => r.s.Category == category),
             };
         }
@@ -822,22 +822,22 @@ public static class CaseEndpoints
             // Delivered cases whose customer was unhappy, until someone marks the follow-up.
             LowSatisfaction = seeAll ? await Arte.Api.Surveys.SurveyEndpoints.NeedsFollowUpAsync(db, ct) : [],
             Mine = cards.Where(c => c.Mine).ToList(),
-            Ready = cards.Where(c => c.Stage.Category == StageCategories.Done).ToList(),
+            Ready = cards.Where(c => CaseQueue.IsReady(c.Stage.Category, c.Stage.IsTerminal)).ToList(),
             Blocked = cards.Where(c => c.WaitReason is not null)
                 .GroupBy(c => c.WaitReason!).Select(g => new { Reason = g.Key, Cases = g.ToList() }).ToList(),
             DueToday = cards.Where(c => c.PromisedAt is { } p && CaseAlerts.TehranDay(p) <= today).ToList(),
             Stats = new
             {
                 Open = cards.Count,
-                Active = cards.Count(c => c.Stage.Category != StageCategories.Done && c.WaitReason is null && c.Stage.Category != StageCategories.Waiting),
-                Waiting = cards.Count(c => c.Stage.Category != StageCategories.Done && (c.WaitReason is not null || c.Stage.Category == StageCategories.Waiting)),
-                Ready = cards.Count(c => c.Stage.Category == StageCategories.Done),
+                Active = cards.Count(c => CaseQueue.IsInProgress(c.Stage.Key, c.WaitReason)),
+                Waiting = cards.Count(c => CaseQueue.IsWaiting(c.Stage.Category, c.WaitReason)),
+                Ready = cards.Count(c => CaseQueue.IsReady(c.Stage.Category, c.Stage.IsTerminal)),
                 OpenedToday = await cases.CountAsync(c => c.OpenedAt >= CaseAlerts.TehranMidnightUtc(now), ct),
                 DeliveredToday = await (from c in cases join s in db.Stages on c.StageId equals s.Id
                                         where s.Key == "delivered" && c.ClosedAt >= CaseAlerts.TehranMidnightUtc(now) select c).CountAsync(ct),
-                Unassigned = open.Count(o => o.AssigneeId == null && o.Stage.Category != StageCategories.Done),
+                Unassigned = open.Count(o => o.AssigneeId == null && !CaseQueue.IsReady(o.Stage.Category, o.Stage.IsTerminal)),
                 Blocked = cards.Count(c => c.WaitReason is not null),
-                ReadyBalanceRials = cards.Where(c => c.Stage.Category == StageCategories.Done).Sum(c => Math.Max(0, c.BalanceRials)),
+                ReadyBalanceRials = cards.Where(c => CaseQueue.IsReady(c.Stage.Category, c.Stage.IsTerminal)).Sum(c => Math.Max(0, c.BalanceRials)),
             },
         });
     }
