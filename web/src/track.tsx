@@ -659,33 +659,6 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           )}
         </Section>
 
-        {(t.customerDamages?.length ?? 0) > 0 && (
-          <Section icon="document" eyebrow="خسارت" title="بستانکاری خسارت">
-            <ul className="inv-list">
-              {t.customerDamages!.map((d) => (
-                <li className="inv-row" key={d.id}>
-                  <span className="inv-body">
-                    <span className="inv-title">خسارت ثبت‌شده</span>
-                    <span className="inv-sub">ماندهٔ بستانکاری شما</span>
-                  </span>
-                  <span className="inv-amount font-num">{formatNumber(Math.round(d.remainingRials / 10))}</span>
-                </li>
-              ))}
-            </ul>
-            {t.customerDamages!.some((d) => (d.media?.length ?? 0) > 0) && (
-              <div className="tk-photos" style={{ marginTop: "0.75rem" }}>
-                {t.customerDamages!.flatMap((d) => (d.media ?? []).map((m) => (
-                  <a className="tk-photo" key={m.id} href={photoUrl(m.id)} target="_blank" rel="noreferrer">
-                    {m.isVideo
-                      ? <><video src={photoUrl(m.id)} muted playsInline preload="metadata" /><span className="tk-play" aria-hidden="true"><Icon name="play" /></span></>
-                      : <img src={photoUrl(m.id)} alt="رسانه خسارت" loading="lazy" />}
-                  </a>
-                )))}
-              </div>
-            )}
-          </Section>
-        )}
-
         {t.photos.length > 0 && (
           <Section icon="camera" eyebrow="گزارش تصویری" title="تصاویر و فیلم کار" action={<span className="tk-count">{formatNumber(t.photos.length)} مورد</span>}>
             <div className="tk-photos">
@@ -701,10 +674,59 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </Section>
         )}
 
-        {(t.items || t.money) && (
+        {(t.items || t.money || (t.customerDamages?.length ?? 0) > 0) && (
           <Section icon="wallet" eyebrow="صورت‌حساب" title="کالا، کارها و هزینه">
+            {(t.customerDamages?.length ?? 0) > 0 && (() => {
+              const damages = t.customerDamages!;
+              const remaining = damages.reduce((s, d) => s + d.remainingRials, 0);
+              const registered = damages.reduce((s, d) => s + d.amountRials, 0);
+              const usable = remaining > 0;
+              return (
+                <div className="tk-damage">
+                  <div className="tk-damage-head">
+                    <span className="tk-damage-icon" aria-hidden="true"><Icon name="document" /></span>
+                    <div>
+                      <span className="tk-damage-caption">خسارت</span>
+                      <strong className="tk-damage-title">بستانکاری خسارت</strong>
+                    </div>
+                  </div>
+                  <div className="tk-damage-body">
+                    <div className="tk-damage-copy">
+                      <span className="tk-damage-label">خسارت ثبت‌شده</span>
+                      <span className="tk-damage-sub">ماندهٔ بستانکاری شما</span>
+                      {registered !== remaining && (
+                        <span className="tk-damage-meta muted small">از {toman(registered)} ثبت‌شده</span>
+                      )}
+                    </div>
+                    <div className="tk-damage-amount">
+                      <strong className="font-num">{formatNumber(Math.round(remaining / 10))}</strong>
+                      <span>تومان</span>
+                    </div>
+                  </div>
+                  <div className="tk-damage-foot">
+                    <span>وضعیت اعتبار</span>
+                    <span className={`tk-damage-status${usable ? " on" : ""}`}>
+                      <i aria-hidden="true" />
+                      {usable ? "قابل استفاده" : "تسویه با جبران"}
+                    </span>
+                  </div>
+                  {damages.some((d) => (d.media?.length ?? 0) > 0) && (
+                    <div className="tk-photos tk-damage-media">
+                      {damages.flatMap((d) => (d.media ?? []).map((m) => (
+                        <a className="tk-photo" key={m.id} href={photoUrl(m.id)} target="_blank" rel="noreferrer">
+                          {m.isVideo
+                            ? <><video src={photoUrl(m.id)} muted playsInline preload="metadata" /><span className="tk-play" aria-hidden="true"><Icon name="play" /></span></>
+                            : <img src={photoUrl(m.id)} alt="رسانه خسارت" loading="lazy" />}
+                        </a>
+                      )))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {t.items && t.items.length > 0 ? (
-              <ul className="inv-list">
+              <ul className={`inv-list${(t.customerDamages?.length ?? 0) > 0 ? " after-damage" : ""}`}>
                 {t.items.map((i, k) => (
                   <li className="inv-row" key={k}>
                     <span className={`inv-thumb ${i.kind === "part" ? "part" : "labor"}`}>
@@ -724,9 +746,9 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                   </li>
                 ))}
               </ul>
-            ) : (
+            ) : (t.customerDamages?.length ?? 0) === 0 ? (
               <div className="tk-empty-bill"><strong>هنوز کالا یا کاری ثبت نشده</strong><p>بعد از ثبت کالا و اجرت، این‌جا نشان داده می‌شود.</p></div>
-            )}
+            ) : null}
             {t.money && t.money.totalRials > 0 && (
               <div className="inv-sum">
                 {(t.money.discountRials ?? 0) > 0 && (

@@ -2604,6 +2604,52 @@ button.danger-outline { color: var(--danger); background: transparent; border: 1
   .tk-grid > * { width: 100%; margin: 0 0 20px; }
 }
 
+/* Damage credit inside the invoice card (track) — money-related, not a separate inv-row. */
+.tk-damage {
+  display: flex; flex-direction: column; gap: 0;
+  margin: 0 0 4px; padding: 0 0 4px;
+}
+.tk-damage-head {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+}
+.tk-damage-icon {
+  display: grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center;
+  border-radius: 14px; background: var(--accent-soft); color: var(--accent);
+}
+.tk-damage-icon svg { width: 21px; height: 21px; }
+.tk-damage-caption { display: block; font-size: 0.72rem; color: var(--muted); margin-bottom: 2px; }
+.tk-damage-title { display: block; font-size: 1rem; font-weight: 800; color: var(--text); }
+.tk-damage-body {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 4px 0 14px;
+}
+.tk-damage-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.tk-damage-label { font-size: 0.95rem; font-weight: 700; }
+.tk-damage-sub { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+.tk-damage-meta { font-size: 0.75rem; }
+.tk-damage-amount {
+  display: flex; flex: 0 0 auto; align-items: baseline; gap: 5px;
+  color: var(--accent); white-space: nowrap;
+}
+.tk-damage-amount strong { font-size: 1.35rem; font-weight: 800; }
+.tk-damage-amount span { font-size: 0.72rem; font-weight: 600; }
+.tk-damage-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding-top: 14px; border-top: 1px dashed var(--border-strong);
+  font-size: 0.78rem; color: var(--muted);
+}
+.tk-damage-status { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; }
+.tk-damage-status i {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+}
+.tk-damage-status.on { color: var(--success); }
+.tk-damage-status.on i { background: var(--success); }
+.tk-damage-media { margin-top: 14px; }
+.inv-list.after-damage {
+  margin-top: 12px; padding-top: 8px;
+  border-top: 1px dashed var(--border-strong);
+}
+
 .inv-list { margin: 0; padding: 0; list-style: none; }
 .inv-row { display: grid; grid-template-columns: 52px 1fr auto auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); }
 .inv-row:first-child { border-top: 0; padding-top: 0; }
