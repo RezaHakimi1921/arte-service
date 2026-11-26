@@ -15,7 +15,8 @@ public static class BillingEndpoints
 {
     public sealed record ItemInput(
         string? Kind, string? Title, decimal? Quantity, long? UnitPriceRials, long? UnitCostRials, long? DiscountRials,
-        string? Supplier, string? Status, Guid? PerformedBy, int? WarrantyDays, Guid? CatalogItemId, Guid? StandardItemId = null);
+        string? Supplier, string? Status, Guid? PerformedBy, int? WarrantyDays, Guid? CatalogItemId, Guid? StandardItemId = null,
+        Guid? CustomerDamageId = null, string? CompensationExcessMode = null);
 
     public sealed record BatchInput(List<ItemInput>? Lines, string? Package);
 
@@ -70,6 +71,8 @@ public static class BillingEndpoints
         if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
         if (!CanEditMoney(m, c) || await IsClosed(db, c, ct) && !m.Has(Permissions.CasesCreate))
             return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
+        if (lines.Any(l => l.CustomerDamageId is not null) && !m.Has(Permissions.CasesCreate))
+            return Results.Problem(statusCode: 403, title: "جبران خسارت فقط با دسترسی ثبت پرونده است.");
 
         var now = clock.UtcNow;
         var added = new List<(CaseItem Item, StandardItem? Std, CatalogItem? Cat)>();
@@ -115,7 +118,15 @@ public static class BillingEndpoints
                 UpdatedAt = now,
             };
             if (PriceError(item) is { } priceError) return priceError;
+            if (req.CustomerDamageId is not null && req.DiscountRials is not null)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["discountRials"] = ["تخفیف جبران خودکار محاسبه می‌شود."] });
             db.CaseItems.Add(item);
+            if (req.CustomerDamageId is not null)
+            {
+                if (await DamageEndpoints.ApplyCompensationAsync(db, c, item, req.CustomerDamageId, req.CompensationExcessMode,
+                        m, me.RequiredUserId, now, ct) is { } compProblem) return compProblem;
+                if (PriceError(item) is { } compPriceError) return compPriceError;
+            }
             added.Add((item, std, cat));
             AddEvent(db, c, CaseEventTypes.ItemAdded, me.RequiredUserId, now,
                 new { item.Kind, item.Title, item.Quantity, item.Supplier, item.Status, Total = item.LineTotalRials, Package = package });
@@ -151,6 +162,8 @@ public static class BillingEndpoints
         if (item is null) return Results.NotFound();
         if (!CanEditMoney(m, c) || await IsClosed(db, c, ct) && !m.Has(Permissions.CasesCreate))
             return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
+        if ((req.CustomerDamageId is not null || item.CustomerDamageId is not null) && !m.Has(Permissions.CasesCreate))
+            return Results.Problem(statusCode: 403, title: "جبران خسارت فقط با دسترسی ثبت پرونده است.");
 
         var errors = Validate(req, isNew: false, m);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
@@ -160,11 +173,24 @@ public static class BillingEndpoints
         if (req.Quantity is not null) item.Quantity = req.Quantity.Value;
         if (req.UnitPriceRials is not null) item.UnitPriceRials = req.UnitPriceRials.Value;
         if (req.UnitCostRials is not null && m.Has(Permissions.ReportsView)) item.UnitCostRials = req.UnitCostRials;
-        if (req.DiscountRials is not null) item.DiscountRials = req.DiscountRials.Value;
         if (req.Supplier is not null && item.Kind == ItemKinds.Part) item.Supplier = req.Supplier;
         if (req.Status is not null) item.Status = req.Status;
         if (req.PerformedBy is not null) item.PerformedBy = req.PerformedBy;
         if (req.WarrantyDays is not null) item.WarrantyDays = req.WarrantyDays == 0 ? null : req.WarrantyDays;
+
+        if (req.CustomerDamageId is not null || item.CustomerDamageId is not null &&
+            (req.Status is not null || req.UnitPriceRials is not null || req.Quantity is not null || req.CompensationExcessMode is not null))
+        {
+            var damageId = req.CustomerDamageId ?? item.CustomerDamageId;
+            var excessMode = req.CompensationExcessMode ?? item.CompensationExcessMode;
+            if (await DamageEndpoints.ApplyCompensationAsync(db, c, item, damageId, excessMode,
+                    m, me.RequiredUserId, clock.UtcNow, ct) is { } compProblem) return compProblem;
+        }
+        else if (req.DiscountRials is not null && item.CustomerDamageId is null)
+            item.DiscountRials = req.DiscountRials.Value;
+        else if (req.DiscountRials is not null)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["discountRials"] = ["تخفیف جبران خودکار محاسبه می‌شود."] });
+
         item.UpdatedAt = clock.UtcNow;
         if (PriceError(item) is { } priceError) return priceError;
         if (item.CatalogItemId is { } logged && item.Supplier == Suppliers.Shop && (item.UnitPriceRials != oldPrice || item.UnitCostRials != oldCost))

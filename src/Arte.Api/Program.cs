@@ -212,6 +212,7 @@ app.MapStaff();
 app.MapCustomers();
 app.MapWorkflows();
 app.MapCases();
+Arte.Api.Cases.DamageEndpoints.MapDamage(app);
 app.MapBilling();
 Arte.Api.Billing.StandardCatalogEndpoints.MapStandardCatalog(app);
 app.MapAttachments();

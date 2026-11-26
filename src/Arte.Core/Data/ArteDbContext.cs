@@ -57,6 +57,8 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<RequestTypeChecklistBinding> RequestTypeChecklistBindings => Set<RequestTypeChecklistBinding>();
     public DbSet<CaseChecklistItem> CaseChecklistItems => Set<CaseChecklistItem>();
     public DbSet<CaseFinding> CaseFindings => Set<CaseFinding>();
+    public DbSet<CustomerDamageReport> CustomerDamageReports => Set<CustomerDamageReport>();
+    public DbSet<ShopLossReport> ShopLossReports => Set<ShopLossReport>();
     public DbSet<PaymentTerminal> PaymentTerminals => Set<PaymentTerminal>();
     public DbSet<BankCard> BankCards => Set<BankCard>();
     public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
@@ -346,6 +348,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.WaitReason).HasMaxLength(30);
             e.Property(x => x.BodyNotes).HasMaxLength(500);
             e.Property(x => x.Relation).HasMaxLength(20);
+            e.Property(x => x.ReturnReason).HasMaxLength(500);
             e.Property(x => x.Version).IsRowVersion();
             e.HasOne<Customer>().WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Asset>().WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
@@ -382,7 +385,27 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasIndex(x => new { x.TenantId, x.PerformedBy });
             e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Membership>().WithMany().HasForeignKey(x => x.PerformedBy).OnDelete(DeleteBehavior.Restrict);
+            e.Property(x => x.CompensationExcessMode).HasMaxLength(20);
             e.HasOne<CatalogItem>().WithMany().HasForeignKey(x => x.CatalogItemId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<CustomerDamageReport>().WithMany().HasForeignKey(x => x.CustomerDamageId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ShopLossReport>().WithMany().HasForeignKey(x => x.CompensationShopLossId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        b.Entity<CustomerDamageReport>(e =>
+        {
+            e.Property(x => x.InternalNote).HasMaxLength(500);
+            e.Property(x => x.VoidReason).HasMaxLength(500);
+            e.HasIndex(x => new { x.TenantId, x.CaseId });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<ShopLossReport>(e =>
+        {
+            e.Property(x => x.InternalNote).HasMaxLength(500);
+            e.HasIndex(x => new { x.TenantId, x.CaseId });
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.ResponsibleUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<Payment>(e =>
@@ -402,7 +425,9 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.Property(x => x.StoragePath).HasMaxLength(200);
             e.Property(x => x.Caption).HasMaxLength(200);
             e.HasIndex(x => new { x.TenantId, x.CaseId });
+            e.HasIndex(x => new { x.TenantId, x.DamageReportId });
             e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<CustomerDamageReport>().WithMany().HasForeignKey(x => x.DamageReportId).OnDelete(DeleteBehavior.Restrict);
         });
 
         b.Entity<CatalogPriceLog>(e =>

@@ -7,6 +7,7 @@ import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
 import { PhotoSection, type CasePhoto } from "./photos";
+import { CustomerDamageSection, MarkReturnedButton } from "./damage";
 import { CustomerReceipts } from "./finance";
 import { CaseWorkshopSections, type CaseChecklistRow, type CaseFinding } from "./workshop";
 import { SurveySection, type CaseSurvey } from "./survey";
@@ -42,6 +43,7 @@ type CaseDetailView = {
   photos: CasePhoto[]; trackingCode: string | null; photosVisibleByDefault: boolean; isSample?: boolean;
   transitions: TransitionView[]; motorType?: string | null; checklist?: CaseChecklistRow[]; findings?: CaseFinding[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
+  returnMarkedAt?: string | null; returnReason?: string | null;
   survey: CaseSurvey | null; canFollowUp: boolean;
 };
 type Assignable = { id: string; name: string; role: string };
@@ -547,6 +549,17 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
       <BottomSheet open={editing} title="ویرایش درخواست مشتری" onClose={() => setEditing(false)}>
         {editing && <CaseEditForm c={c} onDone={(updated) => { setEditing(false); if (updated) { setC(updated); notify("ذخیره شد"); } }} />}
       </BottomSheet>
+
+      <CustomerDamageSection caseId={c.id} canManage={c.canManage} onChanged={load} />
+
+      {c.stage.key === "delivered" && c.canManage && (
+        <div className="card">
+          <MarkReturnedButton caseId={c.id} already={!!c.returnMarkedAt} onDone={load} />
+          {c.returnMarkedAt && c.returnReason && (
+            <p className="muted small">دلیل برگشتی: {c.returnReason}</p>
+          )}
+        </div>
+      )}
 
       <Collapsible title="پذیرش و وضعیت ظاهری">
         <Detail label="کیلومتر" value={c.odometerKm != null ? `${formatNumber(c.odometerKm)} کیلومتر` : "—"} />

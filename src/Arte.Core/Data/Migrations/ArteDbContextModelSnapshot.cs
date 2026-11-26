@@ -78,6 +78,19 @@ namespace Arte.Core.Data.Migrations
                     b.Property<Guid?>("CatalogItemId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("CompensationCreditRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CompensationExcessMode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("CompensationShopLossId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustomerDamageId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -134,6 +147,10 @@ namespace Arte.Core.Data.Migrations
                     b.HasIndex("CaseId");
 
                     b.HasIndex("CatalogItemId");
+
+                    b.HasIndex("CompensationShopLossId");
+
+                    b.HasIndex("CustomerDamageId");
 
                     b.HasIndex("PerformedBy");
 
@@ -1993,6 +2010,13 @@ namespace Arte.Core.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
+                    b.Property<DateTimeOffset?>("ReturnMarkedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTimeOffset>("StageEnteredAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2078,6 +2102,9 @@ namespace Arte.Core.Data.Migrations
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("DamageReportId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2114,7 +2141,11 @@ namespace Arte.Core.Data.Migrations
 
                     b.HasIndex("CaseId");
 
+                    b.HasIndex("DamageReportId");
+
                     b.HasIndex("TenantId", "CaseId");
+
+                    b.HasIndex("TenantId", "DamageReportId");
 
                     b.ToTable("CaseAttachments");
                 });
@@ -2154,6 +2185,109 @@ namespace Arte.Core.Data.Migrations
                     b.HasIndex("TenantId", "CaseId", "Id");
 
                     b.ToTable("CaseEvents");
+                });
+
+            modelBuilder.Entity("Arte.Core.Cases.CustomerDamageReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("AmountRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InternalNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("ShowMediaToCustomer")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowReportToCustomer")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("VoidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VoidedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("TenantId", "CaseId");
+
+                    b.ToTable("CustomerDamageReports");
+                });
+
+            modelBuilder.Entity("Arte.Core.Cases.ShopLossReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("AmountRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InternalNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("ResponsibleUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.HasIndex("ResponsibleUserId");
+
+                    b.HasIndex("TenantId", "CaseId");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.ToTable("ShopLossReports");
                 });
 
             modelBuilder.Entity("Arte.Core.Customers.Asset", b =>
@@ -3576,6 +3710,16 @@ namespace Arte.Core.Data.Migrations
                         .HasForeignKey("CatalogItemId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Arte.Core.Cases.ShopLossReport", null)
+                        .WithMany()
+                        .HasForeignKey("CompensationShopLossId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Arte.Core.Cases.CustomerDamageReport", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerDamageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Arte.Core.Identity.Membership", null)
                         .WithMany()
                         .HasForeignKey("PerformedBy")
@@ -3678,6 +3822,11 @@ namespace Arte.Core.Data.Migrations
                         .HasForeignKey("CaseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Arte.Core.Cases.CustomerDamageReport", null)
+                        .WithMany()
+                        .HasForeignKey("DamageReportId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Arte.Core.Cases.CaseEvent", b =>
@@ -3685,6 +3834,29 @@ namespace Arte.Core.Data.Migrations
                     b.HasOne("Arte.Core.Cases.Case", null)
                         .WithMany()
                         .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Arte.Core.Cases.CustomerDamageReport", b =>
+                {
+                    b.HasOne("Arte.Core.Cases.Case", null)
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Arte.Core.Cases.ShopLossReport", b =>
+                {
+                    b.HasOne("Arte.Core.Cases.Case", null)
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Arte.Core.Identity.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("ResponsibleUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
