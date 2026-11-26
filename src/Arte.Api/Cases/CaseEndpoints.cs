@@ -113,14 +113,14 @@ public static class CaseEndpoints
         if (!string.IsNullOrEmpty(category))
         {
             if (!StageCategories.All.Contains(category)) return Results.ValidationProblem(new Dictionary<string, string[]> { ["category"] = ["دسته نامعتبر است."] });
-            // Doc 33: «در حال کار» = diagnosing/repairing/review only (not received).
-            // Keys inlined so EF can translate (CaseQueue helpers stay for inbox in-memory).
+            // Doc 33: «در حال کار» = diagnosing/repairing/review (waitReason ignored).
+            // «منتظر» = Stage.Category waiting only — not every case that has WaitReason.
+            // Keys/category inlined so EF can translate; CaseQueue helpers used for inbox in-memory.
             rows = category switch
             {
                 StageCategories.Done => rows.Where(r => r.s.Category == StageCategories.Done && !r.s.IsTerminal),
-                StageCategories.Waiting => rows.Where(r => !r.s.IsTerminal
-                    && (r.c.WaitReason != null || r.s.Category == StageCategories.Waiting)),
-                StageCategories.Active => rows.Where(r => !r.s.IsTerminal && r.c.WaitReason == null
+                StageCategories.Waiting => rows.Where(r => !r.s.IsTerminal && r.s.Category == StageCategories.Waiting),
+                StageCategories.Active => rows.Where(r => !r.s.IsTerminal
                     && (r.s.Key == "diagnosing" || r.s.Key == "repairing" || r.s.Key == "review")),
                 _ => rows.Where(r => r.s.Category == category),
             };
@@ -829,8 +829,8 @@ public static class CaseEndpoints
             Stats = new
             {
                 Open = cards.Count,
-                Active = cards.Count(c => CaseQueue.IsInProgress(c.Stage.Key, c.WaitReason)),
-                Waiting = cards.Count(c => CaseQueue.IsWaiting(c.Stage.Category, c.WaitReason)),
+                Active = cards.Count(c => CaseQueue.IsInProgress(c.Stage.Key)),
+                Waiting = cards.Count(c => CaseQueue.IsWaiting(c.Stage.Category)),
                 Ready = cards.Count(c => CaseQueue.IsReady(c.Stage.Category, c.Stage.IsTerminal)),
                 OpenedToday = await cases.CountAsync(c => c.OpenedAt >= CaseAlerts.TehranMidnightUtc(now), ct),
                 DeliveredToday = await (from c in cases join s in db.Stages on c.StageId equals s.Id

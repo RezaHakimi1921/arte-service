@@ -23,17 +23,46 @@ public sealed class HomeFilterTests(ArteApiFactory api)
             newAsset = new { title = "هوندا CG 125", kind = "motorcycle" },
         }))).GetProperty("id").GetGuid();
 
+    private static async Task<JsonElement> Detail(HttpClient c, Guid id) =>
+        await Json(await c.GetAsync($"/api/v1/cases/{id}"));
+
+    private static async Task<JsonElement> Run(HttpClient c, Guid id, Guid transitionId, object? body = null) =>
+        await Json(await c.PostAsJsonAsync($"/api/v1/cases/{id}/transitions/{transitionId}", body ?? new { }));
+
     private static async Task AdvanceTo(HttpClient c, Guid id, string targetKey)
     {
-        for (var i = 0; i < 8; i++)
+        // Transitions expose toStage.name/category, not key — walk with known path + labels.
+        for (var i = 0; i < 12; i++)
         {
-            var detail = await Json(await c.GetAsync($"/api/v1/cases/{id}"));
-            if (detail.GetProperty("stage").GetProperty("key").GetString() == targetKey) return;
-            var primary = Primary(detail);
-            detail = await Json(await c.PostAsJsonAsync($"/api/v1/cases/{id}/transitions/{primary}", new { }));
-            if (detail.GetProperty("stage").GetProperty("key").GetString() == targetKey) return;
+            var detail = await Detail(c, id);
+            var key = detail.GetProperty("stage").GetProperty("key").GetString();
+            if (key == targetKey) return;
+
+            if (targetKey == "awaiting_parts")
+            {
+                var parts = detail.GetProperty("transitions").EnumerateArray()
+                    .FirstOrDefault(t => t.GetProperty("label").GetString()!.Contains("منتظر قطعه"));
+                if (parts.ValueKind != JsonValueKind.Undefined)
+                {
+                    await Run(c, id, parts.GetProperty("id").GetGuid(), new { waitReason = "shop_parts" });
+                    continue;
+                }
+            }
+
+            if (targetKey == "repairing" && key is "received" or "diagnosing")
+            {
+                var startRepair = detail.GetProperty("transitions").EnumerateArray()
+                    .FirstOrDefault(t => t.GetProperty("label").GetString() == "شروع تعمیر");
+                if (startRepair.ValueKind != JsonValueKind.Undefined)
+                {
+                    await Run(c, id, startRepair.GetProperty("id").GetGuid());
+                    continue;
+                }
+            }
+
+            await Run(c, id, Primary(detail));
         }
-        Assert.Fail($"did not reach {targetKey}");
+        Assert.Fail($"did not reach {targetKey}; last={(await Detail(c, id)).GetProperty("stage").GetProperty("key").GetString()}");
     }
 
     private static async Task<int> Count(HttpClient c, string? category = null, bool all = false)
@@ -42,33 +71,64 @@ public sealed class HomeFilterTests(ArteApiFactory api)
         return (await Json(await c.GetAsync($"/api/v1/cases?{q}"))).GetArrayLength();
     }
 
+    private static async Task AssertStatsMatchFilters(HttpClient owner)
+    {
+        var stats = (await Json(await owner.GetAsync("/api/v1/inbox"))).GetProperty("stats");
+        Assert.Equal(stats.GetProperty("active").GetInt32(), await Count(owner, "active"));
+        Assert.Equal(stats.GetProperty("waiting").GetInt32(), await Count(owner, "waiting"));
+        Assert.Equal(stats.GetProperty("ready").GetInt32(), await Count(owner, "done"));
+        Assert.Equal(stats.GetProperty("open").GetInt32(), await Count(owner));
+    }
+
     [Fact]
-    public async Task Open_includes_received_but_active_only_diagnosing_repairing_review()
+    public async Task In_progress_keeps_diagnosing_even_with_wait_reason_waiting_is_stage_category()
     {
         var (owner, _) = await api.NewBusinessAsync();
-        var received = await Open(owner);
+
+        await Open(owner); // received — open only
+
         var diagnosing = await Open(owner);
         await AdvanceTo(owner, diagnosing, "diagnosing");
-        var waiting = await Open(owner);
-        (await owner.PostAsJsonAsync($"/api/v1/cases/{waiting}/wait", new { waitReason = "owner_decision" })).EnsureSuccessStatusCode();
+        (await owner.PostAsJsonAsync($"/api/v1/cases/{diagnosing}/wait", new { waitReason = "owner_decision" })).EnsureSuccessStatusCode();
+        Assert.Equal("diagnosing", (await Detail(owner, diagnosing)).GetProperty("stage").GetProperty("key").GetString());
+        Assert.Equal("owner_decision", (await Detail(owner, diagnosing)).GetProperty("waitReason").GetString());
+
+        var awaitingParts = await Open(owner);
+        await AdvanceTo(owner, awaitingParts, "awaiting_parts");
+        Assert.Equal("awaiting_parts", (await Detail(owner, awaitingParts)).GetProperty("stage").GetProperty("key").GetString());
+        Assert.Equal("waiting", (await Detail(owner, awaitingParts)).GetProperty("stage").GetProperty("category").GetString());
 
         var stats = (await Json(await owner.GetAsync("/api/v1/inbox"))).GetProperty("stats");
         Assert.Equal(3, stats.GetProperty("open").GetInt32());
-        Assert.Equal(1, stats.GetProperty("active").GetInt32());
-        Assert.Equal(1, stats.GetProperty("waiting").GetInt32());
+        Assert.Equal(1, stats.GetProperty("active").GetInt32()); // diagnosing + waitReason still in progress
+        Assert.Equal(1, stats.GetProperty("waiting").GetInt32()); // awaiting_parts only
         Assert.Equal(0, stats.GetProperty("ready").GetInt32());
+        Assert.True(stats.GetProperty("blocked").GetInt32() >= 1);
 
-        // received is open, not in active/waiting/ready — partition is not open == sum of three.
-        Assert.True(stats.GetProperty("open").GetInt32() >=
-            stats.GetProperty("active").GetInt32() + stats.GetProperty("waiting").GetInt32() + stats.GetProperty("ready").GetInt32());
+        await AssertStatsMatchFilters(owner);
+    }
 
-        Assert.Equal(1, await Count(owner, "active"));
-        Assert.Equal(1, await Count(owner, "waiting"));
-        Assert.Equal(0, await Count(owner, "done"));
-        Assert.Equal(3, await Count(owner)); // default «باز» = non-terminal
-        Assert.True(await Count(owner, all: true) >= 3);
+    [Fact]
+    public async Task Repairing_and_review_are_in_progress_ready_is_not()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var repairing = await Open(owner);
+        await AdvanceTo(owner, repairing, "repairing");
+        Assert.Equal("repairing", (await Detail(owner, repairing)).GetProperty("stage").GetProperty("key").GetString());
 
-        _ = received;
+        var review = await Open(owner);
+        await AdvanceTo(owner, review, "review");
+        Assert.Equal("review", (await Detail(owner, review)).GetProperty("stage").GetProperty("key").GetString());
+
+        var ready = await Open(owner);
+        await AdvanceTo(owner, ready, "ready");
+        Assert.Equal("ready", (await Detail(owner, ready)).GetProperty("stage").GetProperty("key").GetString());
+
+        var stats = (await Json(await owner.GetAsync("/api/v1/inbox"))).GetProperty("stats");
+        Assert.Equal(2, stats.GetProperty("active").GetInt32());
+        Assert.Equal(1, stats.GetProperty("ready").GetInt32());
+        Assert.Equal(3, stats.GetProperty("open").GetInt32());
+        await AssertStatsMatchFilters(owner);
     }
 
     [Fact]
@@ -77,14 +137,13 @@ public sealed class HomeFilterTests(ArteApiFactory api)
         var (owner, _) = await api.NewBusinessAsync();
         var deliveredId = await Open(owner);
         await AdvanceTo(owner, deliveredId, "delivered");
+        Assert.Equal("delivered", (await Detail(owner, deliveredId)).GetProperty("stage").GetProperty("key").GetString());
 
         var cancelledId = await Open(owner);
-        var detail = await Json(await owner.GetAsync($"/api/v1/cases/{cancelledId}"));
+        var detail = await Detail(owner, cancelledId);
         var cancel = detail.GetProperty("transitions").EnumerateArray()
             .First(t => t.GetProperty("toStage").GetProperty("category").GetString() == "cancelled");
-        await Json(await owner.PostAsJsonAsync(
-            $"/api/v1/cases/{cancelledId}/transitions/{cancel.GetProperty("id").GetGuid()}",
-            new { reason = "انصراف تست" }));
+        await Run(owner, cancelledId, cancel.GetProperty("id").GetGuid(), new { reason = "انصراف تست" });
 
         var openList = await Json(await owner.GetAsync("/api/v1/cases"));
         Assert.DoesNotContain(openList.EnumerateArray(), c => c.GetProperty("id").GetGuid() == deliveredId);
@@ -93,5 +152,7 @@ public sealed class HomeFilterTests(ArteApiFactory api)
         var all = await Json(await owner.GetAsync("/api/v1/cases?all=true"));
         Assert.Contains(all.EnumerateArray(), c => c.GetProperty("id").GetGuid() == deliveredId);
         Assert.Contains(all.EnumerateArray(), c => c.GetProperty("id").GetGuid() == cancelledId);
+        Assert.Equal((await Json(await owner.GetAsync("/api/v1/inbox"))).GetProperty("stats").GetProperty("open").GetInt32(),
+            await Count(owner));
     }
 }
