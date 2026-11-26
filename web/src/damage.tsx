@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
 import { useFeedback } from "./feedback";
 import { BottomSheet } from "./sheet";
-import { NumberInput, formatNumber, onlyDigits, toLatinDigits } from "./ui";
+import { Field, NumberInput, formatNumber, onlyDigits, toLatinDigits } from "./ui";
 
 export type DamageMedia = { id: string; isVideo: boolean };
 export type CustomerDamage = {
@@ -12,6 +12,77 @@ export type CustomerDamage = {
 };
 
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
+const faShort = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+/** ALERT + اقدام فوری برای پروندهٔ تحویل‌شده — بالای صفحه، نه ته لیست. */
+export function ReturnBanner({ caseId, canManage, returnMarkedAt, returnReason, onDone }: {
+  caseId: string; canManage: boolean;
+  returnMarkedAt?: string | null; returnReason?: string | null;
+  onDone: () => void;
+}) {
+  const { notify } = useFeedback();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (returnMarkedAt) {
+    return (
+      <div className="notice warn return-alert" role="alert">
+        <strong className="notice-title">این پرونده برگشتی است</strong>
+        <span className="notice-body">
+          کار به‌صورت خودکار باز نمی‌شود.
+          {returnReason ? <> دلیل: {returnReason}</> : null}
+          {" · "}{faShort.format(new Date(returnMarkedAt))}
+        </span>
+      </div>
+    );
+  }
+
+  if (!canManage) return null;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (!reason.trim()) { setErr("دلیل برگشتی لازم است."); return; }
+    setBusy(true);
+    try {
+      await api(`/api/v1/cases/${caseId}/mark-returned`, { method: "POST", body: { reason: reason.trim() } });
+      notify("برگشتی ثبت شد");
+      setOpen(false);
+      setReason("");
+      onDone();
+    } catch (ex) {
+      setErr(ex instanceof ApiError ? ex.message : "ثبت نشد.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <div className="credit-bar return-alert" role="alert">
+        <span>
+          <strong>برگشتی؟</strong>
+          {" "}مشتری بعد از تحویل برگشته. فقط نشانگر ثبت می‌شود؛ کار را جدا باز کنید.
+        </span>
+        <button type="button" className="primary" onClick={() => { setErr(null); setOpen(true); }}>
+          ثبت برگشتی
+        </button>
+      </div>
+      <BottomSheet open={open} title="ثبت برگشتی" onClose={() => !busy && setOpen(false)}>
+        <form className="stack" onSubmit={submit}>
+          <p className="muted small">مرحلهٔ پرونده عوض نمی‌شود و کار خودکار باز نمی‌شود. برای ادامهٔ کار بعداً از بازگشایی در ضمانت استفاده کنید.</p>
+          <Field label="دلیل برگشتی" error={err}>
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} rows={3}
+              placeholder="مثلاً صدای غیرعادی بعد از تحویل" required />
+          </Field>
+          <button type="submit" className="primary block" disabled={busy} aria-busy={busy}>
+            {busy ? "در حال ثبت…" : "ثبت برگشتی"}
+          </button>
+        </form>
+      </BottomSheet>
+    </>
+  );
+}
 
 export function CustomerDamageSection({ caseId, canManage, onChanged }: {
   caseId: string; canManage: boolean; onChanged?: () => void;
@@ -19,12 +90,15 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
   const { notify } = useFeedback();
   const [rows, setRows] = useState<CustomerDamage[] | null>(null);
   const [open, setOpen] = useState(false);
+  const [voidId, setVoidId] = useState<string | null>(null);
+  const [voidReason, setVoidReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [voidErr, setVoidErr] = useState<string | null>(null);
 
   const load = () => api<CustomerDamage[]>(`/api/v1/cases/${caseId}/customer-damages`)
     .then(setRows).catch((e) => notify(e instanceof ApiError ? e.message : "بارگذاری خسارت‌ها نشد", "error"));
@@ -57,19 +131,24 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
     } finally { setBusy(false); }
   }
 
-  async function voidRow(id: string) {
-    const reason = window.prompt("علت ابطال خسارت؟");
-    if (!reason?.trim()) return;
+  async function confirmVoid(e: FormEvent) {
+    e.preventDefault();
+    if (!voidId) return;
+    setVoidErr(null);
+    if (!voidReason.trim()) { setVoidErr("علت ابطال لازم است."); return; }
     setBusy(true);
     try {
-      await api(`/api/v1/cases/${caseId}/customer-damages/${id}/void`, {
-        method: "POST", body: { reason: reason.trim() },
+      await api(`/api/v1/cases/${caseId}/customer-damages/${voidId}/void`, {
+        method: "POST", body: { reason: voidReason.trim() },
       });
       notify("گزارش ابطال شد");
+      setVoidId(null);
+      setVoidReason("");
       await load();
       onChanged?.();
-    } catch (ex) { notify(ex instanceof ApiError ? ex.message : "ابطال نشد", "error"); }
-    finally { setBusy(false); }
+    } catch (ex) {
+      setVoidErr(ex instanceof ApiError ? ex.message : "ابطال نشد.");
+    } finally { setBusy(false); }
   }
 
   async function upload(reportId: string, file: File) {
@@ -89,33 +168,46 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
   return (
     <section className="card damage-section">
       <header className="row between">
-        <h2 className="h3">خسارت به مشتری</h2>
-        {canManage && <button type="button" onClick={() => setOpen(true)}>ثبت خسارت</button>}
+        <div>
+          <h2 className="h3">خسارت به مشتری</h2>
+          <p className="muted small">بستانکاری مشتری روی این پرونده — جدا از فاکتور و زیان مجموعه.</p>
+        </div>
+        {canManage && (
+          <button type="button" className="primary" onClick={() => { setErr(null); setOpen(true); }}>
+            ثبت خسارت
+          </button>
+        )}
       </header>
+
       {rows.length === 0 ? (
-        <p className="muted empty-hint">هنوز خسارتی ثبت نشده. ثبت فقط برای مدیر و مکانیک ارشدِ دارای مجوز است.</p>
+        <p className="muted empty-hint">هنوز خسارتی ثبت نشده. با ثبت خسارت، بستانکاری مشتری ثبت می‌شود و در صورت نیاز در لینک مشتری دیده می‌شود.</p>
       ) : (
         <ul className="damage-list">
           {rows.map((r) => (
             <li key={r.id} className="damage-card">
               <div className="row between">
-                <strong>بستانکاری: {toman(r.amountRials)}</strong>
-                <span className="muted">مانده: {toman(r.remainingRials)}</span>
+                <strong>بستانکاری {toman(r.amountRials)}</strong>
+                <span className={`chip ${r.remainingRials > 0 ? "stage-orange" : "stage-green"}`}>
+                  مانده {toman(r.remainingRials)}
+                </span>
               </div>
               {r.internalNote && <p className="small">{r.internalNote}</p>}
               <p className="muted small">
-                نمایش لینک: {r.showReportToCustomer ? "روشن" : "خاموش"}
+                لینک: {r.showReportToCustomer ? "وجود و مانده" : "مخفی"}
                 {" · "}رسانه: {r.showMediaToCustomer ? "روشن" : "خاموش"}
                 {" · "}فایل: {formatNumber(r.media?.length ?? 0)}
               </p>
               {canManage && (
-                <div className="row gap">
-                  <label className="btn-like">
-                    افزودن عکس/فیلم
+                <div className="quick-actions">
+                  <label className="btn-file">
+                    افزودن عکس یا فیلم
                     <input type="file" accept="image/*,video/*" hidden disabled={busy}
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(r.id, f); e.target.value = ""; }} />
                   </label>
-                  <button type="button" className="danger" disabled={busy} onClick={() => void voidRow(r.id)}>ابطال</button>
+                  <button type="button" className="danger" disabled={busy}
+                    onClick={() => { setVoidId(r.id); setVoidReason(""); setVoidErr(null); }}>
+                    ابطال
+                  </button>
                 </div>
               )}
             </li>
@@ -125,10 +217,9 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
 
       <BottomSheet open={open} title="ثبت خسارت به مشتری" onClose={() => !busy && setOpen(false)}>
         <form className="stack" onSubmit={submit}>
-          <label>
-            <span>مبلغ بستانکاری مشتری (تومان)</span>
+          <Field label="مبلغ بستانکاری مشتری (تومان)" error={err}>
             <NumberInput value={amount} onChange={setAmount} inputMode="numeric" />
-          </label>
+          </Field>
           <label>
             <span>یادداشت داخلی (به مشتری نشان داده نمی‌شود)</span>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} />
@@ -138,43 +229,30 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
               setShowReport(e.target.checked);
               if (!e.target.checked) setShowMedia(false);
             }} />
-            <span>نمایش گزارش در لینک مشتری (فقط وجود و مبلغ)</span>
+            <span>نمایش در لینک مشتری (فقط وجود و مانده — بدون شرح)</span>
           </label>
           <label className="check">
             <input type="checkbox" checked={showMedia} disabled={!showReport}
               onChange={(e) => setShowMedia(e.target.checked)} />
             <span>نمایش عکس/فیلم در لینک مشتری</span>
           </label>
-          {err && <p className="error" role="alert">{err}</p>}
-          <button type="submit" disabled={busy} aria-busy={busy}>
+          <button type="submit" className="primary block" disabled={busy} aria-busy={busy}>
             {busy ? "در حال ثبت…" : "ثبت خسارت"}
           </button>
         </form>
       </BottomSheet>
+
+      <BottomSheet open={!!voidId} title="ابطال گزارش خسارت" onClose={() => !busy && setVoidId(null)}>
+        <form className="stack" onSubmit={confirmVoid}>
+          <p className="muted small">گزارش از لیست فعال خارج می‌شود؛ علت برای سابقه لازم است.</p>
+          <Field label="علت ابطال" error={voidErr}>
+            <textarea value={voidReason} onChange={(e) => setVoidReason(e.target.value)} maxLength={500} rows={3} required />
+          </Field>
+          <button type="submit" className="danger block" disabled={busy} aria-busy={busy}>
+            {busy ? "در حال ابطال…" : "ابطال گزارش"}
+          </button>
+        </form>
+      </BottomSheet>
     </section>
-  );
-}
-
-export function MarkReturnedButton({ caseId, already, onDone }: {
-  caseId: string; already: boolean; onDone: () => void;
-}) {
-  const { notify } = useFeedback();
-  const [busy, setBusy] = useState(false);
-  if (already) return <p className="notice warn" role="status">این پرونده برگشتی علامت خورده است.</p>;
-
-  return (
-    <button type="button" disabled={busy} aria-busy={busy} onClick={async () => {
-      const reason = window.prompt("دلیل برگشتی؟ (کار را خودکار باز نمی‌کند)");
-      if (!reason?.trim()) return;
-      setBusy(true);
-      try {
-        await api(`/api/v1/cases/${caseId}/mark-returned`, { method: "POST", body: { reason: reason.trim() } });
-        notify("برگشتی ثبت شد");
-        onDone();
-      } catch (e) { notify(e instanceof ApiError ? e.message : "ثبت نشد", "error"); }
-      finally { setBusy(false); }
-    }}>
-      {busy ? "در حال ثبت…" : "ثبت برگشتی"}
-    </button>
   );
 }

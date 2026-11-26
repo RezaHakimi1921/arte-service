@@ -7,7 +7,7 @@ import { progressOf, useWorkflow } from "./workflow";
 import { PlateView } from "./plate";
 import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
 import { PhotoSection, type CasePhoto } from "./photos";
-import { CustomerDamageSection, MarkReturnedButton } from "./damage";
+import { CustomerDamageSection, ReturnBanner } from "./damage";
 import { CustomerReceipts } from "./finance";
 import { CaseWorkshopSections, type CaseChecklistRow, type CaseFinding } from "./workshop";
 import { SurveySection, type CaseSurvey } from "./survey";
@@ -468,6 +468,17 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         {c.parentCase && <p className="muted small">برگشتی پرونده <span dir="ltr">{caseCode(c.parentCase.number)}</span></p>}
       </header>
 
+      {/* برگشتی: ALERT بالای صفحه تا همان اول اقدام شود (سند ۳۲ + الگوی نسیه/هشدار). */}
+      {c.stage.key === "delivered" && (
+        <ReturnBanner
+          caseId={c.id}
+          canManage={c.canManage}
+          returnMarkedAt={c.returnMarkedAt}
+          returnReason={c.returnReason}
+          onDone={load}
+        />
+      )}
+
       {(() => {
         const missing = (c.checklist ?? []).filter((r) => r.isRequired && !r.isChecked);
         if (missing.length === 0 || c.stage.isTerminal || c.stage.category === "active") return null;
@@ -527,7 +538,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
       {/* In review the master looks at the work photos first; otherwise they sit below the bill. */}
       {c.stage.key === "review" && photoSection}
       <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal} vehicleKind={c.asset?.kind ?? null}
-        caseAssigneeId={c.assignee?.id}
+        caseAssigneeId={c.assignee?.id} canCompensate={c.canManage}
         onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
 
       {c.stage.key !== "review" && photoSection}
@@ -551,15 +562,6 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
       </BottomSheet>
 
       <CustomerDamageSection caseId={c.id} canManage={c.canManage} onChanged={load} />
-
-      {c.stage.key === "delivered" && c.canManage && (
-        <div className="card">
-          <MarkReturnedButton caseId={c.id} already={!!c.returnMarkedAt} onDone={load} />
-          {c.returnMarkedAt && c.returnReason && (
-            <p className="muted small">دلیل برگشتی: {c.returnReason}</p>
-          )}
-        </div>
-      )}
 
       <Collapsible title="پذیرش و وضعیت ظاهری">
         <Detail label="کیلومتر" value={c.odometerKm != null ? `${formatNumber(c.odometerKm)} کیلومتر` : "—"} />

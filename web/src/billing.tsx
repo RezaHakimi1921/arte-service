@@ -11,9 +11,11 @@ export type Item = {
   id: string; kind: string; title: string; quantity: number; unitPriceRials: number; unitCostRials: number | null;
   discountRials: number; supplier: string; status: string; performedBy: string | null; performedByName: string | null;
   warrantyDays: number | null; lineTotalRials: number; profitRials: number | null;
+  customerDamageId?: string | null; compensationExcessMode?: string | null; compensationCreditRials?: number;
   /** True while the line is only waited for: the profit is what it will make once fitted, not zero. */
   profitIsExpected?: boolean; expectedTotalRials?: number | null;
 };
+type DamageOption = { id: string; amountRials: number; remainingRials: number; internalNote: string | null };
 export type PaymentRow = { id: string; amountRials: number; method: string; paidAt: string; note: string | null; receiptId: string | null; terminalId?: string | null; cardId?: string | null };
 export type Billing = {
   items: Item[]; payments: PaymentRow[];
@@ -71,9 +73,9 @@ export function MoneyBar({ money, onDetails }: { money: Billing["money"]; onDeta
 
 /* ───────── items + payments section ───────── */
 
-export function BillingSection({ caseId, billing, onChange, canAssignLabor, paySignal, vehicleKind, caseAssigneeId }: {
+export function BillingSection({ caseId, billing, onChange, canAssignLabor, paySignal, vehicleKind, caseAssigneeId, canCompensate }: {
   caseId: string; billing: Billing; onChange: (b: Billing) => void; canAssignLabor: boolean; paySignal: number; vehicleKind: string | null;
-  caseAssigneeId?: string | null;
+  caseAssigneeId?: string | null; canCompensate?: boolean;
 }) {
   const [standard, setStandard] = useState<Standard | null>(null);
   const [packages, setPackages] = useState(false);
@@ -138,6 +140,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                       ? <>{formatNumber(i.quantity)} × {toman(i.unitPriceRials)}{i.discountRials > 0 && ` · تخفیف ${toman(i.discountRials)}`}</>
                       : <>تعداد {formatNumber(i.quantity)}</>}
                     {i.status === "needed" && " · هنوز نصب نشده"}
+                    {i.customerDamageId && " · جبران خسارت"}
                     {i.performedByName && ` · ${i.performedByName}`}
                     {!!i.warrantyDays && ` · ضمانت ${formatNumber(i.warrantyDays)} روز`}
                   </span>
@@ -201,6 +204,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
 
       <ItemSheet
         open={!!editing} kind={editing?.kind ?? "part"} item={editing?.item} canSeeCost={billing.canSeeCost} canAssignLabor={canAssignLabor}
+        caseId={caseId} canCompensate={!!canCompensate}
         caseAssigneeId={caseAssigneeId}
         standard={standard?.items ?? []}
         busy={busy} onClose={() => setEditing(null)}
@@ -327,8 +331,9 @@ function PackageSheet({ open, packages, canSeeCost, busy, onClose, onAdd }: {
 }
 
 
-function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, caseAssigneeId, standard, busy, onClose, onSave, onDelete }: {
-  open: boolean; kind: string; item?: Item; canSeeCost: boolean; canAssignLabor: boolean; caseAssigneeId?: string | null; standard: StdItem[]; busy: boolean;
+function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, caseId, canCompensate, caseAssigneeId, standard, busy, onClose, onSave, onDelete }: {
+  open: boolean; kind: string; item?: Item; canSeeCost: boolean; canAssignLabor: boolean; caseId: string; canCompensate: boolean;
+  caseAssigneeId?: string | null; standard: StdItem[]; busy: boolean;
   onClose: () => void; onSave: (body: Record<string, unknown>, saveToCatalog: boolean) => void; onDelete?: () => void;
 }) {
   const [kind, setKind] = useState(initialKind);
@@ -347,6 +352,10 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
   const [saveToCatalog, setSaveToCatalog] = useState(false);
   const [suggestions, setSuggestions] = useState<CatalogRow[]>([]);
   const [staff, setStaff] = useState<Assignable[]>([]);
+  const [damages, setDamages] = useState<DamageOption[]>([]);
+  const [asCompensation, setAsCompensation] = useState(false);
+  const [damageId, setDamageId] = useState("");
+  const [excessMode, setExcessMode] = useState("customer_purchase");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -366,9 +375,17 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     setStandardId(null);
     setShowAll(false);
     setSaveToCatalog(false);
+    setAsCompensation(!!item?.customerDamageId);
+    setDamageId(item?.customerDamageId ?? "");
+    setExcessMode(item?.compensationExcessMode ?? "customer_purchase");
     setError(null);
     if (canAssignLabor) api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => {});
-  }, [open, item, initialKind, canAssignLabor, caseAssigneeId]);
+    if (canCompensate) {
+      api<DamageOption[]>(`/api/v1/cases/${caseId}/customer-damages`)
+        .then((rows) => setDamages(rows.filter((r) => r.remainingRials > 0 || r.id === item?.customerDamageId)))
+        .catch(() => setDamages([]));
+    } else setDamages([]);
+  }, [open, item, initialKind, canAssignLabor, caseAssigneeId, canCompensate, caseId]);
 
   useEffect(() => {
     if (!open || item || title.trim().length < 2 || catalogId) { setSuggestions([]); return; }
@@ -409,7 +426,7 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     const q = goods ? Number(toLatinDigits(qty).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "")) : 1;
     if (!(q > 0)) { setError("تعداد نامعتبر است."); return; }
     const body: Record<string, unknown> = {
-      kind, title: title.trim(), quantity: q, unitPriceRials: toRials(price), discountRials: toRials(discount),
+      kind, title: title.trim(), quantity: q, unitPriceRials: toRials(price),
       status: goods ? status : "used", warrantyDays: goods ? warranty : 0,
     };
     if (goods) body.supplier = supplier;
@@ -417,8 +434,25 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
     if (kind !== "part" && performedBy) body.performedBy = performedBy;
     if (catalogId) body.catalogItemId = catalogId;
     else if (standardId) body.standardItemId = standardId;
+
+    const wantComp = goods && supplier === "shop" && asCompensation && !!damageId;
+    if (wantComp) {
+      body.customerDamageId = damageId;
+      const gross = toRials(price) * q;
+      const rem = damages.find((d) => d.id === damageId)?.remainingRials ?? 0;
+      if (gross > rem) body.compensationExcessMode = excessMode;
+    } else if (item?.customerDamageId) {
+      body.clearCompensation = true;
+      body.discountRials = toRials(discount);
+    } else {
+      body.discountRials = toRials(discount);
+    }
     onSave(body, saveToCatalog && !standardId);
   }
+
+  const selectedDamage = damages.find((d) => d.id === damageId);
+  const lineGross = (Number(toLatinDigits(qty).replace(/[^\d.]/g, "")) || 0) * toRials(price);
+  const needsExcess = !!(selectedDamage && lineGross > selectedDamage.remainingRials);
 
   return (
     <BottomSheet open={open} title={item ? `ویرایش ${KIND_LABELS[kind]}` : `افزودن ${KIND_LABELS[kind]}`} onClose={onClose}>
@@ -513,6 +547,52 @@ function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, 
             <input type="checkbox" checked={status === "needed"} onChange={(e) => setStatus(e.target.checked ? "needed" : "used")} />
             <span>هنوز نصب نشده (منتظر قطعه) — در صورت‌حساب حساب نمی‌شود</span>
           </label>
+        )}
+
+        {canCompensate && kind === "part" && supplier === "shop" && (
+          <div className="comp-block">
+            <label className="check">
+              <input type="checkbox" checked={asCompensation}
+                onChange={(e) => {
+                  setAsCompensation(e.target.checked);
+                  if (!e.target.checked) setDamageId("");
+                }}
+                disabled={damages.length === 0 && !item?.customerDamageId} />
+              <span>جبران خسارت مشتری با این قطعه (قیمت فروش)</span>
+            </label>
+            {asCompensation && (
+              <>
+                {damages.length === 0 ? (
+                  <p className="muted small">گزارش خسارت فعالی با مانده نیست. اول در بخش «خسارت به مشتری» ثبت کنید.</p>
+                ) : (
+                  <Field label="گزارش خسارت">
+                    <select value={damageId} onChange={(e) => setDamageId(e.target.value)} required>
+                      <option value="">انتخاب کنید…</option>
+                      {damages.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          مانده {toman(d.remainingRials)}{d.internalNote ? ` — ${d.internalNote.slice(0, 40)}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {needsExcess && (
+                  <div className="field">
+                    <span className="label">قیمت قطعه از مانده بیشتر است — مابه‌التفاوت</span>
+                    <div className="segmented wide" role="radiogroup" aria-label="مسیر مابه‌التفاوت">
+                      <button type="button" role="radio" aria-checked={excessMode === "customer_purchase"}
+                        className={excessMode === "customer_purchase" ? "on" : ""}
+                        onClick={() => setExcessMode("customer_purchase")}>خرید مشتری</button>
+                      <button type="button" role="radio" aria-checked={excessMode === "shop_loss"}
+                        className={excessMode === "shop_loss" ? "on" : ""}
+                        onClick={() => setExcessMode("shop_loss")}>زیان مجموعه</button>
+                    </div>
+                  </div>
+                )}
+                <p className="hint">بخش جبران‌شده از فاکتور مشتری کم می‌شود؛ تخفیف دستی روی این ردیف اعمال نمی‌شود.</p>
+              </>
+            )}
+          </div>
         )}
 
         {kind !== "part" && canAssignLabor && staff.length > 0 && (

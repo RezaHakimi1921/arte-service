@@ -16,7 +16,7 @@ public static class BillingEndpoints
     public sealed record ItemInput(
         string? Kind, string? Title, decimal? Quantity, long? UnitPriceRials, long? UnitCostRials, long? DiscountRials,
         string? Supplier, string? Status, Guid? PerformedBy, int? WarrantyDays, Guid? CatalogItemId, Guid? StandardItemId = null,
-        Guid? CustomerDamageId = null, string? CompensationExcessMode = null);
+        Guid? CustomerDamageId = null, string? CompensationExcessMode = null, bool ClearCompensation = false);
 
     public sealed record BatchInput(List<ItemInput>? Lines, string? Package);
 
@@ -162,7 +162,7 @@ public static class BillingEndpoints
         if (item is null) return Results.NotFound();
         if (!CanEditMoney(m, c) || await IsClosed(db, c, ct) && !m.Has(Permissions.CasesCreate))
             return Results.Problem(statusCode: 403, title: "دسترسی لازم را ندارید.");
-        if ((req.CustomerDamageId is not null || item.CustomerDamageId is not null) && !m.Has(Permissions.CasesCreate))
+        if ((req.ClearCompensation || req.CustomerDamageId is not null || item.CustomerDamageId is not null) && !m.Has(Permissions.CasesCreate))
             return Results.Problem(statusCode: 403, title: "جبران خسارت فقط با دسترسی ثبت پرونده است.");
 
         var errors = Validate(req, isNew: false, m);
@@ -178,7 +178,12 @@ public static class BillingEndpoints
         if (req.PerformedBy is not null) item.PerformedBy = req.PerformedBy;
         if (req.WarrantyDays is not null) item.WarrantyDays = req.WarrantyDays == 0 ? null : req.WarrantyDays;
 
-        if (req.CustomerDamageId is not null || item.CustomerDamageId is not null &&
+        if (req.ClearCompensation)
+        {
+            if (await DamageEndpoints.ApplyCompensationAsync(db, c, item, null, null,
+                    m, me.RequiredUserId, clock.UtcNow, ct) is { } clearProblem) return clearProblem;
+        }
+        else if (req.CustomerDamageId is not null || item.CustomerDamageId is not null &&
             (req.Status is not null || req.UnitPriceRials is not null || req.Quantity is not null || req.CompensationExcessMode is not null))
         {
             var damageId = req.CustomerDamageId ?? item.CustomerDamageId;
@@ -419,6 +424,7 @@ public static class BillingEndpoints
                 i.DiscountRials, i.Supplier, i.Status, i.PerformedBy,
                 PerformedByName = i.PerformedBy is { } pb ? names.GetValueOrDefault(pb) : null,
                 i.WarrantyDays, i.LineTotalRials,
+                i.CustomerDamageId, i.CompensationExcessMode, i.CompensationCreditRials,
                 // A line that is only waited for is not billed yet, but its profit is known: show it as expected, never as zero.
                 ProfitRials = showCost && i.UnitCostRials != null
                     ? (i.IsPendingForProfit ? i.ExpectedProfitRials : i.LineTotalRials - i.LineCostRials)
