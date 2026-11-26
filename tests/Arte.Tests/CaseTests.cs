@@ -215,6 +215,8 @@ public sealed class CaseTests(ArteApiFactory api)
         var id = c.GetProperty("id").GetGuid();
         await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items",
             new { kind = "labor", title = "تعمیر", unitPriceRials = 1_000_000, warrantyDays = 30 }));
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments",
+            new { amountRials = 1_000_000, method = "cash" }));
         while (StageKey(c) != "delivered") c = await Run(owner, c, Primary(c));
         Assert.NotEqual(JsonValueKind.Null, c.GetProperty("warrantyUntil").ValueKind);
 
