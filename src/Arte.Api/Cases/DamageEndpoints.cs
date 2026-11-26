@@ -29,7 +29,8 @@ public static class DamageEndpoints
         damages.MapGet("/", ListDamagesAsync);
         damages.MapPost("/", CreateDamageAsync).RequirePermission(Permissions.CasesCreate);
         damages.MapPatch("/{reportId:guid}", UpdateDamageAsync).RequirePermission(Permissions.CasesCreate);
-        damages.MapDelete("/{reportId:guid}", VoidDamageAsync).RequirePermission(Permissions.CasesCreate);
+        // POST (not DELETE): void needs a JSON reason body; DELETE cannot take an inferred body in minimal APIs.
+        damages.MapPost("/{reportId:guid}/void", VoidDamageAsync).RequirePermission(Permissions.CasesCreate);
         damages.MapPost("/{reportId:guid}/restore", RestoreDamageAsync).RequirePermission(Permissions.CasesCreate);
         damages.MapPost("/{reportId:guid}/photos", UploadDamagePhotoAsync).RequirePermission(Permissions.CasesCreate);
 

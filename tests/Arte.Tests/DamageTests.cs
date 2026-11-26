@@ -130,10 +130,9 @@ public sealed class DamageTests(ArteApiFactory api)
         var damageId = damage.GetProperty("id").GetGuid();
 
         Assert.Equal(HttpStatusCode.BadRequest,
-            (await owner.DeleteAsync($"/api/v1/cases/{id}/customer-damages/{damageId}")).StatusCode);
-        var voidReq = new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/cases/{id}/customer-damages/{damageId}")
-            { Content = JsonContent.Create(new { reason = "اشتباه" }) };
-        Assert.Equal(HttpStatusCode.NoContent, (await owner.SendAsync(voidReq)).StatusCode);
+            (await owner.PostAsJsonAsync($"/api/v1/cases/{id}/customer-damages/{damageId}/void", new { reason = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await owner.PostAsJsonAsync($"/api/v1/cases/{id}/customer-damages/{damageId}/void", new { reason = "اشتباه" })).StatusCode);
         var list = await Json(await owner.GetAsync($"/api/v1/cases/{id}/customer-damages"));
         Assert.Empty(list.EnumerateArray());
     }

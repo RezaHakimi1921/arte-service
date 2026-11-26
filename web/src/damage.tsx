@@ -62,8 +62,8 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
     if (!reason?.trim()) return;
     setBusy(true);
     try {
-      await api(`/api/v1/cases/${caseId}/customer-damages/${id}`, {
-        method: "DELETE", body: { reason: reason.trim() },
+      await api(`/api/v1/cases/${caseId}/customer-damages/${id}/void`, {
+        method: "POST", body: { reason: reason.trim() },
       });
       notify("گزارش ابطال شد");
       await load();
