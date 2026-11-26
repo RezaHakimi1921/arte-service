@@ -2033,6 +2033,27 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .credit-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.6rem 0.75rem; border: 1px solid color-mix(in srgb, var(--stage-orange) 45%, var(--border)); border-radius: 12px; background: var(--warn-bg); }
 .credit-bar strong { color: var(--stage-orange); }
 .credit-bar button { flex: 0 0 auto; min-height: 40px; }
+.return-alert { margin-block: 0.25rem; }
+.return-alert.notice { gap: 0.35rem; }
+.damage-section { display: flex; flex-direction: column; gap: 0.75rem; }
+.damage-section > header { align-items: flex-start; gap: 0.75rem; }
+.damage-section .h3 { margin: 0 0 0.15rem; font-size: 1.05rem; }
+.damage-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.65rem; }
+.damage-card {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  padding: 0.75rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2);
+}
+.damage-card .chip { font-size: 0.8rem; }
+.btn-file {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 0.85rem; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: inherit; font: inherit; cursor: pointer;
+}
+.comp-block {
+  display: flex; flex-direction: column; gap: 0.55rem;
+  padding: 0.7rem 0.75rem; border: 1px dashed color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 12px; background: var(--accent-soft);
+}
 .receipt-button { display: flex; align-items: center; justify-content: center; min-height: 48px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
 .receipt-picked { display: flex; align-items: center; gap: 0.75rem; }
 .receipt-picked img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
