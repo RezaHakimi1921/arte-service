@@ -2376,6 +2376,8 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .package-fields.with-cost { grid-template-columns: 4.5rem 1fr 1fr; }
 .package-fields .field { margin: 0; }
 .package-total { margin: 0.25rem 0 0; }
+.multi-catalog-lines { max-height: min(50dvh, 22rem); overflow: auto; margin-block: 0.5rem; }
+.multi-catalog-lines .check { min-height: 48px; }
 
 /* ── credit and receipts ── */
 .credit-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.6rem 0.75rem; border: 1px solid color-mix(in srgb, var(--stage-orange) 45%, var(--border)); border-radius: 12px; background: var(--warn-bg); }

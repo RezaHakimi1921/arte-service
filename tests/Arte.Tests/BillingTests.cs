@@ -238,4 +238,38 @@ public sealed class BillingTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.NoContent, (await owner.PatchAsJsonAsync($"/api/v1/catalog/{cat.GetProperty("id")}", new { isActive = false })).StatusCode);
         Assert.Equal(0, (await Json(await owner.GetAsync("/api/v1/catalog"))).GetArrayLength());
     }
+
+    /// <summary>Docs/21 #۱۲ — several independent catalog lines in one batch (not a named package).</summary>
+    [Fact]
+    public async Task Batch_adds_several_catalog_items_at_once()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (other, _) = await api.NewBusinessAsync();
+        var pad = await Json(await owner.PostAsJsonAsync("/api/v1/catalog",
+            new { kind = "part", title = "لنت ترمز", defaultPriceRials = 2_000_000, defaultCostRials = 1_200_000 }));
+        var fluid = await Json(await owner.PostAsJsonAsync("/api/v1/catalog",
+            new { kind = "part", title = "روغن ترمز", defaultPriceRials = 500_000, defaultCostRials = 300_000 }));
+        var labor = await Json(await owner.PostAsJsonAsync("/api/v1/catalog",
+            new { kind = "labor", title = "اجرت تعویض لنت", defaultPriceRials = 800_000 }));
+        var c = await OpenCase(owner);
+        var id = c.GetProperty("id").GetGuid();
+
+        var body = new
+        {
+            lines = new object[]
+            {
+                new { catalogItemId = pad.GetProperty("id").GetGuid(), quantity = 2 },
+                new { catalogItemId = fluid.GetProperty("id").GetGuid(), quantity = 1 },
+                new { catalogItemId = labor.GetProperty("id").GetGuid() },
+            },
+        };
+        var b = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items/batch", body));
+        Assert.Equal(3, b.GetProperty("items").GetArrayLength());
+        Assert.Equal(5_300_000, Money(b, "totalRials")); // 2×2M + 0.5M + 0.8M
+        Assert.Contains(b.GetProperty("items").EnumerateArray(), i => i.GetProperty("title").GetString() == "لنت ترمز" && i.GetProperty("quantity").GetDecimal() == 2);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await other.PostAsJsonAsync($"/api/v1/cases/{id}/items/batch", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items/batch",
+            new { lines = new object[] { new { catalogItemId = Guid.NewGuid() } } })).StatusCode);
+    }
 }
