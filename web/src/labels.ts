@@ -100,10 +100,16 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
     `برگشتی ثبت شد${d.reason ? ` (دلیل: ${d.reason})` : ""} — کار خودکار باز نشد`,
   "case.shop_loss_created": (d) =>
     `زیان مجموعه ثبت شد${d.amountRials != null ? ` · ${tomanText(d.amountRials)}` : ""}`,
-  "staff.sms": (d) =>
-    d.sent
-      ? `پیامک به استاد: کار تمام شد`
-      : `پیامک به استاد ارسال نشد${d.error ? ` (${d.error})` : ""}`,
+  "staff.sms": (d) => {
+    const who = typeof d.toName === "string" && d.toName
+      ? d.toName
+      : typeof d.toLast4 === "string" && d.toLast4
+        ? `…${d.toLast4}`
+        : null;
+    return d.sent
+      ? `پیامک به استاد${who ? ` (${who})` : ""}: کار تمام شد`
+      : `پیامک به استاد${who ? ` (${who})` : ""} ارسال نشد${d.error ? ` (${d.error})` : ""}`;
+  },
 };
 
 /** Who did a timeline step: the staff member's name, or «مشتری» / «سیستم» for steps nobody on staff took. */
