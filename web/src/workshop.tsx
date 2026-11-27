@@ -85,18 +85,14 @@ export function IntakeChecklist({ motorType, onMotorType, ticks, onTicks, error 
   );
 }
 
-/** On the case: the saved checklist (tick later, see who ticked) and the problems found during work. */
-export function CaseWorkshopSections({ caseId, checklist, findings, motorType, canEdit, onChange }: {
-  caseId: string; checklist: CaseChecklistRow[]; findings: CaseFinding[]; motorType: string | null; canEdit: boolean; onChange: () => void;
-}) {
+type WorkshopBusy = {
+  busy: boolean;
+  run: (fn: () => Promise<unknown>, ok?: string) => Promise<void>;
+};
+
+function useWorkshopBusy(onChange: () => void): WorkshopBusy {
   const { notify } = useFeedback();
   const [busy, setBusy] = useState(false);
-  const [title, setTitle] = useState("");
-  const [source, setSource] = useState<"mechanic" | "customer">("mechanic");
-  const done = checklist.filter((r) => r.isChecked).length;
-  const remaining = checklist.length - done;
-  const date = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
-
   async function run(fn: () => Promise<unknown>, ok?: string) {
     if (busy) return;
     setBusy(true);
@@ -104,65 +100,106 @@ export function CaseWorkshopSections({ caseId, checklist, findings, motorType, c
     catch (e) { notify(e instanceof ApiError ? e.message : "خطا در ارتباط با سرور", "error"); }
     finally { setBusy(false); }
   }
+  return { busy, run };
+}
 
+/** Checklist only — used inside the diagnosis step card. */
+export function CaseChecklistBlock({ caseId, checklist, motorType, canEdit, onChange, framed = false }: {
+  caseId: string; checklist: CaseChecklistRow[]; motorType: string | null; canEdit: boolean; onChange: () => void; framed?: boolean;
+}) {
+  const { busy, run } = useWorkshopBusy(onChange);
+  if (checklist.length === 0) return null;
+  const done = checklist.filter((r) => r.isChecked).length;
+  const remaining = checklist.length - done;
+  const body = (
+    <>
+      {canEdit && remaining > 0 && (
+        <div className="checklist-bulk">
+          <button type="button" className="block secondary" disabled={busy} aria-busy={busy}
+            onClick={() => run(() => api(`/api/v1/cases/${caseId}/checklist/check-all`, { method: "POST", body: {} }), "همه موارد با «انتخاب همه» تیک خورد")}>
+            {busy ? "در حال انتخاب همه…" : "انتخاب همهٔ موارد چک‌لیست"}
+          </button>
+          <p className="hint muted small font-num">{formatNumber(remaining)} مورد باقی‌مانده — در تاریخچه یک رویداد ثبت می‌شود.</p>
+        </div>
+      )}
+      {groupRows(checklist).map((g) => (
+        <div key={g.name}>
+          {g.name && <h4>{g.name}</h4>}
+          <div className="checks">
+            {g.rows.map((r) => (
+              <label key={r.id} className={`check-chip${r.isChecked ? " on" : ""}`}>
+                <input type="checkbox" checked={r.isChecked} disabled={!canEdit || busy}
+                  onChange={() => run(() => api(`/api/v1/cases/${caseId}/checklist/${r.id}`, { method: "PUT", body: { isChecked: !r.isChecked } }))} />
+                <span className="box" aria-hidden="true">{r.isChecked ? "✓" : ""}</span>
+                {r.title}
+                {r.isChecked && r.checkedByName && <span className="muted small"> · {r.checkedByName}</span>}
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+  if (framed) return <div className="case-step-nested">{body}</div>;
+  return (
+    <details className="case-section" open={done < checklist.length}>
+      <summary>چک‌لیست بازدید{motorType ? ` · ${MOTOR_TYPES.find((t) => t.key === motorType)?.label ?? ""}` : ""} <span className="badge font-num">{formatNumber(done)}/{formatNumber(checklist.length)}</span></summary>
+      {body}
+    </details>
+  );
+}
+
+/** Findings / actions only — used inside the actions step card. */
+export function CaseFindingsBlock({ caseId, findings, canEdit, onChange, framed = false, showForm = true }: {
+  caseId: string; findings: CaseFinding[]; canEdit: boolean; onChange: () => void; framed?: boolean; showForm?: boolean;
+}) {
+  const { busy, run } = useWorkshopBusy(onChange);
+  const [title, setTitle] = useState("");
+  const [source, setSource] = useState<"mechanic" | "customer">("mechanic");
+  const date = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" });
+  const list = (
+    <>
+      {findings.length === 0 && <p className="hint">ایرادی که حین کار پیدا شد یا مشتری بعداً گفت را اینجا ثبت کنید.</p>}
+      <ul className="plain-list">
+        {findings.map((f) => (
+          <li key={f.id} className="row-between">
+            <span>{f.title} <span className="muted small">· {f.source === "customer" ? "مشتری" : "تعمیرکار"}{f.createdByName ? ` · ${f.createdByName}` : ""} · {date.format(new Date(f.createdAt))}</span></span>
+            {canEdit && <button type="button" className="link-button" disabled={busy}
+              onClick={() => run(() => api(`/api/v1/cases/${caseId}/findings/${f.id}`, { method: "DELETE" }), "حذف شد")}>حذف</button>}
+          </li>
+        ))}
+      </ul>
+      {canEdit && showForm && (
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!title.trim()) return;
+          run(async () => { await api(`/api/v1/cases/${caseId}/findings`, { body: { title: title.trim(), source } }); setTitle(""); }, "ثبت شد"); }}>
+          <div className="chips" role="radiogroup" aria-label="چه کسی ایراد را گفت">
+            {([["mechanic", "تعمیرکار پیدا کرد"], ["customer", "مشتری گفت"]] as const).map(([k, l]) => (
+              <button type="button" key={k} role="radio" aria-checked={source === k} className={`chip-button${source === k ? " active" : ""}`} onClick={() => setSource(k)}>{l}</button>
+            ))}
+          </div>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="ایراد (مثلاً زنجیر کشیده)" aria-label="ایراد" />
+          <button type="submit" className="primary" disabled={busy || !title.trim()} aria-busy={busy}>{busy ? "در حال ثبت…" : "ثبت ایراد"}</button>
+        </form>
+      )}
+    </>
+  );
+  if (framed) return <div className="case-step-nested">{list}</div>;
+  return (
+    <details className="case-section" open={findings.length > 0}>
+      <summary>ایرادهای پیدا‌شده <span className="badge font-num">{formatNumber(findings.length)}</span></summary>
+      {list}
+    </details>
+  );
+}
+
+/** On the case: checklist + findings (legacy combined; prefer the split blocks in the process rail). */
+export function CaseWorkshopSections({ caseId, checklist, findings, motorType, canEdit, onChange }: {
+  caseId: string; checklist: CaseChecklistRow[]; findings: CaseFinding[]; motorType: string | null; canEdit: boolean; onChange: () => void;
+}) {
   return (
     <>
-      {checklist.length > 0 && (
-        <details className="case-section" open={done < checklist.length}>
-          <summary>چک‌لیست بازدید{motorType ? ` · ${MOTOR_TYPES.find((t) => t.key === motorType)?.label ?? ""}` : ""} <span className="badge font-num">{formatNumber(done)}/{formatNumber(checklist.length)}</span></summary>
-          {canEdit && remaining > 0 && (
-            <div className="checklist-bulk">
-              <button type="button" className="block secondary" disabled={busy} aria-busy={busy}
-                onClick={() => run(() => api(`/api/v1/cases/${caseId}/checklist/check-all`, { method: "POST", body: {} }), "همه موارد با «انتخاب همه» تیک خورد")}>
-                {busy ? "در حال انتخاب همه…" : "انتخاب همهٔ موارد چک‌لیست"}
-              </button>
-              <p className="hint muted small font-num">{formatNumber(remaining)} مورد باقی‌مانده — در تاریخچه یک رویداد ثبت می‌شود.</p>
-            </div>
-          )}
-          {groupRows(checklist).map((g) => (
-            <div key={g.name}>
-              {g.name && <h4>{g.name}</h4>}
-              <div className="checks">
-                {g.rows.map((r) => (
-                  <label key={r.id} className={`check-chip${r.isChecked ? " on" : ""}`}>
-                    <input type="checkbox" checked={r.isChecked} disabled={!canEdit || busy}
-                      onChange={() => run(() => api(`/api/v1/cases/${caseId}/checklist/${r.id}`, { method: "PUT", body: { isChecked: !r.isChecked } }))} />
-                    <span className="box" aria-hidden="true">{r.isChecked ? "✓" : ""}</span>
-                    {r.title}
-                    {r.isChecked && r.checkedByName && <span className="muted small"> · {r.checkedByName}</span>}
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-        </details>
-      )}
-
-      <details className="case-section" open={findings.length > 0}>
-        <summary>ایرادهای پیدا‌شده <span className="badge font-num">{formatNumber(findings.length)}</span></summary>
-        {findings.length === 0 && <p className="hint">ایرادی که حین کار پیدا شد یا مشتری بعداً گفت را اینجا ثبت کنید؛ برای گزارش ایرادهای پرتکرار استفاده می‌شود.</p>}
-        <ul className="plain-list">
-          {findings.map((f) => (
-            <li key={f.id} className="row-between">
-              <span>{f.title} <span className="muted small">· {f.source === "customer" ? "مشتری" : "تعمیرکار"}{f.createdByName ? ` · ${f.createdByName}` : ""} · {date.format(new Date(f.createdAt))}</span></span>
-              {canEdit && <button type="button" className="link-button" disabled={busy}
-                onClick={() => run(() => api(`/api/v1/cases/${caseId}/findings/${f.id}`, { method: "DELETE" }), "حذف شد")}>حذف</button>}
-            </li>
-          ))}
-        </ul>
-        {canEdit && (
-          <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!title.trim()) return;
-            run(async () => { await api(`/api/v1/cases/${caseId}/findings`, { body: { title: title.trim(), source } }); setTitle(""); }, "ثبت شد"); }}>
-            <div className="chips" role="radiogroup" aria-label="چه کسی ایراد را گفت">
-              {([["mechanic", "تعمیرکار پیدا کرد"], ["customer", "مشتری گفت"]] as const).map(([k, l]) => (
-                <button type="button" key={k} role="radio" aria-checked={source === k} className={`chip-button${source === k ? " active" : ""}`} onClick={() => setSource(k)}>{l}</button>
-              ))}
-            </div>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} placeholder="ایراد (مثلاً زنجیر کشیده)" aria-label="ایراد" />
-            <button type="submit" className="primary" disabled={busy || !title.trim()} aria-busy={busy}>{busy ? "در حال ثبت…" : "ثبت ایراد"}</button>
-          </form>
-        )}
-      </details>
+      <CaseChecklistBlock caseId={caseId} checklist={checklist} motorType={motorType} canEdit={canEdit} onChange={onChange} />
+      <CaseFindingsBlock caseId={caseId} findings={findings} canEdit={canEdit} onChange={onChange} />
     </>
   );
 }
