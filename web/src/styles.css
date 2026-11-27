@@ -1776,7 +1776,17 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
 .tk-vehicle-icon { display: grid; width: 58px; height: 58px; flex: 0 0 auto; place-items: center; color: #b8ceff; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 17px; background: rgba(255, 255, 255, 0.08); }
 .tk-vehicle-icon svg { width: 28px; height: 28px; }
 .tk-hero-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
-.tk-greeting { display: flex; align-items: center; gap: 8px; color: rgba(255, 255, 255, 0.75); font-size: 0.85rem; }
+.tk-greeting { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: rgba(255, 255, 255, 0.75); font-size: 0.85rem; }
+.tk-case-code {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
 .tk-hero-copy h1 { margin: 0; font-size: 1.35rem; font-weight: 800; line-height: 1.5; }
 .tk-plate { color: rgba(255, 255, 255, 0.75); font-size: 0.85rem; }
 .tk-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; color: #d3e0ff; border: 1px solid rgba(154, 185, 255, 0.2); border-radius: 999px; background: rgba(108, 155, 245, 0.16); font-size: 0.85rem; font-weight: 700; }
