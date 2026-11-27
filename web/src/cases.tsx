@@ -30,6 +30,7 @@ export type CaseCardData = {
   reasons?: Alert[]; balanceRials?: number; openedAt?: string; reportedProblems?: string[];
   requestTypes?: string[];
   totalRials?: number; paidRials?: number; isCredit?: boolean; creditDueAt?: string | null;
+  pendingReceipts?: number;
   odometerKm?: number | null; fuelLevel?: number | null; assetKind?: string | null;
   lastEvent?: { type: string; occurredAt: string; data: Record<string, unknown> | null } | null;
 };
@@ -47,6 +48,7 @@ type CaseDetailView = {
   photos: CasePhoto[]; trackingCode: string | null; photosVisibleByDefault: boolean; isSample?: boolean;
   transitions: TransitionView[]; motorType?: string | null; checklist?: CaseChecklistRow[]; findings?: CaseFinding[]; canEdit: boolean; canManage: boolean; canAssign: boolean; timeline: TimelineEntry[];
   billing: Billing; warrantyUntil: string | null; creditDueAt: string | null;
+  pendingReceipts?: number;
   returnMarkedAt?: string | null; returnReason?: string | null;
   survey: CaseSurvey | null; canFollowUp: boolean;
 };
@@ -152,6 +154,7 @@ export function CaseCard({ c, onOpen, compact = false }: { c: CaseCardData; onOp
             <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
             <span className={`status-pill stage-${color}`}>{status}</span>
             {c.isCredit && <span className="status-pill credit">نسیه</span>}
+            {(c.pendingReceipts ?? 0) > 0 && <span className="status-pill receipt-pending">رسید مشتری</span>}
           </div>
           <h3>{c.assetTitle ?? "بدون وسیله"}</h3>
           {types.length > 0 && !compact && (
@@ -557,10 +560,10 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
 
       <div className="case-tabs case-tabs-seg" role="tablist" aria-label="بخش‌های پرونده">
         {([
-          ["overview", "نمای کلی", IconGrid] as const,
-          ["invoice", "صورتحساب", IconReceipt] as const,
-          ["timeline", "تاریخچه", IconClock] as const,
-        ]).map(([key, label, Icon]) => (
+          ["overview", "نمای کلی", IconGrid, false] as const,
+          ["invoice", "صورتحساب", IconReceipt, (c.pendingReceipts ?? 0) > 0] as const,
+          ["timeline", "تاریخچه", IconClock, false] as const,
+        ]).map(([key, label, Icon, alert]) => (
           <button
             key={key}
             type="button"
@@ -568,11 +571,12 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
             id={`case-tab-${key}`}
             aria-selected={tab === key}
             aria-controls={`case-panel-${key}`}
-            className={tab === key ? "active" : undefined}
+            className={`${tab === key ? "active" : ""}${alert ? " has-alert" : ""}`.trim() || undefined}
             onClick={() => setTab(key)}
           >
             <Icon size={16} />
             {label}
+            {alert && <span className="tab-alert-dot" aria-label="رسید مشتری در انتظار" />}
           </button>
         ))}
       </div>
@@ -756,21 +760,29 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
           <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal} vehicleKind={c.asset?.kind ?? null}
             caseAssigneeId={c.assignee?.id} canCompensate={c.canManage}
             onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
-          {c.billing.canRecordPayments && <CustomerReceipts caseId={c.id} onChange={load} />}
+          {c.billing.canRecordPayments && (
+            <CustomerReceipts
+              caseId={c.id}
+              balanceRials={c.billing.money.balanceRials}
+              totalRials={c.billing.money.totalRials}
+              onChange={load}
+            />
+          )}
           <CustomerDamageSection caseId={c.id} canManage={c.canManage} caseAssigneeId={c.assignee?.id} onChanged={load} />
         </div>
       )}
 
       {tab === "timeline" && (
         <div className="case-tab-panel" role="tabpanel" id="case-panel-timeline" aria-labelledby="case-tab-timeline" data-tour="timeline">
-          <section className="card case-section">
-            <header className="case-section-head">
+          <details className="card case-section case-history-fold" open>
+            <summary className="case-section-head case-history-summary">
               <span className="case-step-icon tone-blue"><IconClock size={18} /></span>
               <div>
                 <span className="case-money-kicker">رویدادها</span>
                 <h2 className="case-section-title">تاریخچه پرونده</h2>
               </div>
-            </header>
+              <span className="case-step-badge subtle font-num">{formatNumber(c.timeline.length)} رویداد</span>
+            </summary>
             {c.timeline.length === 0 ? (
               <p className="muted">هنوز رویدادی ثبت نشده.</p>
             ) : (
@@ -783,7 +795,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
                 ))}
               </ol>
             )}
-          </section>
+          </details>
 
           {smsLog.length > 0 && (
             <Collapsible title={`پیامک‌های مشتری (${formatNumber(smsLog.length)})`} open>
@@ -961,7 +973,7 @@ const SMS_KIND: Record<string, string> = {
   "case.link": "پیامک لینک پیگیری", "survey.request": "پیامک نظرسنجی",
 };
 
-/** One vertical process card: icon rail + framed body (hierarchy from the reference UI). */
+/** One vertical process card: icon rail + framed collapsible body (current step open by default). */
 function ProcessStep({
   state, tone, icon, kicker, title, badge, badgeTone, action, children,
 }: {
@@ -982,18 +994,18 @@ function ProcessStep({
           {state === "done" ? <IconCheck size={14} /> : icon}
         </span>
       </div>
-      <article className="card case-step-card">
-        <header className="case-step-head">
+      <details className="card case-step-card" open={state === "current"}>
+        <summary className="case-step-head">
           <span className={`case-step-icon tone-${tone}`}>{icon}</span>
           <div className="case-step-titles">
             <span className="case-money-kicker">{kicker}</span>
             <h2 className="case-section-title">{title}</h2>
           </div>
           <span className={`case-step-badge ${badgeTone}`}>{badge}</span>
-        </header>
+        </summary>
         {action && <div className="case-step-actions">{action}</div>}
         <div className="case-step-body">{children}</div>
-      </article>
+      </details>
     </li>
   );
 }

@@ -163,6 +163,12 @@ public static class CaseEndpoints
             .ToListAsync(ct);
         var now = DateTimeOffset.UtcNow;
         var money = await BillingEndpoints.Totals(db, items.Select(i => i.Id).ToList(), ct);
+        var caseIds = items.Select(i => i.Id).ToList();
+        var pendingReceipts = await db.CustomerReceipts.AsNoTracking()
+            .Where(r => caseIds.Contains(r.CaseId) && r.Status == ReceiptStatuses.Pending)
+            .GroupBy(r => r.CaseId)
+            .Select(g => new { CaseId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CaseId, x => x.Count, ct);
         return Results.Ok(items.Select(i => new
         {
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
@@ -176,6 +182,7 @@ public static class CaseEndpoints
             // Delivered and still owing: نسیه.
             IsCredit = i.Stage.Key == "delivered" && (money.GetValueOrDefault(i.Id)?.BalanceRials ?? 0) > 0,
             i.CreditDueAt,
+            PendingReceipts = pendingReceipts.GetValueOrDefault(i.Id),
             LastEvent = i.LastEvent == null ? null : new { i.LastEvent.Type, i.LastEvent.OccurredAt, Data = i.LastEvent.Data?.RootElement },
             Alert = CaseAlerts.Primary(i.Stage.IsTerminal, i.Stage.Category, i.AssigneeId, i.StageEnteredAt, i.PromisedAt, i.WaitReason, now),
         }));
@@ -253,6 +260,8 @@ public static class CaseEndpoints
             c.WarrantyUntil, c.CreditDueAt,
             c.ReturnMarkedAt, c.ReturnReason,
             Billing = await BillingEndpoints.MoneyView(db, c.Id, me, ct),
+            PendingReceipts = await db.CustomerReceipts.AsNoTracking()
+                .CountAsync(r => r.CaseId == c.Id && r.Status == ReceiptStatuses.Pending, ct),
             PhotosVisibleByDefault = await db.Tenants.Where(t => t.Id == c.TenantId).Select(t => t.PhotosVisibleByDefault).SingleAsync(ct),
             Photos = await db.CaseAttachments.AsNoTracking()
                 .Where(a => a.CaseId == c.Id && a.Purpose == AttachmentPurposes.Photo && a.DamageReportId == null)
@@ -798,11 +807,18 @@ public static class CaseEndpoints
             .Take(500).ToListAsync(ct);
 
         var totals = await BillingEndpoints.Totals(db, open.Select(o => o.Id).ToList(), ct);
+        var openIds = open.Select(o => o.Id).ToList();
+        var pendingReceipts = await db.CustomerReceipts.AsNoTracking()
+            .Where(r => openIds.Contains(r.CaseId) && r.Status == ReceiptStatuses.Pending)
+            .GroupBy(r => r.CaseId)
+            .Select(g => new { CaseId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CaseId, x => x.Count, ct);
         var cards = open.Select(i => new
         {
             BalanceRials = totals.GetValueOrDefault(i.Id)?.BalanceRials ?? 0,
             TotalRials = totals.GetValueOrDefault(i.Id)?.TotalRials ?? 0,
             PaidRials = totals.GetValueOrDefault(i.Id)?.PaidRials ?? 0,
+            PendingReceipts = pendingReceipts.GetValueOrDefault(i.Id),
             i.OdometerKm, i.FuelLevel, i.AssetKind,
             i.Id, i.Number, i.CustomerName, i.CustomerMobile, i.AssetTitle, i.AssetIdentifier, i.Stage,
             i.AssigneeName, i.StageEnteredAt, i.PromisedAt, i.Request, i.RequestedServices, i.ReportedProblems,

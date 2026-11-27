@@ -104,6 +104,33 @@ public sealed class DamageTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Customer_link_marks_compensation_apart_from_manual_discount()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (id, code) = await OpenCase(owner);
+        var damage = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/customer-damages",
+            new { amountRials = 500_000 }));
+        var damageId = damage.GetProperty("id").GetGuid();
+        await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items", new
+        {
+            kind = "part", title = "شمع", unitPriceRials = 300_000, status = "used", customerDamageId = damageId,
+        });
+        await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items", new
+        {
+            kind = "labor", title = "اجرت", unitPriceRials = 200_000, discountRials = 50_000,
+        });
+
+        var track = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        var items = track.GetProperty("items").EnumerateArray().ToList();
+        var spark = items.Single(i => i.GetProperty("title").GetString() == "شمع");
+        Assert.Equal(damageId, spark.GetProperty("customerDamageId").GetGuid());
+        Assert.Equal(300_000, spark.GetProperty("discountRials").GetInt64());
+        var money = track.GetProperty("money");
+        Assert.Equal(300_000, money.GetProperty("damageCompensationRials").GetInt64());
+        Assert.Equal(50_000, money.GetProperty("manualDiscountRials").GetInt64());
+    }
+
+    [Fact]
     public async Task Excess_customer_purchase_adds_difference_to_total()
     {
         var (owner, _) = await api.NewBusinessAsync();

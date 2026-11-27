@@ -122,22 +122,29 @@ export function CaseChecklistBlock({ caseId, checklist, motorType, canEdit, onCh
           <p className="hint muted small font-num">{formatNumber(remaining)} مورد باقی‌مانده — در تاریخچه یک رویداد ثبت می‌شود.</p>
         </div>
       )}
-      {groupRows(checklist).map((g) => (
-        <div key={g.name}>
-          {g.name && <h4>{g.name}</h4>}
-          <div className="checks">
-            {g.rows.map((r) => (
-              <label key={r.id} className={`check-chip${r.isChecked ? " on" : ""}`}>
-                <input type="checkbox" checked={r.isChecked} disabled={!canEdit || busy}
-                  onChange={() => run(() => api(`/api/v1/cases/${caseId}/checklist/${r.id}`, { method: "PUT", body: { isChecked: !r.isChecked } }))} />
-                <span className="box" aria-hidden="true">{r.isChecked ? "✓" : ""}</span>
-                {r.title}
-                {r.isChecked && r.checkedByName && <span className="muted small"> · {r.checkedByName}</span>}
-              </label>
-            ))}
-          </div>
-        </div>
-      ))}
+      {groupRows(checklist).map((g) => {
+        const groupDone = g.rows.every((r) => r.isChecked);
+        const groupChecked = g.rows.filter((r) => r.isChecked).length;
+        return (
+          <details key={g.name || "ungrouped"} className="case-check-group" open={!groupDone}>
+            <summary>
+              <span>{g.name || "چک‌لیست"}</span>
+              <span className="badge font-num">{formatNumber(groupChecked)}/{formatNumber(g.rows.length)}</span>
+            </summary>
+            <div className="checks">
+              {g.rows.map((r) => (
+                <label key={r.id} className={`check-chip${r.isChecked ? " on" : ""}`}>
+                  <input type="checkbox" checked={r.isChecked} disabled={!canEdit || busy}
+                    onChange={() => run(() => api(`/api/v1/cases/${caseId}/checklist/${r.id}`, { method: "PUT", body: { isChecked: !r.isChecked } }))} />
+                  <span className="box" aria-hidden="true">{r.isChecked ? "✓" : ""}</span>
+                  {r.title}
+                  {r.isChecked && r.checkedByName && <span className="muted small"> · {r.checkedByName}</span>}
+                </label>
+              ))}
+            </div>
+          </details>
+        );
+      })}
     </>
   );
   if (framed) return <div className="case-step-nested">{body}</div>;

@@ -72,7 +72,8 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
   // Whether the next photos are shown on the customer's tracking page; starts from the business setting.
   const [share, setShare] = useState(visibleByDefault);
   const { notify } = useFeedback();
-  const input = useRef<HTMLInputElement>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [viewing, setViewing] = useState<{ photo: CasePhoto; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -100,7 +101,8 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
       notify(err instanceof ApiError ? err.message : "بارگذاری عکس انجام نشد", "error");
     } finally {
       setUploading(false);
-      if (input.current) input.current.value = "";
+      if (photoInput.current) photoInput.current.value = "";
+      if (videoInput.current) videoInput.current.value = "";
     }
   }
 
@@ -134,25 +136,42 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
 
   const hint = stageKey === "repairing" ? "قبل از فرستادن برای بازبینی، از کار انجام‌شده عکس بگیرید."
     : stageKey === "ready" ? "هنگام تحویل از وضعیت وسیله عکس بگیرید." : null;
+  const photoCount = photos.filter((p) => !p.isVideo).length;
+  const videoCount = photos.filter((p) => !!p.isVideo).length;
+  const addButtons = canAdd && (
+    <div className={`photo-add-row${bare ? " stacked" : ""}`}>
+      <button type="button" className={bare ? "secondary block case-step-cta" : undefined}
+        onClick={() => photoInput.current?.click()} disabled={uploading} aria-busy={uploading}>
+        {uploading ? "در حال بارگذاری…" : "افزودن عکس"}
+      </button>
+      <button type="button" className={bare ? "secondary block case-step-cta" : undefined}
+        onClick={() => videoInput.current?.click()} disabled={uploading} aria-busy={uploading}>
+        {uploading ? "در حال بارگذاری…" : "افزودن فیلم"}
+      </button>
+    </div>
+  );
 
   const body = (
     <>
       {!bare && (
         <div className="photos-head">
-          <h3>عکس‌ها{photos.length > 0 && <span className="muted small font-num"> ({formatNumber(photos.length)})</span>}</h3>
-          {canAdd && (
-            <button type="button" onClick={() => input.current?.click()} disabled={uploading} aria-busy={uploading}>
-              {uploading ? "در حال بارگذاری…" : "عکس یا فیلم"}
-            </button>
-          )}
+          <h3>
+            عکس و فیلم
+            {photos.length > 0 && (
+              <span className="muted small font-num">
+                {" "}({[
+                  photoCount > 0 ? `${formatNumber(photoCount)} عکس` : null,
+                  videoCount > 0 ? `${formatNumber(videoCount)} فیلم` : null,
+                ].filter(Boolean).join(" · ")})
+              </span>
+            )}
+          </h3>
+          {addButtons}
         </div>
       )}
-      {bare && canAdd && (
-        <button type="button" className="secondary block case-step-cta" onClick={() => input.current?.click()} disabled={uploading} aria-busy={uploading}>
-          {uploading ? "در حال بارگذاری…" : "افزودن تصویر"}
-        </button>
-      )}
-      <input ref={input} type="file" accept="image/*,video/*" capture="environment" multiple hidden onChange={(e) => upload(e.target.files)} />
+      {bare && addButtons}
+      <input ref={photoInput} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => upload(e.target.files)} />
+      <input ref={videoInput} type="file" accept="video/*" capture="environment" multiple hidden onChange={(e) => upload(e.target.files)} />
       {canAdd && (
         <label className="photo-share">
           <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} />
