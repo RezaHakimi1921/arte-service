@@ -174,6 +174,7 @@ public static class LicenseEndpoints
                 {
                     UserId = userId, Role = Roles.Owner, Permissions = Roles.DefaultPermissions(Roles.Owner),
                     IsSupport = true, CreatedAt = clock.UtcNow, TourDoneAt = clock.UtcNow,
+                    EmploymentStartedOn = Jalali.ToTehranDate(clock.UtcNow),
                 });
             }
             else if (m.IsSupport && !m.IsActive) m.IsActive = true;

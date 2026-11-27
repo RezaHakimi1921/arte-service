@@ -540,7 +540,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
           </div>
           <h3>پیامک به استاد</h3>
           <div className="settings-list">
-            <Switch title="وقتی کاری تمام شد" sub="کسی که کار را تمام می‌کند، برای استاد (و مدیر) پیامک می‌فرستد تا بررسی کند."
+            <Switch title="وقتی کاری تمام شد" sub="برای همهٔ کسانی که مجوز مدیریت پرونده دارند پیامک می‌رود — مالک، مکانیک ارشد، و هر کسی که این مجوز را داشته باشد (نه فقط تعمیرکار معمولی)."
               checked={s.smsToMasterOnFinished} disabled={false} onChange={(v) => save({ smsToMasterOnFinished: v })} />
           </div>
           <h3>صفحه‌ی پیگیری مشتری</h3>
@@ -688,6 +688,7 @@ type StaffRow = {
   id: string; mobile: string; username: string | null; hasPassword: boolean; displayName: string | null; role: string; isActive: boolean;
   fixedMonthlyRials: number | null; commissionType: string; commissionPercent: number | null;
   commissionFixedRials: number | null; commissionBase: string; surveyNotify: boolean;
+  employmentStartedOn: string; employmentEndedOn: string | null;
 };
 
 const COMMISSION_BASES: { value: string; label: string; hint: string }[] = [
@@ -703,6 +704,8 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
   const [name, setName] = useState("");
   const [role, setRole] = useState("technician");
   const [salary, setSalary] = useState("");
+  const [employedFrom, setEmployedFrom] = useState("");
+  const [employedUntil, setEmployedUntil] = useState("");
   const [type, setType] = useState("none");
   const [percent, setPercent] = useState("");
   const [fixed, setFixed] = useState("");
@@ -725,6 +728,8 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
     setName(row.displayName ?? "");
     setRole(row.role);
     setSalary(tomanDigits(row.fixedMonthlyRials));
+    setEmployedFrom(row.employmentStartedOn?.slice(0, 10) ?? "");
+    setEmployedUntil(row.employmentEndedOn?.slice(0, 10) ?? "");
     setType(row.commissionType || "none");
     setPercent(row.commissionPercent != null ? String(row.commissionPercent) : "");
     setFixed(tomanDigits(row.commissionFixedRials));
@@ -750,6 +755,9 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
         commissionType: type, commissionBase: base,
         commissionFixedRials: Number(fixed || 0) * 10,
       };
+      if (employedFrom) body.employmentStartedOn = employedFrom;
+      if (employedUntil) body.employmentEndedOn = employedUntil;
+      else body.clearEmploymentEndedOn = true;
       if (surveyEnabled) body.surveyNotify = surveyNotify;
       if (type === "percent") body.commissionPercent = pct;
       if (row.role !== "owner") body.role = role;
@@ -816,6 +824,15 @@ function StaffSheet({ row, surveyEnabled, onClose, onSaved }: { row: StaffRow | 
             </Field>
           )}
           <Field label="حقوق ثابت ماهانه (اختیاری)"><NumberInput value={salary} onChange={setSalary} max={11} suffix="تومان" /></Field>
+          <Field label="شروع همکاری (میلادی YYYY-MM-DD؛ برای سهم روزشمار حقوق)">
+            <input dir="ltr" className="font-num" value={employedFrom} maxLength={10}
+              onChange={(e) => setEmployedFrom(toLatinDigits(e.target.value).replace(/[^\d-]/g, "").slice(0, 10))} />
+          </Field>
+          <Field label="پایان همکاری (اختیاری)">
+            <input dir="ltr" className="font-num" value={employedUntil} maxLength={10}
+              onChange={(e) => setEmployedUntil(toLatinDigits(e.target.value).replace(/[^\d-]/g, "").slice(0, 10))}
+              placeholder="خالی = هنوز مشغول" />
+          </Field>
 
           <span className="label">پورسانت هر پرونده تحویل‌شده</span>
           <div className="segmented wide" role="radiogroup" aria-label="نوع پورسانت">

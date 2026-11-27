@@ -633,15 +633,16 @@ public static class CaseEndpoints
         // Delivery with money still owed must be an explicit decision (نسیه), and starts the warranty.
         long creditRials = 0;
         DateTimeOffset? warrantyUntil = null;
+        List<CaseItem> deliveryItems = [];
         if (to.Key == "delivered")
         {
-            var items = await db.CaseItems.AsNoTracking().Where(i => i.CaseId == c.Id).ToListAsync(ct);
+            deliveryItems = await db.CaseItems.AsNoTracking().Where(i => i.CaseId == c.Id).ToListAsync(ct);
             var payments = await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct);
-            creditRials = CaseMoney.Of(items, payments).BalanceRials;
+            creditRials = CaseMoney.Of(deliveryItems, payments).BalanceRials;
             if (creditRials > 0 && req.AllowCredit != true)
                 return Results.Problem(statusCode: 409, title: "این پرونده مانده حساب دارد.",
                     extensions: new Dictionary<string, object?> { ["code"] = "balance_due", ["balanceRials"] = creditRials });
-            var warrantyDays = items.Where(i => i.Billable && i.DeletedAt == null).Max(i => i.WarrantyDays);
+            var warrantyDays = deliveryItems.Where(i => i.Billable && i.DeletedAt == null).Max(i => i.WarrantyDays);
             if (warrantyDays is > 0) warrantyUntil = clock.UtcNow.AddDays(warrantyDays.Value);
         }
 
@@ -674,6 +675,7 @@ public static class CaseEndpoints
             await surveys.ScheduleOnDeliveryAsync(c, ct);
         }
         if (to.Category == StageCategories.Cancelled) AddEvent(db, c, CaseEventTypes.Cancelled, userId, now, new { Reason = reason });
+        if (to.Key == "delivered") await GrantCommissionOnce(db, c, deliveryItems, now, ct);
 
         return await SaveOr409(db, ct, async () =>
         {
@@ -859,6 +861,28 @@ public static class CaseEndpoints
     }
 
     // ───────── helpers ─────────
+
+    /// <summary>First delivery only. A later reopen and redelivery must not add a second grant or delete the first.</summary>
+    private static async Task GrantCommissionOnce(ArteDbContext db, Case c, IReadOnlyList<CaseItem> items, DateTimeOffset now, CancellationToken ct)
+    {
+        if (c.AssigneeId is not { } assigneeId) return;
+        if (await db.CaseCommissionGrants.AnyAsync(g => g.CaseId == c.Id, ct)) return;
+        var assignee = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(m => m.Id == assigneeId, ct);
+        if (assignee is null) return;
+        var pay = Commission.For(items, assignee);
+        db.CaseCommissionGrants.Add(new CaseCommissionGrant
+        {
+            CaseId = c.Id,
+            MembershipId = assignee.Id,
+            BaseRials = pay.BaseRials,
+            CommissionRials = pay.CommissionRials,
+            CommissionType = assignee.CommissionType,
+            CommissionPercent = assignee.CommissionPercent,
+            CommissionFixedRials = assignee.CommissionFixedRials,
+            CommissionBase = assignee.CommissionBase,
+            GrantedAt = now,
+        });
+    }
 
     private static void AddEvent(ArteDbContext db, Case c, string type, Guid actor, DateTimeOffset at, object data) =>
         db.CaseEvents.Add(new CaseEvent
