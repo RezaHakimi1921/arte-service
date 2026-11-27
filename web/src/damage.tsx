@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError } from "./api";
 import { useFeedback } from "./feedback";
-import { BottomSheet } from "./sheet";
+import { BottomSheet, SelectField, SelectSheet, SheetOption } from "./sheet";
 import { Field, NumberInput, formatNumber, onlyDigits, toLatinDigits } from "./ui";
 
 export type DamageMedia = { id: string; isVideo: boolean };
@@ -10,6 +10,11 @@ export type CustomerDamage = {
   internalNote: string | null; showReportToCustomer: boolean; showMediaToCustomer: boolean;
   createdAt: string; media?: DamageMedia[];
 };
+export type ShopLoss = {
+  id: string; caseId: string | null; amountRials: number; internalNote: string | null;
+  responsibleUserId: string; responsibleName?: string | null; createdAt: string;
+};
+type Assignable = { id: string; name: string; role: string };
 
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
 const faShort = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -97,28 +102,61 @@ export function ReturnBanner({ caseId, canManage, stageKey, stageName, returnMar
   );
 }
 
-export function CustomerDamageSection({ caseId, canManage, onChanged }: {
-  caseId: string; canManage: boolean; onChanged?: () => void;
+/** یک ماژول خسارت روی پرونده: انتخاب نوع (مشتری / داخلی) سپس فرم همان نوع. */
+export function CustomerDamageSection({ caseId, canManage, caseAssigneeId, onChanged }: {
+  caseId: string; canManage: boolean; caseAssigneeId?: string | null; onChanged?: () => void;
 }) {
   const { notify } = useFeedback();
-  const [rows, setRows] = useState<CustomerDamage[] | null>(null);
-  const [open, setOpen] = useState(false);
+  const [customers, setCustomers] = useState<CustomerDamage[] | null>(null);
+  const [losses, setLosses] = useState<ShopLoss[] | null>(null);
+  const [staff, setStaff] = useState<Assignable[]>([]);
+  const [pickOpen, setPickOpen] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [lossOpen, setLossOpen] = useState(false);
   const [voidId, setVoidId] = useState<string | null>(null);
   const [voidReason, setVoidReason] = useState("");
+  const [deleteLossId, setDeleteLossId] = useState<string | null>(null);
+  const [pickStaff, setPickStaff] = useState(false);
   const [busy, setBusy] = useState(false);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
+  const [responsibleId, setResponsibleId] = useState<string | null>(caseAssigneeId ?? null);
   const [err, setErr] = useState<string | null>(null);
   const [voidErr, setVoidErr] = useState<string | null>(null);
 
-  const load = () => api<CustomerDamage[]>(`/api/v1/cases/${caseId}/customer-damages`)
-    .then(setRows).catch((e) => notify(e instanceof ApiError ? e.message : "بارگذاری خسارت‌ها نشد", "error"));
+  const load = async () => {
+    try {
+      const [cRows, lRows] = await Promise.all([
+        api<CustomerDamage[]>(`/api/v1/cases/${caseId}/customer-damages`),
+        api<ShopLoss[]>(`/api/v1/cases/${caseId}/shop-losses`),
+      ]);
+      setCustomers(cRows);
+      setLosses(lRows);
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : "بارگذاری خسارت‌ها نشد", "error");
+    }
+  };
 
   useEffect(() => { void load(); }, [caseId]);
+  useEffect(() => {
+    if (!canManage) return;
+    api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => {});
+  }, [canManage]);
+  useEffect(() => {
+    if (caseAssigneeId) setResponsibleId((prev) => prev ?? caseAssigneeId);
+  }, [caseAssigneeId]);
 
-  async function submit(e: FormEvent) {
+  function resetCustomerForm() {
+    setAmount(""); setNote(""); setShowReport(false); setShowMedia(false); setErr(null);
+  }
+  function resetLossForm() {
+    setAmount(""); setNote(""); setErr(null);
+    setResponsibleId(caseAssigneeId ?? null);
+  }
+
+  async function submitCustomer(e: FormEvent) {
     e.preventDefault();
     setErr(null);
     const rials = Number(onlyDigits(toLatinDigits(amount))) * 10;
@@ -135,10 +173,37 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
         },
       });
       notify(showReport
-        ? "خسارت ثبت شد و در لینک مشتری (وجود و مانده) دیده می‌شود"
-        : "خسارت ثبت شد — در لینک مشتری دیده نمی‌شود مگر «نمایش در لینک» را روشن کنید");
-      setOpen(false);
-      setAmount(""); setNote(""); setShowReport(false); setShowMedia(false);
+        ? "خسارت مشتری ثبت شد و در لینک (وجود و مانده) دیده می‌شود"
+        : "خسارت مشتری ثبت شد — تا «نمایش در لینک» روشن نشود مشتری نمی‌بیند");
+      setCustomerOpen(false);
+      resetCustomerForm();
+      await load();
+      onChanged?.();
+    } catch (ex) {
+      setErr(ex instanceof ApiError ? ex.message : "ثبت نشد.");
+    } finally { setBusy(false); }
+  }
+
+  async function submitLoss(e: FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    const rials = Number(onlyDigits(toLatinDigits(amount))) * 10;
+    if (!Number.isFinite(rials) || rials <= 0) { setErr("مبلغ لازم است."); return; }
+    if (!responsibleId) { setErr("مسئول لازم است."); return; }
+    setBusy(true);
+    try {
+      await api("/api/v1/shop-losses", {
+        method: "POST",
+        body: {
+          amountRials: rials,
+          internalNote: note.trim() || null,
+          responsibleUserId: responsibleId,
+          caseId,
+        },
+      });
+      notify("زیان داخلی ثبت شد");
+      setLossOpen(false);
+      resetLossForm();
       await load();
       onChanged?.();
     } catch (ex) {
@@ -156,13 +221,27 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
       await api(`/api/v1/cases/${caseId}/customer-damages/${voidId}/void`, {
         method: "POST", body: { reason: voidReason.trim() },
       });
-      notify("گزارش ابطال شد");
+      notify("گزارش خسارت مشتری ابطال شد");
       setVoidId(null);
       setVoidReason("");
       await load();
       onChanged?.();
     } catch (ex) {
       setVoidErr(ex instanceof ApiError ? ex.message : "ابطال نشد.");
+    } finally { setBusy(false); }
+  }
+
+  async function confirmDeleteLoss() {
+    if (!deleteLossId) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/shop-losses/${deleteLossId}`, { method: "DELETE" });
+      notify("زیان داخلی حذف شد");
+      setDeleteLossId(null);
+      await load();
+      onChanged?.();
+    } catch (ex) {
+      notify(ex instanceof ApiError ? ex.message : "حذف نشد", "error");
     } finally { setBusy(false); }
   }
 
@@ -178,34 +257,40 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
     finally { setBusy(false); }
   }
 
-  if (rows === null) return <p className="muted splash" aria-busy="true">در حال بارگذاری خسارت‌ها…</p>;
+  if (customers === null || losses === null) {
+    return <p className="muted splash" aria-busy="true">در حال بارگذاری خسارت‌ها…</p>;
+  }
+
+  const empty = customers.length === 0 && losses.length === 0;
+  const staffItems = staff.map((s) => ({ value: s.id, label: s.name, hint: s.role }));
 
   return (
     <section className="card damage-section">
       <header className="row between">
         <div>
-          <h2 className="h3">خسارت به مشتری</h2>
-          <p className="muted small">بستانکاری مشتری روی این پرونده — جدا از فاکتور و زیان مجموعه.</p>
+          <h2 className="h3">خسارت</h2>
+          <p className="muted small">بستانکاری مشتری یا زیان داخلی مجموعه — هر دو از همین‌جا ثبت می‌شوند.</p>
         </div>
         {canManage && (
-          <button type="button" className="primary" onClick={() => { setErr(null); setOpen(true); }}>
+          <button type="button" className="primary" onClick={() => setPickOpen(true)}>
             ثبت خسارت
           </button>
         )}
       </header>
 
-      {rows.length === 0 ? (
-        <p className="muted empty-hint">هنوز خسارتی ثبت نشده. با ثبت خسارت، بستانکاری مشتری ثبت می‌شود و در صورت نیاز در لینک مشتری دیده می‌شود.</p>
+      {empty ? (
+        <p className="muted empty-hint">هنوز خسارتی ثبت نشده. نوع را انتخاب کنید: به مشتری، یا زیان داخلی مجموعه.</p>
       ) : (
         <ul className="damage-list">
-          {rows.map((r) => (
+          {customers.map((r) => (
             <li key={r.id} className="damage-card">
               <div className="row between">
-                <strong>بستانکاری {toman(r.amountRials)}</strong>
+                <span className="chip stage-blue">به مشتری</span>
                 <span className={`chip ${r.remainingRials > 0 ? "stage-orange" : "stage-green"}`}>
                   مانده {toman(r.remainingRials)}
                 </span>
               </div>
+              <strong>بستانکاری {toman(r.amountRials)}</strong>
               {r.internalNote && <p className="small">{r.internalNote}</p>}
               <p className="muted small">
                 لینک: {r.showReportToCustomer ? "وجود و مانده" : "مخفی"}
@@ -213,7 +298,7 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
                 {" · "}فایل: {formatNumber(r.media?.length ?? 0)}
               </p>
               {!r.showReportToCustomer && (
-                <p className="hint">برای دیدن مشتری در لینک پیگیری، هنگام ویرایش «نمایش در لینک مشتری» را روشن کنید. یادداشت داخلی هرگز عمومی نمی‌شود.</p>
+                <p className="hint">یادداشت داخلی هرگز عمومی نمی‌شود؛ برای دیدن مشتری در لینک، هنگام ثبت «نمایش در لینک» را روشن کنید.</p>
               )}
               {canManage && (
                 <div className="quick-actions">
@@ -230,11 +315,47 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
               )}
             </li>
           ))}
+          {losses.map((r) => (
+            <li key={r.id} className="damage-card loss">
+              <div className="row between">
+                <span className="chip stage-orange">زیان داخلی</span>
+                <strong>{toman(r.amountRials)}</strong>
+              </div>
+              {r.responsibleName && <p className="small">مسئول: {r.responsibleName}</p>}
+              {r.internalNote && <p className="small">{r.internalNote}</p>}
+              <p className="muted small">هرگز در لینک مشتری دیده نمی‌شود · {faShort.format(new Date(r.createdAt))}</p>
+              {canManage && (
+                <div className="quick-actions">
+                  <button type="button" className="danger" disabled={busy}
+                    onClick={() => setDeleteLossId(r.id)}>
+                    حذف
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
         </ul>
       )}
 
-      <BottomSheet open={open} title="ثبت خسارت به مشتری" onClose={() => !busy && setOpen(false)}>
-        <form className="stack" onSubmit={(e) => { void submit(e); }}>
+      <BottomSheet open={pickOpen} title="ثبت خسارت" onClose={() => setPickOpen(false)}>
+        <div className="stack">
+          <p className="muted small">کدام نوع را ثبت می‌کنید؟</p>
+          <SheetOption
+            label="خسارت به مشتری"
+            hint="بستانکاری مشتری روی پرونده؛ در صورت نیاز در لینک دیده می‌شود"
+            tone="primary"
+            onClick={() => { setPickOpen(false); resetCustomerForm(); setCustomerOpen(true); }}
+          />
+          <SheetOption
+            label="خسارت داخلی (زیان مجموعه)"
+            hint="زیان مغازه با مسئول مشخص؛ هرگز به مشتری نشان داده نمی‌شود"
+            onClick={() => { setPickOpen(false); resetLossForm(); setLossOpen(true); }}
+          />
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={customerOpen} title="ثبت خسارت به مشتری" onClose={() => !busy && setCustomerOpen(false)}>
+        <form className="stack" onSubmit={(e) => { void submitCustomer(e); }}>
           <Field label="مبلغ بستانکاری مشتری (تومان)" error={err}>
             <NumberInput value={amount} onChange={(v) => { setAmount(v); if (err) setErr(null); }} inputMode="numeric" />
           </Field>
@@ -259,12 +380,48 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
           </label>
           <button type="submit" className="primary block"
             disabled={busy || !onlyDigits(toLatinDigits(amount))} aria-busy={busy}>
-            {busy ? "در حال ثبت…" : "ثبت خسارت"}
+            {busy ? "در حال ثبت…" : "ثبت خسارت به مشتری"}
           </button>
         </form>
       </BottomSheet>
 
-      <BottomSheet open={!!voidId} title="ابطال گزارش خسارت" onClose={() => !busy && setVoidId(null)}>
+      <BottomSheet open={lossOpen} title="ثبت زیان داخلی" onClose={() => !busy && setLossOpen(false)}>
+        <form className="stack" onSubmit={(e) => { void submitLoss(e); }}>
+          <p className="muted small">این مبلغ بستانکاری مشتری نیست و در لینک مشتری دیده نمی‌شود.</p>
+          <Field label="مبلغ زیان (تومان)" error={err && err.includes("مسئول") ? undefined : err ?? undefined}>
+            <NumberInput value={amount} onChange={(v) => { setAmount(v); if (err) setErr(null); }} inputMode="numeric" />
+          </Field>
+          <div>
+            <span className="muted small">مسئول</span>
+            <SelectField
+              label={staff.find((s) => s.id === responsibleId)?.name}
+              placeholder={staff.length === 0 ? "در حال بارگذاری…" : "انتخاب همکار"}
+              invalid={!!err && !responsibleId}
+              onOpen={() => setPickStaff(true)}
+            />
+            <SelectSheet
+              open={pickStaff}
+              title="مسئول زیان"
+              value={responsibleId}
+              items={staffItems}
+              onClose={() => setPickStaff(false)}
+              onSelect={(v) => { setResponsibleId(v); setPickStaff(false); if (err) setErr(null); }}
+            />
+            {err && !responsibleId && <span className="error">{err}</span>}
+          </div>
+          <label>
+            <span>یادداشت داخلی</span>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3}
+              placeholder="مثلاً شکستگی ابزار · اشتباه سفارش" />
+          </label>
+          <button type="submit" className="primary block"
+            disabled={busy || !onlyDigits(toLatinDigits(amount)) || !responsibleId} aria-busy={busy}>
+            {busy ? "در حال ثبت…" : "ثبت زیان داخلی"}
+          </button>
+        </form>
+      </BottomSheet>
+
+      <BottomSheet open={!!voidId} title="ابطال گزارش خسارت مشتری" onClose={() => !busy && setVoidId(null)}>
         <form className="stack" onSubmit={(e) => { void confirmVoid(e); }}>
           <p className="muted small">گزارش از لیست فعال خارج می‌شود؛ علت برای سابقه لازم است.</p>
           <Field label="علت ابطال" error={voidErr}>
@@ -274,6 +431,17 @@ export function CustomerDamageSection({ caseId, canManage, onChanged }: {
             {busy ? "در حال ابطال…" : "ابطال گزارش"}
           </button>
         </form>
+      </BottomSheet>
+
+      <BottomSheet open={!!deleteLossId} title="حذف زیان داخلی" onClose={() => !busy && setDeleteLossId(null)}>
+        <div className="stack">
+          <p>این زیان از فهرست فعال برداشته شود؟ در تاریخچه پرونده می‌ماند.</p>
+          <button type="button" className="danger block" disabled={busy} aria-busy={busy}
+            onClick={() => { void confirmDeleteLoss(); }}>
+            {busy ? "در حال حذف…" : "بله، حذف شود"}
+          </button>
+          <button type="button" className="block" disabled={busy} onClick={() => setDeleteLossId(null)}>انصراف</button>
+        </div>
       </BottomSheet>
     </section>
   );

@@ -563,7 +563,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         {editing && <CaseEditForm c={c} onDone={(updated) => { setEditing(false); if (updated) { setC(updated); notify("ذخیره شد"); } }} />}
       </BottomSheet>
 
-      <CustomerDamageSection caseId={c.id} canManage={c.canManage} onChanged={load} />
+      <CustomerDamageSection caseId={c.id} canManage={c.canManage} caseAssigneeId={c.assignee?.id} onChanged={load} />
 
       <Collapsible title="پذیرش و وضعیت ظاهری">
         <Detail label="کیلومتر" value={c.odometerKm != null ? `${formatNumber(c.odometerKm)} کیلومتر` : "—"} />
