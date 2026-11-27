@@ -36,6 +36,9 @@ public static class DamageEndpoints
 
         app.MapPost("/api/v1/cases/{caseId:guid}/mark-returned", MarkReturnedAsync).RequireTenant().RequirePermission(Permissions.CasesCreate);
 
+        // Case-scoped list for the damage module on the case page (same visibility as customer damages).
+        app.MapGet("/api/v1/cases/{caseId:guid}/shop-losses", ListCaseShopLossesAsync).RequireTenant();
+
         var losses = app.MapGroup("/api/v1/shop-losses").RequireTenant();
         losses.MapGet("/", ListShopLossesAsync).RequirePermission(Permissions.ReportsView);
         losses.MapPost("/", CreateShopLossAsync).RequirePermission(Permissions.CasesCreate);
@@ -294,11 +297,33 @@ public static class DamageEndpoints
 
     // ───────── shop losses ─────────
 
-    private static async Task<IResult> ListShopLossesAsync(RequestUser me, ArteDbContext db, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct)
+    private static async Task<IResult> ListCaseShopLossesAsync(Guid caseId, RequestUser me, ArteDbContext db, CancellationToken ct)
+    {
+        var m = me.RequiredMembership;
+        var c = await db.Cases.AsNoTracking().SingleOrDefaultAsync(x => x.Id == caseId, ct);
+        if (c is null || !CaseAccess.CanSee(m, c)) return Results.NotFound();
+
+        var rows = await (
+            from x in db.ShopLossReports.AsNoTracking()
+            where x.CaseId == caseId
+            join mem in db.Memberships.IgnoreQueryFilters([ArteDbContext.SupportFilter]).AsNoTracking()
+                on x.ResponsibleUserId equals mem.Id into mj
+            from mem in mj.DefaultIfEmpty()
+            orderby x.CreatedAt descending
+            select new
+            {
+                x.Id, x.CaseId, x.AmountRials, x.InternalNote, x.ResponsibleUserId, x.CreatedAt, x.UpdatedAt,
+                ResponsibleName = mem == null ? null : (mem.DisplayName ?? mem.User!.Mobile),
+            }).ToListAsync(ct);
+        return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> ListShopLossesAsync(RequestUser me, ArteDbContext db, DateTimeOffset? from, DateTimeOffset? to, Guid? caseId, CancellationToken ct)
     {
         var q = db.ShopLossReports.AsNoTracking().AsQueryable();
         if (from is { } f) q = q.Where(x => x.CreatedAt >= f);
         if (to is { } t) q = q.Where(x => x.CreatedAt < t);
+        if (caseId is { } cid) q = q.Where(x => x.CaseId == cid);
         var rows = await q.OrderByDescending(x => x.CreatedAt).Take(200).Select(x => new
         {
             x.Id, x.CaseId, x.AmountRials, x.InternalNote, x.ResponsibleUserId, x.CreatedAt, x.UpdatedAt,
