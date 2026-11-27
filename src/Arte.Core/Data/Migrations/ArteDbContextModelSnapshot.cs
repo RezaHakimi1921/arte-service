@@ -1071,6 +1071,11 @@ namespace Arte.Core.Data.Migrations
                     b.Property<Guid>("MembershipId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid?>("ShopLossId")
                         .HasColumnType("uuid");
 

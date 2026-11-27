@@ -15,8 +15,8 @@ public static class StaffPayEndpoints
 
     public sealed record BonusInput(Guid MembershipId, long AmountRials, string? Title, int JalaliYear, int JalaliMonth);
     public sealed record BonusPatch(long? AmountRials, string? Title, int? JalaliYear, int? JalaliMonth, string? Reason);
-    public sealed record DeductionInput(Guid MembershipId, long AmountRials, string? Category, int JalaliYear, int JalaliMonth, Guid? ShopLossId);
-    public sealed record DeductionPatch(long? AmountRials, string? Category, int? JalaliYear, int? JalaliMonth, Guid? ShopLossId, string? Reason);
+    public sealed record DeductionInput(Guid MembershipId, long AmountRials, string? Category, string? Reason, int JalaliYear, int JalaliMonth, Guid? ShopLossId);
+    public sealed record DeductionPatch(long? AmountRials, string? Category, string? Note, int? JalaliYear, int? JalaliMonth, Guid? ShopLossId, string? Reason);
     public sealed record VoidInput(string? Reason);
     public sealed record SettlementInput(Guid MembershipId, int JalaliYear, int JalaliMonth);
 
@@ -119,6 +119,7 @@ public static class StaffPayEndpoints
         if (category is null || !DeductionCategories.All.Contains(category)) errors["category"] = ["نوع کسر نامعتبر است."];
         if (req.AmountRials is <= 0 or > MaxRials) errors["amountRials"] = ["مبلغ نامعتبر است."];
         if (!Jalali.ValidMonth(req.JalaliYear, req.JalaliMonth)) errors["jalaliMonth"] = ["ماه شمسی نامعتبر است."];
+        var note = CleanReason(req.Reason, errors, required: true);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
         var member = await db.Memberships.SingleOrDefaultAsync(m => m.Id == req.MembershipId, ct);
@@ -131,7 +132,7 @@ public static class StaffPayEndpoints
         var now = clock.UtcNow;
         var row = new StaffDeduction
         {
-            MembershipId = member.Id, Category = category!, AmountRials = req.AmountRials,
+            MembershipId = member.Id, Category = category!, AmountRials = req.AmountRials, Reason = note!,
             JalaliYear = req.JalaliYear, JalaliMonth = req.JalaliMonth, ShopLossId = req.ShopLossId,
             CreatedBy = me.RequiredUserId, CreatedAt = now,
         };
@@ -155,6 +156,8 @@ public static class StaffPayEndpoints
         var year = req.JalaliYear ?? row.JalaliYear;
         var month = req.JalaliMonth ?? row.JalaliMonth;
         if (!Jalali.ValidMonth(year, month)) errors["jalaliMonth"] = ["ماه شمسی نامعتبر است."];
+        string? note = null;
+        if (req.Note is not null) note = CleanReason(req.Note, errors, required: true);
         var reason = CleanReason(req.Reason, errors);
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
@@ -170,6 +173,7 @@ public static class StaffPayEndpoints
         var before = DeductionSnap(row);
         row.Category = category;
         row.AmountRials = amount;
+        if (note is not null) row.Reason = note;
         row.JalaliYear = year;
         row.JalaliMonth = month;
         row.ShopLossId = shopLossId;
@@ -288,7 +292,7 @@ public static class StaffPayEndpoints
 
     private static object DeductionSnap(StaffDeduction d) => new
     {
-        d.Id, d.MembershipId, d.Category, d.AmountRials, d.JalaliYear, d.JalaliMonth, d.ShopLossId, d.VoidedAt, d.VoidReason,
+        d.Id, d.MembershipId, d.Category, d.AmountRials, d.Reason, d.JalaliYear, d.JalaliMonth, d.ShopLossId, d.VoidedAt, d.VoidReason,
     };
 
     private static object SettlementSnap(StaffPaySettlement s) => new

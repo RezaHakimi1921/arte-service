@@ -248,24 +248,24 @@ public sealed class StaffPayReportTests(ArteApiFactory api)
 
         var emptyMonth = await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 1, category = "advance", jalaliYear = 1404, jalaliMonth = 7,
+            membershipId = techId, amountRials = 1, reason = "بابت تست", category = "advance", jalaliYear = 1404, jalaliMonth = 7,
         });
         Assert.Equal(HttpStatusCode.BadRequest, emptyMonth.StatusCode);
         Assert.Contains("amountRials", await emptyMonth.Content.ReadAsStringAsync());
 
         await Json(await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 600_000, category = "advance", jalaliYear = 1404, jalaliMonth = 8,
+            membershipId = techId, amountRials = 600_000, reason = "بابت تست", category = "advance", jalaliYear = 1404, jalaliMonth = 8,
         }));
         var over = await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 500_000, category = "financial_adjustment", jalaliYear = 1404, jalaliMonth = 8,
+            membershipId = techId, amountRials = 500_000, reason = "بابت تست", category = "financial_adjustment", jalaliYear = 1404, jalaliMonth = 8,
         });
         Assert.Equal(HttpStatusCode.BadRequest, over.StatusCode);
 
         var second = await Json(await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 400_000, category = "financial_adjustment", jalaliYear = 1404, jalaliMonth = 8,
+            membershipId = techId, amountRials = 400_000, reason = "بابت تست", category = "financial_adjustment", jalaliYear = 1404, jalaliMonth = 8,
         }));
         var raised = await owner.PatchAsJsonAsync($"/api/v1/reports/staff-pay/deductions/{second.GetProperty("id").GetGuid()}", new { amountRials = 500_000 });
         Assert.Equal(HttpStatusCode.BadRequest, raised.StatusCode);
@@ -275,7 +275,7 @@ public sealed class StaffPayReportTests(ArteApiFactory api)
         var foreignLoss = await Json(await owner.PostAsJsonAsync("/api/v1/shop-losses", new { amountRials = 50_000, responsibleUserId = ownerId }));
         var wrongPerson = await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 1, category = "loss_linked", jalaliYear = 1404, jalaliMonth = 8,
+            membershipId = techId, amountRials = 1, reason = "بابت تست", category = "loss_linked", jalaliYear = 1404, jalaliMonth = 8,
             shopLossId = foreignLoss.GetProperty("id").GetGuid(),
         });
         Assert.Equal(HttpStatusCode.BadRequest, wrongPerson.StatusCode);
@@ -301,7 +301,7 @@ public sealed class StaffPayReportTests(ArteApiFactory api)
         var bonusId = bonus.GetProperty("id").GetGuid();
         var deduction = await Json(await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 500_000, category = "advance", jalaliYear = 1404, jalaliMonth = 6,
+            membershipId = techId, amountRials = 500_000, reason = "بابت تست", category = "advance", jalaliYear = 1404, jalaliMonth = 6,
         }));
         var deductionId = deduction.GetProperty("id").GetGuid();
 
@@ -322,7 +322,7 @@ public sealed class StaffPayReportTests(ArteApiFactory api)
         // The voided bonus no longer funds a deduction.
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 1, category = "advance", jalaliYear = 1404, jalaliMonth = 6,
+            membershipId = techId, amountRials = 1, reason = "بابت تست", category = "advance", jalaliYear = 1404, jalaliMonth = 6,
         })).StatusCode);
 
         await using var scope = api.Services.CreateAsyncScope();
@@ -361,7 +361,7 @@ public sealed class StaffPayReportTests(ArteApiFactory api)
         }));
         await Json(await owner.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = techId, amountRials = 500_000, category = "advance", jalaliYear = year, jalaliMonth = month,
+            membershipId = techId, amountRials = 500_000, reason = "بابت تست", category = "advance", jalaliYear = year, jalaliMonth = month,
         }));
         await Json(await owner.PostAsJsonAsync("/api/v1/shop-losses", new { amountRials = 700_000, responsibleUserId = techId }));
 
@@ -413,7 +413,7 @@ public sealed class StaffPayReportTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.OK, (await supervisor.GetAsync(url)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await supervisor.PostAsJsonAsync("/api/v1/reports/staff-pay/deductions", new
         {
-            membershipId = Guid.NewGuid(), amountRials = 1, category = "advance", jalaliYear = 1404, jalaliMonth = 1,
+            membershipId = Guid.NewGuid(), amountRials = 1, reason = "بابت تست", category = "advance", jalaliYear = 1404, jalaliMonth = 1,
         })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await supervisor.PostAsJsonAsync("/api/v1/reports/staff-pay/settlements", new
         {

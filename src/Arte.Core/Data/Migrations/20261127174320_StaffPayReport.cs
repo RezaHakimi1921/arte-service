@@ -110,6 +110,7 @@ namespace Arte.Core.Data.Migrations
                     MembershipId = table.Column<Guid>(type: "uuid", nullable: false),
                     Category = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     AmountRials = table.Column<long>(type: "bigint", nullable: false),
+                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     JalaliYear = table.Column<int>(type: "integer", nullable: false),
                     JalaliMonth = table.Column<int>(type: "integer", nullable: false),
                     ShopLossId = table.Column<Guid>(type: "uuid", nullable: true),

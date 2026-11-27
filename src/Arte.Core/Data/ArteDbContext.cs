@@ -545,6 +545,7 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
         b.Entity<StaffDeduction>(e =>
         {
             e.Property(x => x.Category).HasMaxLength(32);
+            e.Property(x => x.Reason).HasMaxLength(500);
             e.Property(x => x.VoidReason).HasMaxLength(500);
             e.HasIndex(x => new { x.TenantId, x.MembershipId, x.JalaliYear, x.JalaliMonth });
             e.HasOne<Membership>().WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);

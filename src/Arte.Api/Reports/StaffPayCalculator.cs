@@ -9,7 +9,7 @@ namespace Arte.Api.Reports;
 public sealed record StaffPayBonusRow(Guid Id, string Title, long AmountRials, int JalaliYear, int JalaliMonth, DateTimeOffset? VoidedAt, string? VoidReason);
 
 public sealed record StaffPayDeductionRow(
-    Guid Id, string Category, long AmountRials, int JalaliYear, int JalaliMonth, Guid? ShopLossId, DateTimeOffset? VoidedAt, string? VoidReason);
+    Guid Id, string Category, long AmountRials, string Reason, int JalaliYear, int JalaliMonth, Guid? ShopLossId, DateTimeOffset? VoidedAt, string? VoidReason);
 
 public sealed record StaffPayCommissionCaseRow(
     Guid CaseId, long CaseNumber, DateTimeOffset GrantedAt, long BaseRials, long CommissionRials,
@@ -90,7 +90,7 @@ public static class StaffPayCalculator
                 fixedSalary, bonus, deduction, income, income - deduction,
                 mineLosses.Count, mineLosses.Sum(l => l.AmountRials),
                 mineBonuses.Select(b => new StaffPayBonusRow(b.Id, b.Title, b.AmountRials, b.JalaliYear, b.JalaliMonth, b.VoidedAt, b.VoidReason)).ToList(),
-                mineDeductions.Select(d => new StaffPayDeductionRow(d.Id, d.Category, d.AmountRials, d.JalaliYear, d.JalaliMonth, d.ShopLossId, d.VoidedAt, d.VoidReason)).ToList(),
+                mineDeductions.Select(d => new StaffPayDeductionRow(d.Id, d.Category, d.AmountRials, d.Reason, d.JalaliYear, d.JalaliMonth, d.ShopLossId, d.VoidedAt, d.VoidReason)).ToList(),
                 mineGrants.OrderBy(g => g.GrantedAt).Select(g => new StaffPayCommissionCaseRow(
                     g.CaseId, caseNumbers.GetValueOrDefault(g.CaseId), g.GrantedAt, g.BaseRials, g.CommissionRials,
                     g.CommissionType, g.CommissionPercent, g.CommissionFixedRials, g.CommissionBase)).ToList(),

@@ -72,6 +72,8 @@ public sealed class StaffDeduction : ITenantOwned
     public Guid MembershipId { get; set; }
     public required string Category { get; set; }
     public long AmountRials { get; set; }
+    /// <summary>Why this deduction was recorded (required on create).</summary>
+    public required string Reason { get; set; }
     public int JalaliYear { get; set; }
     public int JalaliMonth { get; set; }
     public Guid? ShopLossId { get; set; }
