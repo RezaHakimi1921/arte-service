@@ -237,7 +237,7 @@ public static class BranchEndpoints
                 UserId = m.UserId, DisplayName = m.DisplayName, Role = m.Role, Permissions = m.Permissions, PayModel = m.PayModel,
                 CommissionPercent = m.CommissionPercent, FixedMonthlyRials = m.FixedMonthlyRials, CommissionType = m.CommissionType,
                 CommissionFixedRials = m.CommissionFixedRials, CommissionBase = m.CommissionBase, SurveyNotify = m.SurveyNotify,
-                CreatedAt = now, TourDoneAt = now,
+                CreatedAt = now, TourDoneAt = now, EmploymentStartedOn = Jalali.ToTehranDate(now),
             });
         await db.SaveChangesAsync(ct);
     }

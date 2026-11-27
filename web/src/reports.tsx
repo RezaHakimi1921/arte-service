@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ApiError, api } from "./api";
 import { ROLE_NAMES, caseCode } from "./labels";
 import { SubPage } from "./settings";
+import { StaffPayBlock } from "./staffPay";
 import { StarRow, scoreText } from "./survey";
 import { formatNumber } from "./ui";
 
@@ -12,13 +13,9 @@ type SurveyReport = {
   low: { id: string; number: number; customer: string | null; score: number; comment: string | null; answeredAt: string; followed: boolean }[];
 };
 
-type StaffPay = {
-  membershipId: string; name: string; role: string; cases: number; baseRials: number; commissionRials: number;
-  commissionType: string; fixedMonthlyRials: number;
-};
 type Summary = {
   opened: number; delivered: number; salesRials: number; partsRials: number; workRials: number; partsProfitRials: number | null;
-  receivedRials: number; receivablesRials: number; staff: StaffPay[]; survey: SurveyReport | null;
+  receivedRials: number; receivablesRials: number; survey: SurveyReport | null;
   topItems: { kind: string; title: string; cases: number; quantity: number; salesRials: number; profitRials: number | null }[];
 };
 
@@ -33,23 +30,37 @@ function jalaliMonthStart(d: Date) {
 }
 
 const PERIODS = [
-  { key: "today", label: "امروز", range: (now: Date) => [midnight(now), addDays(midnight(now), 1)] },
+  { key: "today", label: "امروز", range: (now: Date) => [midnight(now), addDays(midnight(now), 1)] as [Date, Date] },
   // The Iranian week starts on Saturday (getDay() === 6).
-  { key: "week", label: "این هفته", range: (now: Date) => [addDays(midnight(now), -((now.getDay() + 1) % 7)), addDays(midnight(now), 1)] },
-  { key: "month", label: "این ماه", range: (now: Date) => [jalaliMonthStart(now), addDays(midnight(now), 1)] },
-  { key: "last", label: "ماه قبل", range: (now: Date) => { const start = jalaliMonthStart(now); return [jalaliMonthStart(addDays(start, -1)), start]; } },
+  { key: "week", label: "این هفته", range: (now: Date) => [addDays(midnight(now), -((now.getDay() + 1) % 7)), addDays(midnight(now), 1)] as [Date, Date] },
+  { key: "month", label: "این ماه", range: (now: Date) => [jalaliMonthStart(now), addDays(midnight(now), 1)] as [Date, Date] },
+  { key: "last", label: "ماه قبل", range: (now: Date) => { const start = jalaliMonthStart(now); return [jalaliMonthStart(addDays(start, -1)), start] as [Date, Date]; } },
+  { key: "custom", label: "سفارشی", range: null },
 ] as const;
 
 const toman = (rials: number) => `${formatNumber(Math.round(rials / 10))} تومان`;
 const monthName = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { month: "long", year: "numeric" });
+const dayChipLabel = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { weekday: "short", day: "numeric", month: "short" });
 
-/** A few fixed numbers for the owner; no builder, no charts. Delivered cases drive sales and staff pay. */
-export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () => void; onReceivables: () => void; onOpenCase: (id: string) => void }) {
+/** A few fixed numbers for the owner; no builder, no charts. Staff pay has its own endpoint. */
+export function ReportsPage({ onBack, onReceivables, onOpenCase, canManageStaff }: {
+  onBack: () => void; onReceivables: () => void; onOpenCase: (id: string) => void; canManageStaff: boolean;
+}) {
+  const now = new Date();
   const [period, setPeriod] = useState<(typeof PERIODS)[number]["key"]>("month");
+  const [customFrom, setCustomFrom] = useState(() => jalaliMonthStart(now));
+  const [customTo, setCustomTo] = useState(() => addDays(midnight(now), 1));
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const now = new Date();
-  const [from, to] = PERIODS.find((p) => p.key === period)!.range(now);
+
+  const [from, to] = useMemo(() => {
+    if (period === "custom") {
+      const a = midnight(customFrom);
+      const b = midnight(customTo);
+      return a < b ? [a, b] as [Date, Date] : [b, addDays(a, 1)] as [Date, Date];
+    }
+    return PERIODS.find((p) => p.key === period)!.range!(now);
+  }, [period, customFrom.getTime(), customTo.getTime()]);
 
   useEffect(() => {
     let alive = true;
@@ -59,11 +70,13 @@ export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () 
       .then((d) => alive && setData(d))
       .catch((err) => alive && setError(err instanceof ApiError ? err.message : "خطا"));
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
+  }, [from.getTime(), to.getTime()]);
 
-  const subtitle = period === "month" || period === "last" ? monthName.format(from) : null;
-  const payable = data?.staff.filter((s) => s.cases > 0 || s.fixedMonthlyRials > 0 || s.commissionType !== "none") ?? [];
+  const subtitle = period === "custom"
+    ? `${monthName.format(from)} ← ${monthName.format(addDays(to, -1))}`
+    : period === "month" || period === "last" ? monthName.format(from) : null;
+
+  const customDays = useMemo(() => Array.from({ length: 60 }, (_, i) => addDays(midnight(now), -45 + i)), [now.toDateString()]);
 
   return (
     <SubPage title="گزارش‌ها" onBack={onBack}>
@@ -72,6 +85,28 @@ export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () 
           <button type="button" key={p.key} role="radio" aria-checked={period === p.key} className={period === p.key ? "on" : ""} onClick={() => setPeriod(p.key)}>{p.label}</button>
         ))}
       </div>
+      {period === "custom" && (
+        <div className="custom-range">
+          <span className="label">از روز</span>
+          <div className="day-chips" role="listbox" aria-label="شروع بازه">
+            {customDays.map((d) => (
+              <button type="button" key={`f-${d.toISOString()}`} role="option" aria-selected={midnight(customFrom).getTime() === d.getTime()}
+                className={midnight(customFrom).getTime() === d.getTime() ? "on" : ""} onClick={() => setCustomFrom(d)}>
+                {d.toDateString() === midnight(now).toDateString() ? "امروز" : dayChipLabel.format(d)}
+              </button>
+            ))}
+          </div>
+          <span className="label">تا روز (پایان؛ خودش داخل بازه نیست)</span>
+          <div className="day-chips" role="listbox" aria-label="پایان بازه">
+            {customDays.map((d) => (
+              <button type="button" key={`t-${d.toISOString()}`} role="option" aria-selected={midnight(customTo).getTime() === d.getTime()}
+                className={midnight(customTo).getTime() === d.getTime() ? "on" : ""} onClick={() => setCustomTo(d)}>
+                {d.toDateString() === midnight(now).toDateString() ? "امروز" : dayChipLabel.format(d)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {subtitle && <p className="muted small">{subtitle}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {!data && !error && <div className="splash" aria-busy="true" />}
@@ -113,29 +148,7 @@ export function ReportsPage({ onBack, onReceivables, onOpenCase }: { onBack: () 
             </div>
           )}
 
-          <h3>دستمزد کارکنان</h3>
-          {payable.length === 0 ? (
-            <p className="muted small">برای کارکنان حقوق یا پورسانت تعریف نشده است. از «کارکنان و دسترسی‌ها» تنظیم کنید.</p>
-          ) : (
-            <div className="settings-list">
-              {payable.map((s) => (
-                <div key={s.membershipId} className="settings-row static report-pay">
-                  <span className="settings-row-text">
-                    <span>{s.name}</span>
-                    <span className="muted small">{ROLE_NAMES[s.role] ?? s.role} · {formatNumber(s.cases)} پرونده تحویل‌شده</span>
-                    <span className="muted small">
-                      پورسانت <span className="font-num">{toman(s.commissionRials)}</span>
-                      {s.fixedMonthlyRials > 0 && <> · حقوق ماهانه <span className="font-num">{toman(s.fixedMonthlyRials)}</span></>}
-                    </span>
-                  </span>
-                  <strong className="font-num">{toman(s.commissionRials + (period === "today" || period === "week" ? 0 : s.fixedMonthlyRials))}</strong>
-                </div>
-              ))}
-            </div>
-          )}
-          {payable.some((s) => s.fixedMonthlyRials > 0) && (
-            <p className="hint">{period === "today" || period === "week" ? "در بازه روزانه و هفتگی فقط پورسانت در جمع آمده است." : "جمع = پورسانت این بازه + حقوق ثابت یک ماه."}</p>
-          )}
+          <StaffPayBlock from={from} to={to} canManage={canManageStaff} onOpenCase={onOpenCase} />
 
           <WorkshopBlock from={from} to={to} />
 

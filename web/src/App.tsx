@@ -419,6 +419,7 @@ function Shell({ me, onSignOut, onSettingsChanged, onBranches }: { me: Me; onSig
     else if (morePage === "customer") page = <CustomerPage onBack={back} onSaved={onSettingsChanged} />;
     else if (morePage === "staff") page = <StaffPage onBack={back} surveyEnabled={me.business!.surveyEnabled} />;
     else if (morePage === "reports") page = <ReportsPage onBack={back} onReceivables={() => setMorePage("receivables")}
+      canManageStaff={can("staff.manage")}
       onOpenCase={(id) => { setTab("cases"); setMorePage(null); setCaseId(id); setSurveyCase(id); }} />;
     else if (morePage === "license") page = <LicensePage onBack={back} />;
     else if (morePage === "admin" && me.isPlatformAdmin) page = <AdminPanel onBack={back} />;

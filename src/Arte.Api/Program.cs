@@ -229,6 +229,7 @@ app.MapGet("/api/v1/public/info", (IConfiguration c) => Results.Ok(new { Support
 Arte.Api.Licensing.LicenseEndpoints.MapLicensing(app);
 Arte.Api.Sms.SmsEndpoints.MapSms(app);
 app.MapReports();
+app.MapStaffPay();
 
 if (config.GetValue("Database:MigrateOnStartup", false))
 {

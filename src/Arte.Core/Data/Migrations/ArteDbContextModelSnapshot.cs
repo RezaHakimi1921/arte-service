@@ -60,6 +60,59 @@ namespace Arte.Core.Data.Migrations
                     b.ToTable("BankCards");
                 });
 
+            modelBuilder.Entity("Arte.Core.Billing.CaseCommissionGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("BaseRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CommissionBase")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<long?>("CommissionFixedRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal?>("CommissionPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<long>("CommissionRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("CommissionType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("GrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId")
+                        .IsUnique();
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("TenantId", "MembershipId", "GrantedAt");
+
+                    b.ToTable("CaseCommissionGrants");
+                });
+
             modelBuilder.Entity("Arte.Core.Billing.CaseItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -936,6 +989,222 @@ namespace Arte.Core.Data.Migrations
                             SortOrder = 2,
                             StandardItemId = new Guid("d537d6d5-78e0-5f81-ab39-8fb09a999975")
                         });
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.StaffBonus", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("AmountRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("JalaliMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("JalaliYear")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("VoidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VoidedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("TenantId", "MembershipId", "JalaliYear", "JalaliMonth");
+
+                    b.ToTable("StaffBonuses");
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.StaffDeduction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("AmountRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("JalaliMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("JalaliYear")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("ShopLossId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VoidReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("VoidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VoidedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("ShopLossId");
+
+                    b.HasIndex("TenantId", "MembershipId", "JalaliYear", "JalaliMonth");
+
+                    b.ToTable("StaffDeductions");
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.StaffPayAuditLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.HasIndex("TenantId", "At");
+
+                    b.ToTable("StaffPayAuditLogs");
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.StaffPaySettlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("AfterDeductionsRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BonusRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CommissionRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ConfirmedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("DeductionRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("FixedSalaryRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("IncomeRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("JalaliMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("JalaliYear")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("ShopLossRials")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MembershipId");
+
+                    b.HasIndex("TenantId", "MembershipId", "JalaliYear", "JalaliMonth")
+                        .IsUnique();
+
+                    b.ToTable("StaffPaySettlements");
                 });
 
             modelBuilder.Entity("Arte.Core.Billing.StandardItem", b =>
@@ -2458,6 +2727,12 @@ namespace Arte.Core.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<DateOnly?>("EmploymentEndedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("EmploymentStartedOn")
+                        .HasColumnType("date");
+
                     b.Property<long?>("FixedMonthlyRials")
                         .HasColumnType("bigint");
 
@@ -3697,6 +3972,21 @@ namespace Arte.Core.Data.Migrations
                     b.ToTable("RequestTypeChecklistBindings");
                 });
 
+            modelBuilder.Entity("Arte.Core.Billing.CaseCommissionGrant", b =>
+                {
+                    b.HasOne("Arte.Core.Cases.Case", null)
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Arte.Core.Identity.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Arte.Core.Billing.CaseItem", b =>
                 {
                     b.HasOne("Arte.Core.Cases.Case", null)
@@ -3769,6 +4059,38 @@ namespace Arte.Core.Data.Migrations
                     b.HasOne("Arte.Core.Billing.StandardItem", null)
                         .WithMany()
                         .HasForeignKey("StandardItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.StaffBonus", b =>
+                {
+                    b.HasOne("Arte.Core.Identity.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.StaffDeduction", b =>
+                {
+                    b.HasOne("Arte.Core.Identity.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Arte.Core.Cases.ShopLossReport", null)
+                        .WithMany()
+                        .HasForeignKey("ShopLossId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Arte.Core.Billing.StaffPaySettlement", b =>
+                {
+                    b.HasOne("Arte.Core.Identity.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("MembershipId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
