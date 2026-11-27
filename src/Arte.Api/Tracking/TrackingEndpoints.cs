@@ -130,6 +130,11 @@ public static class TrackingEndpoints
                 }
             }
 
+            // Any case timeline entry (item, payment, note, photo, stage…) moves "last updated" — not only stage changes.
+            var lastEventAt = await db.CaseEvents.AsNoTracking().Where(e => e.CaseId == c.Id)
+                .Select(e => (DateTimeOffset?)e.OccurredAt).MaxAsync(ct);
+            var updatedAt = lastEventAt ?? c.StageEnteredAt;
+
             // Only the photos the shop marked for the customer (gallery; not damage-only rows until flags allow).
             var photos = await db.CaseAttachments.AsNoTracking().Where(a => a.CaseId == c.Id && a.VisibleToCustomer && a.Purpose == AttachmentPurposes.Photo
                     && a.DamageReportId == null)
@@ -195,7 +200,8 @@ public static class TrackingEndpoints
                 Photos = photos,
                 Case = new
                 {
-                    Customer = customer.FullName, c.OpenedAt, c.PromisedAt, c.ClosedAt, c.WarrantyUntil,
+                    c.Number, Customer = customer.FullName, c.OpenedAt, UpdatedAt = updatedAt,
+                    c.PromisedAt, c.ClosedAt, c.WarrantyUntil,
                     Vehicle = asset is null ? null : new { asset.Title, asset.Kind, asset.Identifier },
                     c.ReportedProblems, c.RequestedServices, ServiceChanges = serviceChanges, ProblemChanges = problemChanges,
                 },
