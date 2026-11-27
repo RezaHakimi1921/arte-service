@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiError, api } from "./api";
 import { applyTheme } from "./App";
-import { WAIT_REASONS } from "./labels";
+import { WAIT_REASONS, caseCode } from "./labels";
 import { formatNumber } from "./ui";
 import { compress } from "./photos";
 import { BottomSheet } from "./sheet";
@@ -17,7 +17,8 @@ type Track = {
   survey: Survey | null;
   photos: { id: string; stageKey: string; caption: string | null; createdAt: string; isVideo?: boolean }[];
   case: {
-    customer: string | null; openedAt: string; promisedAt: string | null; closedAt: string | null; warrantyUntil: string | null;
+    number: number; customer: string | null; openedAt: string; updatedAt: string;
+    promisedAt: string | null; closedAt: string | null; warrantyUntil: string | null;
     vehicle: { title: string; kind: string; identifier: string | null } | null; reportedProblems: string[]; requestedServices: string[];
     /** Services at intake against now: kept, taken off ("removed") or put on after intake ("added"). */
     serviceChanges?: Change[];
@@ -596,6 +597,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
             <div className="tk-hero-copy">
               <div className="tk-greeting">
                 <span>{t.case.customer ? `${t.case.customer} عزیز` : "مشتری گرامی"}</span>
+                <span className="tk-case-code font-num" dir="ltr">{caseCode(t.case.number)}</span>
               </div>
               <h1>{t.case.vehicle?.title ?? "پرونده‌ی شما"}</h1>
               {t.case.vehicle?.identifier && <bdi className="tk-plate font-num" dir="ltr">{t.case.vehicle.identifier}</bdi>}
@@ -604,7 +606,7 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
           </div>
           <div className="tk-hero-meta">
             <div><Icon name="calendar" /><span>پذیرش</span><strong>{day.format(new Date(t.case.openedAt))}</strong></div>
-            <div><Icon name="clock" /><span>آخرین به‌روزرسانی</span><strong>{when(t.status.stageEnteredAt)}</strong></div>
+            <div><Icon name="clock" /><span>آخرین به‌روزرسانی</span><strong>{when(t.case.updatedAt)}</strong></div>
             {t.case.promisedAt && t.status.key !== "delivered" && (
               <div><Icon name="check" /><span>قول تحویل</span><strong>{dayTime.format(new Date(t.case.promisedAt))}</strong></div>
             )}

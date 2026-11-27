@@ -39,12 +39,32 @@ public sealed class TrackingTests(ArteApiFactory api)
         var t = JsonDocument.Parse(body).RootElement;
         Assert.Equal("تعمیرگاه تست", t.GetProperty("shop").GetProperty("name").GetString());
         Assert.Equal("received", t.GetProperty("status").GetProperty("key").GetString());
+        Assert.True(t.GetProperty("case").GetProperty("number").GetInt64() > 0);
+        Assert.True(t.GetProperty("case").TryGetProperty("updatedAt", out _));
         Assert.Equal("current", t.GetProperty("stages")[0].GetProperty("state").GetString());
         Assert.Equal("شمع", t.GetProperty("items")[0].GetProperty("title").GetString());
         Assert.Equal(1_500_000, t.GetProperty("money").GetProperty("totalRials").GetInt64());
         // Never the customer's mobile, never the purchase price.
         Assert.DoesNotContain(mobile, body);
         Assert.DoesNotContain("1000000", body);
+    }
+
+    [Fact]
+    public async Task Tracking_updatedAt_moves_on_any_case_change_not_only_stage()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (id, code, _) = await OpenCase(owner);
+        var before = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        var stageAt = before.GetProperty("status").GetProperty("stageEnteredAt").GetDateTimeOffset();
+        var beforeUpdated = before.GetProperty("case").GetProperty("updatedAt").GetDateTimeOffset();
+        Assert.True(beforeUpdated >= stageAt);
+
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items", new { kind = "part", title = "فیلتر", unitCostRials = 100_000, unitPriceRials = 200_000 }));
+        var after = await Json(await api.Client().GetAsync($"/api/v1/track/{code}"));
+        var updatedAt = after.GetProperty("case").GetProperty("updatedAt").GetDateTimeOffset();
+        Assert.Equal(stageAt, after.GetProperty("status").GetProperty("stageEnteredAt").GetDateTimeOffset());
+        Assert.True(updatedAt > beforeUpdated, "adding an item must bump updatedAt without a stage change");
+        Assert.True(updatedAt > stageAt);
     }
 
     [Fact]
