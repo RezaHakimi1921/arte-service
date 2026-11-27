@@ -79,6 +79,41 @@ public sealed class WorkshopNotifyTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Finishing_work_sms_goes_to_every_member_with_cases_create_including_senior()
+    {
+        var ownerMobile = ArteApiFactory.NewMobile();
+        var (owner, _) = await api.NewBusinessAsync(ownerMobile);
+        (await owner.PutAsJsonAsync("/api/v1/settings/business", new { smsToMasterOnFinished = true })).EnsureSuccessStatusCode();
+
+        var seniorMobile = ArteApiFactory.NewMobile();
+        await Json(await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = seniorMobile, displayName = "مکانیک ارشد", role = "supervisor" }));
+
+        var techMobile = ArteApiFactory.NewMobile();
+        var tech = await Json(await owner.PostAsJsonAsync("/api/v1/staff", new { mobile = techMobile, displayName = "شاگرد", role = "technician" }));
+        var (techClient, _) = await api.LoginAsync(techMobile);
+
+        var id = (await Json(await owner.PostAsJsonAsync("/api/v1/cases", new
+        {
+            mobile = ArteApiFactory.NewMobile(), customerName = "م", reportedProblems = new[] { "روشن نمی‌شود" },
+            newAsset = new { title = "هوندا CG 125", kind = "motorcycle" }, assigneeId = tech.GetProperty("id").GetGuid(),
+        }))).GetProperty("id").GetGuid();
+        await Move(owner, id, "در حال تعمیر");
+        api.Sms.Keys.Clear();
+        await Move(techClient, id, "بررسی نهایی استاد");
+
+        var staffSms = (await Events(owner, id)).Where(e => e.GetProperty("type").GetString() == "staff.sms").ToList();
+        Assert.Equal(2, staffSms.Count); // owner + senior; not the technician
+        Assert.Contains(staffSms, e => e.GetProperty("data").GetProperty("toName").GetString() == "مکانیک ارشد");
+        Assert.True(api.Sms.Keys.TryGetValue(ownerMobile, out var ownerKeys));
+        Assert.True(api.Sms.Keys.TryGetValue(seniorMobile, out var seniorKeys));
+        Assert.Contains(ownerKeys, k => k == "staff.work_finished");
+        Assert.Contains(seniorKeys, k => k == "staff.work_finished");
+        Assert.False(
+            api.Sms.Keys.TryGetValue(techMobile, out var techKeys) && techKeys.Contains("staff.work_finished"),
+            "technician without cases.create must not get the master SMS");
+    }
+
+    [Fact]
     public async Task Push_subscription_is_validated_and_moves_with_the_device()
     {
         var (owner, _) = await api.NewBusinessAsync();

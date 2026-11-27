@@ -112,23 +112,30 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
     };
 
     /// <summary>
-    /// SMS to masters that a finished job waits for review. Recipients: active members with
-    /// <see cref="Arte.Core.Identity.Permissions.CasesCreate"/> (owner + senior by default roles),
-    /// including the person who finished the work (solo shops must still get the notice).
+    /// SMS that a finished job waits for review. Goes to every active member with
+    /// <see cref="Arte.Core.Identity.Permissions.CasesCreate"/> (owner + مکانیک ارشد by default,
+    /// and anyone granted that permission) — including the person who finished the work so solo
+    /// shops still get a notice. Technicians without CasesCreate are not recipients.
     /// </summary>
     public async Task NotifyMastersAsync(Case c, Guid actorUserId, CancellationToken ct)
     {
         try
         {
-            _ = actorUserId; // kept for call-site compatibility; recipients are permission-based, not "everyone except actor"
+            _ = actorUserId; // call-site compatibility; recipients are permission-based, not "everyone except actor"
             if (c.IsSample) return;
             var t = await db.Tenants.AsNoTracking().SingleAsync(x => x.Id == c.TenantId, ct);
             if (!t.SmsToMasterOnFinished) return;
-            // Include the finisher: solo owner/master shops must still receive the notice.
+
             var members = await db.Memberships.AsNoTracking().Include(m => m.User).Where(m => m.IsActive).ToListAsync(ct);
-            var mobiles = members.Where(m => m.Has(Arte.Core.Identity.Permissions.CasesCreate) && m.User is not null)
-                .Select(m => m.User!.Mobile).Distinct().Take(5).ToList();
-            if (mobiles.Count == 0) return;
+            // One SMS per distinct mobile among everyone allowed to approve / create cases.
+            var recipients = members
+                .Where(m => m.User is not null && m.Has(Arte.Core.Identity.Permissions.CasesCreate))
+                .GroupBy(m => m.User!.Mobile, StringComparer.Ordinal)
+                .Select(g => g.First())
+                .Take(10)
+                .ToList();
+            if (recipients.Count == 0) return;
+
             var asset = c.AssetId is null ? null : await db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]).AsNoTracking().SingleOrDefaultAsync(x => x.Id == c.AssetId, ct);
             var tokens = new Dictionary<string, string>
             {
@@ -137,13 +144,22 @@ public sealed class CustomerNotifier(ArteDbContext db, ISmsProvider sms, IClock 
                 ["vehicle"] = Cut(asset is null ? "وسیله‌ی" : $"{KindWords.GetValueOrDefault(asset.Kind, "وسیله‌ی")} {asset.Title}", SmsLimits.Vehicle),
                 ["code"] = $"CASE-{c.Number}",
             };
-            foreach (var mobile in mobiles)
+            foreach (var member in recipients)
             {
-                var result = await sms.SendAsync(new SmsRequest(mobile, MessageKeys.StaffWorkFinished, tokens, c.TenantId), ct);
+                var user = member.User!;
+                var result = await sms.SendAsync(new SmsRequest(user.Mobile, MessageKeys.StaffWorkFinished, tokens, c.TenantId), ct);
+                var last4 = user.Mobile.Length >= 4 ? user.Mobile[^4..] : user.Mobile;
                 db.CaseEvents.Add(new CaseEvent
                 {
                     TenantId = c.TenantId, CaseId = c.Id, Type = "staff.sms", OccurredAt = clock.UtcNow,
-                    Data = JsonSerializer.SerializeToDocument(new { Kind = MessageKeys.StaffWorkFinished, Sent = result.Accepted, Error = result.Accepted ? null : result.Error }, Json),
+                    Data = JsonSerializer.SerializeToDocument(new
+                    {
+                        Kind = MessageKeys.StaffWorkFinished,
+                        Sent = result.Accepted,
+                        Error = result.Accepted ? null : result.Error,
+                        ToLast4 = last4,
+                        ToName = member.DisplayName ?? user.DisplayName,
+                    }, Json),
                 });
             }
             await db.SaveChangesAsync(ct);

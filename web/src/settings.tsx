@@ -540,7 +540,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
           </div>
           <h3>پیامک به استاد</h3>
           <div className="settings-list">
-            <Switch title="وقتی کاری تمام شد" sub="کسی که کار را تمام می‌کند، برای استاد (و مدیر) پیامک می‌فرستد تا بررسی کند."
+            <Switch title="وقتی کاری تمام شد" sub="برای همهٔ کسانی که مجوز مدیریت پرونده دارند پیامک می‌رود — مالک، مکانیک ارشد، و هر کسی که این مجوز را داشته باشد (نه فقط تعمیرکار معمولی)."
               checked={s.smsToMasterOnFinished} disabled={false} onChange={(v) => save({ smsToMasterOnFinished: v })} />
           </div>
           <h3>صفحه‌ی پیگیری مشتری</h3>
