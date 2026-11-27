@@ -263,6 +263,14 @@ public static class BillingEndpoints
         if (req.Note is { Length: > 300 }) errors["note"] = ["حداکثر ۳۰۰ حرف."];
         var now = clock.UtcNow;
         if (req.PaidAt is { } at && (at > now.AddMinutes(5) || at < now.AddYears(-1))) errors["paidAt"] = ["تاریخ پرداخت نامعتبر است."];
+        // Invoice already settled (or overpaid): no new payment. Prepayment before any line (Total==0) stays allowed.
+        var money = CaseMoney.Of(
+            await db.CaseItems.AsNoTracking().Where(i => i.CaseId == c.Id).ToListAsync(ct),
+            await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct));
+        if (money.TotalRials > 0 && money.BalanceRials <= 0)
+            errors["amountRials"] = ["این صورت‌حساب تسویه شده؛ پرداخت تازه ثبت نمی‌شود."];
+        else if (money.TotalRials > 0 && req.AmountRials is { } amt && amt > money.BalanceRials)
+            errors["amountRials"] = ["مبلغ بیشتر از ماندهٔ قابل پرداخت است."];
         if (errors.Count > 0) return Results.ValidationProblem(errors);
 
         var payment = new Payment

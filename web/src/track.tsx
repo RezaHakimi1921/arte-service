@@ -116,11 +116,13 @@ function PaySheet({ open, onClose, code, pay, owe, onSent }: { open: boolean; on
             </button>
           </>
         )}
-        {owe && (
+        {owe ? (
           <label className={`tk-upload${busy ? " busy" : ""}`} aria-busy={busy}>
             <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { void send(e.target.files); e.target.value = ""; }} />
             <Icon name="camera" />{busy ? "در حال ارسال رسید…" : "ارسال عکس رسید واریز"}
           </label>
+        ) : (
+          <p className="tk-sheet-note">صورت‌حساب تسویه شده؛ ارسال رسید تازه لازم نیست.</p>
         )}
         {msg && <p className={msg.ok ? "tk-sheet-ok" : "tk-error"} role="status">{msg.text}</p>}
         {pay.receipts.length > 0 && (

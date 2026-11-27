@@ -167,6 +167,12 @@ public static class FinanceEndpoints
             if (await db.CustomerReceipts.CountAsync(x => x.CaseId == c.Id && x.Status == ReceiptStatuses.Pending, ct) >= 3)
                 return Results.Problem(statusCode: 429, title: "چند رسید در انتظار بررسی دارید؛ لطفاً تا تأیید آن‌ها صبر کنید.");
 
+            var bill = CaseMoney.Of(
+                await db.CaseItems.AsNoTracking().Where(i => i.CaseId == c.Id).ToListAsync(ct),
+                await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct));
+            if (bill.TotalRials > 0 && bill.BalanceRials <= 0)
+                return Results.Problem(statusCode: 409, title: "این صورت‌حساب تسویه شده؛ ارسال رسید تازه لازم نیست.");
+
             await using var buffer = new MemoryStream();
             await file.CopyToAsync(buffer, ct);
             var bytes = buffer.ToArray();
@@ -225,6 +231,14 @@ public static class FinanceEndpoints
             if (amount is not > 0 || amount > 100_000_000_000)
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["amountRials"] = ["مبلغ پرداخت را وارد کنید."] });
             if (req.Note is { Length: > 200 }) return Results.ValidationProblem(new Dictionary<string, string[]> { ["note"] = ["حداکثر ۲۰۰ حرف."] });
+
+            var bill = CaseMoney.Of(
+                await db.CaseItems.AsNoTracking().Where(i => i.CaseId == c.Id).ToListAsync(ct),
+                await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct));
+            if (bill.TotalRials > 0 && bill.BalanceRials <= 0)
+                return Results.Problem(statusCode: 409, title: "این صورت‌حساب تسویه شده؛ پرداخت تازه از رسید ثبت نمی‌شود.");
+            if (bill.TotalRials > 0 && amount > bill.BalanceRials)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amountRials"] = ["مبلغ بیشتر از ماندهٔ قابل پرداخت است."] });
 
             var now = clock.UtcNow;
             var attachment = await db.CaseAttachments.SingleAsync(a => a.Id == r.AttachmentId, ct);

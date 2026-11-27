@@ -177,6 +177,25 @@ public sealed class BillingTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Settled_invoice_rejects_new_payment_and_overpay()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var c = await OpenCase(owner);
+        var id = c.GetProperty("id");
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items", new { kind = "service", title = "سرویس", unitPriceRials = 5_000_000 }));
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 2_000_000, method = "cash" }));
+
+        var over = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 4_000_000, method = "cash" });
+        Assert.Equal(HttpStatusCode.BadRequest, over.StatusCode);
+        Assert.Contains("مانده", await over.Content.ReadAsStringAsync());
+
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 3_000_000, method = "cash" }));
+        var again = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 1, method = "cash" });
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Contains("تسویه", await again.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Item_soft_delete_and_restore_and_other_business_gets_404()
     {
         var (owner, _) = await api.NewBusinessAsync();
