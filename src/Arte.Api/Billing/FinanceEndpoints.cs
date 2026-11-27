@@ -238,7 +238,8 @@ public static class FinanceEndpoints
             if (bill.TotalRials > 0 && bill.BalanceRials <= 0)
                 return Results.Problem(statusCode: 409, title: "این صورت‌حساب تسویه شده؛ پرداخت تازه از رسید ثبت نمی‌شود.");
             if (bill.TotalRials > 0 && amount > bill.BalanceRials)
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amountRials"] = ["مبلغ بیشتر از ماندهٔ قابل پرداخت است."] });
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["amountRials"] = ["مبلغ از مانده قابل پرداخت بیشتر است."] },
+                    extensions: new Dictionary<string, object?> { ["code"] = "over_balance" });
 
             var now = clock.UtcNow;
             var attachment = await db.CaseAttachments.SingleAsync(a => a.Id == r.AttachmentId, ct);

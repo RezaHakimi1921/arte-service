@@ -188,19 +188,18 @@ public sealed class BillingTests(ArteApiFactory api)
 
         var over = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 4_000_000, method = "cash" });
         Assert.Equal(HttpStatusCode.BadRequest, over.StatusCode);
-        Assert.Contains("مانده", await AmountErrorAsync(over));
+        Assert.Equal("over_balance", await ProblemCodeAsync(over));
 
         await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 3_000_000, method = "cash" }));
         var again = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 1, method = "cash" });
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
-        Assert.Contains("تسویه", await AmountErrorAsync(again));
+        Assert.Equal("invoice_settled", await ProblemCodeAsync(again));
     }
 
-    /// <summary>ValidationProblem may escape Persian in the raw body; read the decoded errors.amountRials text.</summary>
-    private static async Task<string> AmountErrorAsync(HttpResponseMessage res)
+    private static async Task<string?> ProblemCodeAsync(HttpResponseMessage res)
     {
         var doc = await res.Content.ReadFromJsonAsync<JsonElement>();
-        return string.Join(" ", doc.GetProperty("errors").GetProperty("amountRials").EnumerateArray().Select(x => x.GetString()));
+        return doc.TryGetProperty("code", out var code) ? code.GetString() : null;
     }
 
     [Fact]

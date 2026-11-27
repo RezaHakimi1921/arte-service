@@ -267,11 +267,19 @@ public static class BillingEndpoints
         var money = CaseMoney.Of(
             await db.CaseItems.AsNoTracking().Where(i => i.CaseId == c.Id).ToListAsync(ct),
             await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct));
+        string? moneyCode = null;
         if (money.TotalRials > 0 && money.BalanceRials <= 0)
+        {
             errors["amountRials"] = ["این صورت‌حساب تسویه شده؛ پرداخت تازه ثبت نمی‌شود."];
+            moneyCode = "invoice_settled";
+        }
         else if (money.TotalRials > 0 && req.AmountRials is { } amt && amt > money.BalanceRials)
-            errors["amountRials"] = ["مبلغ بیشتر از ماندهٔ قابل پرداخت است."];
-        if (errors.Count > 0) return Results.ValidationProblem(errors);
+        {
+            errors["amountRials"] = ["مبلغ از مانده قابل پرداخت بیشتر است."];
+            moneyCode = "over_balance";
+        }
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors, extensions: moneyCode is null ? null : new Dictionary<string, object?> { ["code"] = moneyCode });
 
         var payment = new Payment
         {
