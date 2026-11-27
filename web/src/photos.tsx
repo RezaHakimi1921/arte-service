@@ -66,8 +66,8 @@ function Thumb({ photo, onOpen }: { photo: CasePhoto; onOpen: (url: string) => v
  * stage (the camera opens directly on phones); the stage it was taken in is stored with it, so the master
  * sees "work done" photos during review and "delivery" photos afterwards.
  */
-export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visibleByDefault }: {
-  caseId: string; photos: CasePhoto[]; stageKey: string; canAdd: boolean; onChange: () => void; visibleByDefault: boolean;
+export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visibleByDefault, bare = false }: {
+  caseId: string; photos: CasePhoto[]; stageKey: string; canAdd: boolean; onChange: () => void; visibleByDefault: boolean; bare?: boolean;
 }) {
   // Whether the next photos are shown on the customer's tracking page; starts from the business setting.
   const [share, setShare] = useState(visibleByDefault);
@@ -135,21 +135,28 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
   const hint = stageKey === "repairing" ? "قبل از فرستادن برای بازبینی، از کار انجام‌شده عکس بگیرید."
     : stageKey === "ready" ? "هنگام تحویل از وضعیت وسیله عکس بگیرید." : null;
 
-  return (
-    <section className="card photos" aria-label="عکس‌ها" data-tour="photos">
-      <div className="photos-head">
-        <h3>عکس‌ها{photos.length > 0 && <span className="muted small font-num"> ({formatNumber(photos.length)})</span>}</h3>
-        {canAdd && (
-          <button type="button" onClick={() => input.current?.click()} disabled={uploading} aria-busy={uploading}>
-            {uploading ? "در حال بارگذاری…" : "📷 عکس یا فیلم"}
-          </button>
-        )}
-      </div>
+  const body = (
+    <>
+      {!bare && (
+        <div className="photos-head">
+          <h3>عکس‌ها{photos.length > 0 && <span className="muted small font-num"> ({formatNumber(photos.length)})</span>}</h3>
+          {canAdd && (
+            <button type="button" onClick={() => input.current?.click()} disabled={uploading} aria-busy={uploading}>
+              {uploading ? "در حال بارگذاری…" : "عکس یا فیلم"}
+            </button>
+          )}
+        </div>
+      )}
+      {bare && canAdd && (
+        <button type="button" className="secondary block case-step-cta" onClick={() => input.current?.click()} disabled={uploading} aria-busy={uploading}>
+          {uploading ? "در حال بارگذاری…" : "افزودن تصویر"}
+        </button>
+      )}
       <input ref={input} type="file" accept="image/*,video/*" capture="environment" multiple hidden onChange={(e) => upload(e.target.files)} />
       {canAdd && (
         <label className="photo-share">
           <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} />
-          <span>عکس‌های بعدی را مشتری هم در لینک پیگیری ببیند</span>
+          <span>نمایش تصویر برای مشتری در لینک پیگیری</span>
         </label>
       )}
       {hint && canAdd && <p className="hint">{hint}</p>}
@@ -179,6 +186,9 @@ export function PhotoSection({ caseId, photos, stageKey, canAdd, onChange, visib
           </>
         )}
       </BottomSheet>
-    </section>
+    </>
   );
+
+  if (bare) return <div className="photos photos-bare" aria-label="عکس‌ها" data-tour="photos">{body}</div>;
+  return <section className="card photos" aria-label="عکس‌ها" data-tour="photos">{body}</section>;
 }

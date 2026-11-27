@@ -9,12 +9,16 @@ import { BottomSheet, SelectSheet, SheetOption } from "./sheet";
 import { PhotoSection, type CasePhoto } from "./photos";
 import { CustomerDamageSection, ReturnBanner } from "./damage";
 import { CustomerReceipts } from "./finance";
-import { CaseWorkshopSections, type CaseChecklistRow, type CaseFinding } from "./workshop";
+import { CaseChecklistBlock, CaseFindingsBlock, type CaseChecklistRow, type CaseFinding } from "./workshop";
 import { SurveySection, type CaseSurvey } from "./survey";
 import { ROLE_NAMES } from "./labels";
 import { Field, NumberInput, formatNumber, toLatinDigits } from "./ui";
 import { ServicePicker } from "./services";
 import { FUEL_LEVELS, problemsFor } from "./vehicles";
+import {
+  IconCamera, IconCheck, IconClipboard, IconClock, IconGear, IconGrid, IconPencil, IconPlus,
+  IconReceipt, IconShieldCheck, IconTools, IconUser, IconWrench,
+} from "./caseIcons";
 
 /* ───────── types ───────── */
 
@@ -408,12 +412,32 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
   if (!c) return <div className="splash" aria-busy="true" />;
 
   const smsLog = c.timeline.filter((e) => e.type === "customer.sms");
-  const photoSection = <PhotoSection caseId={c.id} photos={c.photos ?? []} stageKey={c.stage.key} canAdd={c.canEdit && c.stage.key !== "cancelled"} onChange={load} visibleByDefault={c.photosVisibleByDefault} />;
+  const photos = c.photos ?? [];
+  const checklist = c.checklist ?? [];
+  const findings = c.findings ?? [];
   const primary = c.transitions.find((t) => t.isPrimary);
   const others = c.transitions.filter((t) => t !== primary);
+  const deliveryTx = c.transitions.find((t) => t.toStage.category === "ready" || t.label.includes("تحویل"));
 
   const canSeeMoney = c.billing.canRecordPayments;
   const openInvoice = () => setTab("invoice");
+
+  const hasRequest = !!(c.request || c.reportedProblems.length || c.requestedServices.length);
+  const hasDiagnosis = !!(c.diagnosis && c.diagnosis.trim());
+  const checklistDone = checklist.length === 0 || checklist.every((r) => !r.isRequired || r.isChecked);
+  const stageKey = c.stage.key;
+  const isDelivered = stageKey === "delivered" || stageKey === "closed" || c.stage.category === "closed";
+  const isReady = stageKey === "ready" || c.stage.category === "ready";
+  const diagnosing = stageKey === "diagnosing" || stageKey.includes("diagnos");
+  const repairing = stageKey === "repairing" || stageKey.includes("repair");
+
+  type StepState = "done" | "current" | "todo";
+  const step1: StepState = hasRequest ? "done" : "current";
+  const step2: StepState = hasDiagnosis && checklistDone ? "done" : diagnosing || step1 === "done" ? "current" : "todo";
+  const step3: StepState = findings.length > 0 && (repairing || isReady || isDelivered) ? "done"
+    : repairing || (step2 === "done" && !isDelivered) ? "current" : findings.length > 0 ? "done" : "todo";
+  const step4: StepState = photos.length > 0 ? (isReady || isDelivered ? "done" : "current") : step3 !== "todo" ? "current" : "todo";
+  const step5: StepState = isDelivered ? "done" : isReady ? "current" : "todo";
 
   return (
     <section className="case-page">
@@ -493,9 +517,10 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         );
       })()}
 
-      {/* صفحه اول Make: اقدام بعدی + خلاصه مالی — بالای تب‌ها می‌مانند. */}
+      {/* فرمان مرکزی: یک اقدام بعدی بزرگ + بقیه در شیت. */}
       {c.transitions.length > 0 && (
         <div className="case-action-rail" data-tour="next-action">
+          <div className="case-action-rail-icon" aria-hidden="true"><IconTools size={28} /></div>
           <span className="case-money-kicker">اقدام بعدی</span>
           {primary && (
             <>
@@ -530,12 +555,12 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         </>
       )}
 
-      <div className="case-tabs" role="tablist" aria-label="بخش‌های پرونده">
+      <div className="case-tabs case-tabs-seg" role="tablist" aria-label="بخش‌های پرونده">
         {([
-          ["overview", "نمای کلی"],
-          ["invoice", "صورتحساب"],
-          ["timeline", "تاریخچه"],
-        ] as const).map(([key, label]) => (
+          ["overview", "نمای کلی", IconGrid] as const,
+          ["invoice", "صورتحساب", IconReceipt] as const,
+          ["timeline", "تاریخچه", IconClock] as const,
+        ]).map(([key, label, Icon]) => (
           <button
             key={key}
             type="button"
@@ -546,6 +571,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
             className={tab === key ? "active" : undefined}
             onClick={() => setTab(key)}
           >
+            <Icon size={16} />
             {label}
           </button>
         ))}
@@ -555,25 +581,151 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         <div className="case-tab-panel" role="tabpanel" id="case-panel-overview" aria-labelledby="case-tab-overview">
           {c.survey && <SurveySection caseId={c.id} survey={c.survey} canFollowUp={c.canFollowUp} focus={focusSurvey} onChange={load} />}
 
-          <section className="card case-section">
-            <header className="case-section-head">
-              <div>
-                <span className="case-money-kicker">شرح پذیرش</span>
-                <h2 className="case-section-title">درخواست مشتری</h2>
-              </div>
-              {c.canEdit && <button type="button" className="link" onClick={() => setEditing(true)}>ویرایش</button>}
-            </header>
-            <Detail label="نوع درخواست" value={(c.requestTypes?.length ? c.requestTypes.map(requestTypeLabel).join("، ") : "—")} />
-            <Detail label="ایراد اعلامی" value={c.reportedProblems.length > 0 ? c.reportedProblems.join("، ") : "—"} />
-            {c.request && <p className="case-request-text">{c.request}</p>}
-            <Detail label="خدمات درخواستی" value={c.requestedServices.length > 0 ? c.requestedServices.join("، ") : "—"} />
-            <Detail label="عیب‌یابی" value={c.diagnosis ?? "—"} />
-            {canSeeMoney && c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
-          </section>
+          <ol className="case-process" aria-label="سلسله‌مراتب پرونده">
+            <ProcessStep
+              state={step1}
+              tone="blue"
+              icon={<IconUser size={18} />}
+              kicker="شرح پذیرش"
+              title="درخواست مشتری"
+              badge={hasRequest ? "ثبت شده" : "ناقص"}
+              badgeTone={hasRequest ? "good" : "warn"}
+              action={c.canEdit ? (
+                <button type="button" className="link case-step-link" onClick={() => setEditing(true)}>
+                  <IconPencil size={14} />ویرایش درخواست
+                </button>
+              ) : undefined}
+            >
+              {(c.requestTypes?.length ?? 0) > 0 && (
+                <div className="tag-row">
+                  {c.requestTypes!.map((k) => <span key={k} className="case-tag">{requestTypeLabel(k)}</span>)}
+                </div>
+              )}
+              {c.reportedProblems.length > 0 && (
+                <div className="tag-row">
+                  {c.reportedProblems.map((p) => <span key={p} className="case-tag">{p}</span>)}
+                </div>
+              )}
+              {c.request
+                ? <p className="case-request-text">{c.request}</p>
+                : <p className="muted small">شرح مشتری ثبت نشده.</p>}
+              {c.requestedServices.length > 0 && (
+                <Detail label="خدمات درخواستی" value={c.requestedServices.join("، ")} />
+              )}
+              {canSeeMoney && c.estimatedAmountRials != null && (
+                <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />
+              )}
+            </ProcessStep>
 
-          <CaseWorkshopSections caseId={c.id} checklist={c.checklist ?? []} findings={c.findings ?? []} motorType={c.motorType ?? null} canEdit={c.canEdit || c.canManage} onChange={load} />
+            <ProcessStep
+              state={step2}
+              tone="orange"
+              icon={<IconWrench size={18} />}
+              kicker="بررسی فنی"
+              title="بررسی و عیب‌یابی"
+              badge={hasDiagnosis ? "ثبت شده" : "در انتظار ثبت"}
+              badgeTone={hasDiagnosis ? "good" : "warn"}
+              action={c.canEdit ? (
+                <button type="button" className="link case-step-link" onClick={() => setEditing(true)}>
+                  <IconPencil size={14} />ویرایش عیب‌یابی
+                </button>
+              ) : undefined}
+            >
+              {hasDiagnosis ? (
+                <p className="case-request-text">{c.diagnosis}</p>
+              ) : (
+                <div className="case-step-empty">
+                  <IconClipboard size={28} />
+                  <p>هنوز گزارش عیب‌یابی ثبت نشده.</p>
+                  {c.canEdit && (
+                    <button type="button" className="primary block case-step-cta" onClick={() => setEditing(true)}>
+                      <IconPlus size={16} />ثبت نتیجه عیب‌یابی
+                    </button>
+                  )}
+                </div>
+              )}
+              <CaseChecklistBlock
+                caseId={c.id}
+                checklist={checklist}
+                motorType={c.motorType ?? null}
+                canEdit={c.canEdit || c.canManage}
+                onChange={load}
+                framed
+              />
+            </ProcessStep>
 
-          {photoSection}
+            <ProcessStep
+              state={step3}
+              tone="gray"
+              icon={<IconGear size={18} />}
+              kicker="کار انجام‌شده"
+              title="اقدامات و ایرادها"
+              badge={`${formatNumber(findings.length)} اقدام`}
+              badgeTone={findings.length > 0 ? "good" : "subtle"}
+            >
+              <CaseFindingsBlock
+                caseId={c.id}
+                findings={findings}
+                canEdit={c.canEdit || c.canManage}
+                onChange={load}
+                framed
+              />
+            </ProcessStep>
+
+            <ProcessStep
+              state={step4}
+              tone="purple"
+              icon={<IconCamera size={18} />}
+              kicker="مستندات"
+              title="تصاویر پرونده"
+              badge={`${formatNumber(photos.length)} تصویر`}
+              badgeTone={photos.length > 0 ? "good" : "subtle"}
+            >
+              <PhotoSection
+                caseId={c.id}
+                photos={photos}
+                stageKey={c.stage.key}
+                canAdd={c.canEdit && c.stage.key !== "cancelled"}
+                onChange={load}
+                visibleByDefault={c.photosVisibleByDefault}
+                bare
+              />
+            </ProcessStep>
+
+            <ProcessStep
+              state={step5}
+              tone="teal"
+              icon={<IconShieldCheck size={18} />}
+              kicker="پایان کار"
+              title="تحویل و کنترل نهایی"
+              badge={isDelivered ? "تحویل شده" : isReady ? "آماده تحویل" : "تکمیل نشده"}
+              badgeTone={isDelivered ? "good" : isReady ? "warn" : "warn"}
+            >
+              {isDelivered ? (
+                <p className="muted small">پرونده تحویل شده است.</p>
+              ) : (
+                <>
+                  <p className="muted small">
+                    {isReady
+                      ? "وسیله آماده است؛ بعد از تسویه، تحویل را ثبت کنید."
+                      : "وقتی کار تمام شد، وضعیت تحویل را از اینجا ثبت کنید."}
+                  </p>
+                  {deliveryTx && (
+                    <button type="button" className="secondary block case-step-cta" disabled={busy} aria-busy={busy}
+                      onClick={() => run(deliveryTx)}>
+                      {busy ? "در حال انجام…" : deliveryTx.label}
+                    </button>
+                  )}
+                  {!deliveryTx && primary && (
+                    <button type="button" className="secondary block case-step-cta" disabled={busy} aria-busy={busy}
+                      onClick={() => run(primary)}>
+                      {busy ? "در حال انجام…" : primary.label}
+                    </button>
+                  )}
+                </>
+              )}
+            </ProcessStep>
+          </ol>
 
           <Collapsible title="پذیرش و وضعیت ظاهری">
             <Detail label="کیلومتر" value={c.odometerKm != null ? `${formatNumber(c.odometerKm)} کیلومتر` : "—"} />
@@ -613,6 +765,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         <div className="case-tab-panel" role="tabpanel" id="case-panel-timeline" aria-labelledby="case-tab-timeline" data-tour="timeline">
           <section className="card case-section">
             <header className="case-section-head">
+              <span className="case-step-icon tone-blue"><IconClock size={18} /></span>
               <div>
                 <span className="case-money-kicker">رویدادها</span>
                 <h2 className="case-section-title">تاریخچه پرونده</h2>
@@ -807,6 +960,43 @@ const SMS_KIND: Record<string, string> = {
   "case.opened": "پیامک پذیرش", "case.ready": "پیامک آماده‌ی تحویل", "case.delivered": "پیامک تحویل",
   "case.link": "پیامک لینک پیگیری", "survey.request": "پیامک نظرسنجی",
 };
+
+/** One vertical process card: icon rail + framed body (hierarchy from the reference UI). */
+function ProcessStep({
+  state, tone, icon, kicker, title, badge, badgeTone, action, children,
+}: {
+  state: "done" | "current" | "todo";
+  tone: "blue" | "orange" | "gray" | "purple" | "teal";
+  icon: ReactNode;
+  kicker: string;
+  title: string;
+  badge: string;
+  badgeTone: "good" | "warn" | "subtle";
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <li className={`case-process-item is-${state}`}>
+      <div className="case-process-rail" aria-hidden="true">
+        <span className={`case-process-dot tone-${tone}`}>
+          {state === "done" ? <IconCheck size={14} /> : icon}
+        </span>
+      </div>
+      <article className="card case-step-card">
+        <header className="case-step-head">
+          <span className={`case-step-icon tone-${tone}`}>{icon}</span>
+          <div className="case-step-titles">
+            <span className="case-money-kicker">{kicker}</span>
+            <h2 className="case-section-title">{title}</h2>
+          </div>
+          <span className={`case-step-badge ${badgeTone}`}>{badge}</span>
+        </header>
+        {action && <div className="case-step-actions">{action}</div>}
+        <div className="case-step-body">{children}</div>
+      </article>
+    </li>
+  );
+}
 
 function Collapsible({ title, open, children, tour }: { title: string; open?: boolean; children: ReactNode; tour?: string }) {
   return (
