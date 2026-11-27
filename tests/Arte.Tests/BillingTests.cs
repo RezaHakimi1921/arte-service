@@ -177,6 +177,32 @@ public sealed class BillingTests(ArteApiFactory api)
     }
 
     [Fact]
+    public async Task Settled_invoice_rejects_new_payment_and_overpay()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var c = await OpenCase(owner);
+        var id = c.GetProperty("id");
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/items", new { kind = "labor", title = "اجرت", unitPriceRials = 5_000_000 }));
+        var afterDeposit = await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 2_000_000, method = "cash" }));
+        Assert.Equal(3_000_000, Money(afterDeposit, "balanceRials"));
+
+        var over = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 4_000_000, method = "cash" });
+        Assert.Equal(HttpStatusCode.BadRequest, over.StatusCode);
+        Assert.Equal("over_balance", await ProblemCodeAsync(over));
+
+        await Json(await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 3_000_000, method = "cash" }));
+        var again = await owner.PostAsJsonAsync($"/api/v1/cases/{id}/payments", new { amountRials = 1, method = "cash" });
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal("invoice_settled", await ProblemCodeAsync(again));
+    }
+
+    private static async Task<string?> ProblemCodeAsync(HttpResponseMessage res)
+    {
+        var doc = await res.Content.ReadFromJsonAsync<JsonElement>();
+        return doc.TryGetProperty("code", out var code) ? code.GetString() : null;
+    }
+
+    [Fact]
     public async Task Item_soft_delete_and_restore_and_other_business_gets_404()
     {
         var (owner, _) = await api.NewBusinessAsync();

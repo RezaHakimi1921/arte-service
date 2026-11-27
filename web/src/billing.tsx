@@ -113,10 +113,11 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
     }
   }
   const [lastUndo, setLastUndo] = useState<(() => Promise<Billing>) | null>(null);
-  // Delivery asked for a payment first: open the payment sheet.
-  useEffect(() => { if (paySignal > 0 && billing.canRecordPayments) setPaying(true); }, [paySignal, billing.canRecordPayments]);
-
   const m = billing.money;
+  const canAddPayment = billing.canRecordPayments && (m.totalRials <= 0 || m.balanceRials > 0);
+  // Delivery asked for a payment first: open the payment sheet (only when something is still due).
+  useEffect(() => { if (paySignal > 0 && canAddPayment) setPaying(true); }, [paySignal, canAddPayment]);
+
   const showMoney = billing.canRecordPayments;
   return (
     <>
@@ -195,7 +196,9 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                 </li>
               ))}
             </ul>
-            <button className="primary block" onClick={() => setPaying(true)}>ثبت پرداخت</button>
+            {canAddPayment
+              ? <button className="primary block" onClick={() => setPaying(true)}>ثبت پرداخت</button>
+              : m.totalRials > 0 && <p className="muted small">صورت‌حساب تسویه شده؛ پرداخت تازه ثبت نمی‌شود.</p>}
           </div>
         </details>
       )}
