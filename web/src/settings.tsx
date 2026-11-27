@@ -595,7 +595,7 @@ export function CustomerPage({ onBack, onSaved }: { onBack: () => void; onSaved:
                 </div>
                 <div className="setting-row block">
                   <span><strong>رضایت پایین یعنی کمتر از چند ستاره؟</strong>
-                    <span className="muted small">برای امتیاز کمتر از {formatNumber(s.surveyAlertBelow)} اعلان می‌آید و پرونده در خانه در «رضایت پایین مشتری» می‌ماند تا پیگیری شود.</span></span>
+                    <span className="muted small">اگر میانگین امتیاز کمتر از {formatNumber(s.surveyAlertBelow)} باشد اعلان می‌آید و پرونده در خانه در «رضایت پایین مشتری» می‌ماند تا پیگیری شود.</span></span>
                   <div className="chips" role="radiogroup" aria-label="حد رضایت پایین">
                     {[2, 3, 4, 5].map((n) => (
                       <button type="button" key={n} role="radio" aria-checked={s.surveyAlertBelow === n}

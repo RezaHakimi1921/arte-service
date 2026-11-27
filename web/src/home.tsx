@@ -3,8 +3,10 @@ import { api } from "./api";
 import { CaseCard, type CaseCardData, type CaseFilter } from "./cases";
 import { WAIT_REASONS, caseCode } from "./labels";
 import type { LicenseStatus } from "./license";
-import { StarRow, scoreText } from "./survey";
+import { StarRow, roundScore, scoreText } from "./survey";
 import { formatNumber } from "./ui";
+
+const faScore = (n: number) => new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(roundScore(n));
 
 type LowCase = { id: string; number: number; customerName: string | null; assetTitle: string | null; score: number; comment: string | null; answeredAt: string };
 type MyScore = { enabled: boolean; responses?: number; average?: number | null; satisfiedPercent?: number | null; days?: number };
@@ -197,7 +199,7 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
           )}
           {manager && csat && csat.responses > 0 && csat.average != null && (
             <section className="feedback-card">
-              <span className="feedback-score font-num">{new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(csat.average)}</span>
+              <span className="feedback-score font-num">{faScore(csat.average)}</span>
               <span>
                 <span>رضایت مشتریان در ۳۰ روز اخیر</span>
                 <strong>{(csat.satisfiedPercent ?? 0) >= 80 ? "عملکرد تعمیرگاه خوب است" : (csat.satisfiedPercent ?? 0) >= 60 ? "جای بهتر شدن دارد" : "نیاز به توجه دارد"}</strong>
@@ -210,7 +212,7 @@ export function HomeView({ name, license, canReports, canCreate, onOpen, onOpenS
         <div className="dash-col">
           {!manager && score?.enabled && (score.responses ?? 0) > 0 && score.average != null && (
             <section className="feedback-card">
-              <span className="feedback-score font-num">{new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(score.average)}</span>
+              <span className="feedback-score font-num">{faScore(score.average)}</span>
               <span>
                 <span>رضایت مشتری از کارهای شما ({formatNumber(score.days ?? 90)} روز اخیر)</span>
                 <strong><StarRow rating={score.average} /></strong>

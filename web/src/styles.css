@@ -2668,12 +2668,14 @@ button.danger-outline { color: var(--danger); background: transparent; border: 1
 .inv-sum p { display: flex; justify-content: space-between; gap: 12px; margin: 0; font-size: 0.88rem; color: var(--muted); }
 .inv-sum p strong { color: var(--text); white-space: nowrap; }
 .inv-sum p.discount, .inv-sum p.discount strong { color: var(--danger); }
+.inv-sum p.credit, .inv-sum p.credit strong { color: var(--accent); }
 .inv-sum p.paid, .inv-sum p.paid strong { color: var(--success); }
 .inv-sum p.total { padding-top: 8px; border-top: 1px solid var(--border); color: var(--text); font-weight: 700; }
 .inv-due { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; padding: 16px 18px; border-radius: 16px; }
 .inv-due span { font-weight: 700; font-size: 0.95rem; }
 .inv-due strong { font-size: 1.45rem; font-weight: 900; white-space: nowrap; }
 .inv-due.owe { color: var(--danger); background: var(--bad-bg); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
+.inv-due.credit { color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
 .inv-due.clear { color: var(--success); background: var(--good-bg); border: 1px solid color-mix(in srgb, var(--success) 35%, transparent); }
 @media (max-width: 380px) { .inv-row { grid-template-columns: 44px 1fr auto; } .inv-thumb { width: 44px; height: 44px; } .inv-qty { display: none; } }
 

@@ -144,10 +144,11 @@ public sealed class SurveyService(ArteDbContext db, IClock clock)
 
     private static string Cut(string s, int max) => s.Length <= max ? s : s[..(max - 1)].TrimEnd() + "…";
 
-    /// <summary>4.33 → «۴٫۳»: one decimal, Persian digits.</summary>
+    /// <summary>4.33 → «۴٫۳»; 2.25 → «۲٫۳»: one decimal, half away from zero, Persian digits (same as web scoreText).</summary>
     public static string Fa(decimal v)
     {
-        var s = Math.Round(v, 1).ToString(v % 1 == 0 ? "0" : "0.0", System.Globalization.CultureInfo.InvariantCulture);
+        var rounded = Math.Round(v, 1, MidpointRounding.AwayFromZero);
+        var s = rounded.ToString(rounded % 1 == 0 ? "0" : "0.0", System.Globalization.CultureInfo.InvariantCulture);
         return string.Concat(s.Select(ch => ch == '.' ? '٫' : char.IsAsciiDigit(ch) ? (char)('۰' + (ch - '0')) : ch));
     }
 }

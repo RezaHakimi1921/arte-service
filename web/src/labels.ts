@@ -1,5 +1,7 @@
 // Plain-language status: say *why* a case is where it is, not only the workflow stage name.
 
+import { roundScore } from "./survey";
+
 export const WAIT_REASONS: Record<string, string> = {
   customer_approval: "منتظر تأیید هزینه توسط مشتری",
   customer_parts: "منتظر قطعه‌ای که مشتری می‌آورد",
@@ -80,7 +82,8 @@ const EVENT_TEXT: Record<string, (d: Record<string, unknown>) => string> = {
   "case.item_removed": (d) => `ردیف «${d.title}» حذف شد`,
   "payment.recorded": (d) => `پرداخت ${tomanText(d.amountRials)} (${METHOD[d.method as string] ?? ""})${d.note ? ` — ${d.note}` : ""}`,
   "payment.voided": (d) => `پرداخت ${tomanText(d.amountRials)} باطل شد`,
-  "survey.answered": (d) => `مشتری در نظرسنجی امتیاز ${new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(Number(d.score ?? 0))} از ۵ داد${d.isLow ? " (رضایت پایین)" : ""}`,
+  "survey.answered": (d) =>
+    `مشتری در نظرسنجی امتیاز ${new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 }).format(roundScore(Number(d.score ?? 0)))} از ۵ داد${d.isLow ? " (رضایت پایین)" : ""}`,
   "survey.followed_up": (d) => `نظر مشتری پیگیری شد${d.note ? `: ${d.note}` : ""}`,
   "case.credit": (d) => `تحویل به‌صورت نسیه؛ مانده ${tomanText(d.balanceRials)}`,
   "case.checklist_bulk_checked": (d) =>
