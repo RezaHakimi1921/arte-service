@@ -337,6 +337,8 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
   const [staff, setStaff] = useState<Assignable[]>([]);
   const [balanceDue, setBalanceDue] = useState(0);
   const [paySignal, setPaySignal] = useState(0);
+  /** Make/CaseDetail: نمای کلی · صورتحساب · تاریخچه (تصمیم مالک: عین Make، با تب). */
+  const [tab, setTab] = useState<"overview" | "invoice" | "timeline">("overview");
 
   const load = useCallback(async () => {
     try {
@@ -346,6 +348,9 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
     }
   }, [id]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (focusSurvey) setTab("overview");
+  }, [focusSurvey]);
   useEffect(() => {
     if (c?.canAssign && staff.length === 0) api<Assignable[]>("/api/v1/staff/assignable").then(setStaff).catch(() => {});
   }, [c?.canAssign, staff.length]);
@@ -408,15 +413,13 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
   const others = c.transitions.filter((t) => t !== primary);
 
   const canSeeMoney = c.billing.canRecordPayments;
-  const scrollToBilling = () => {
-    document.querySelector<HTMLElement>("[data-tour=billing]")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const openInvoice = () => setTab("invoice");
 
   return (
     <section className="case-page">
       <button className="link back" onClick={onBack}>→ پرونده‌ها</button>
 
-      {/* Hero: decision facts only — structure from Make/CaseDetail, tokens from Arte. */}
+      {/* Hero: decision facts — Make/CaseDetail hierarchy, Arte tokens. */}
       <header className="card case-hero" data-tour="case-head">
         <div className="case-row-top">
           <span className="case-code" dir="ltr">{caseCode(c.number)}</span>
@@ -468,7 +471,6 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         {c.parentCase && <p className="muted small">برگشتی پرونده <span dir="ltr">{caseCode(c.parentCase.number)}</span></p>}
       </header>
 
-      {/* برگشتی: ALERT بالای صفحه تا همان اول اقدام شود (سند ۳۲ + الگوی نسیه/هشدار). */}
       {(c.stage.key === "delivered" || c.returnMarkedAt) && (
         <ReturnBanner
           caseId={c.id}
@@ -491,7 +493,7 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         );
       })()}
 
-      {/* Next action rail: one primary CTA; the rest in sheets. */}
+      {/* صفحه اول Make: اقدام بعدی + خلاصه مالی — بالای تب‌ها می‌مانند. */}
       {c.transitions.length > 0 && (
         <div className="case-action-rail" data-tour="next-action">
           <span className="case-money-kicker">اقدام بعدی</span>
@@ -504,27 +506,20 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
               </button>
             </>
           )}
-          <div className="quick-actions">
-            {others.length > 0 && <button type="button" onClick={() => setSheet("actions")}>اقدام‌های دیگر</button>}
-            {c.canEdit && !c.stage.isTerminal && (
-              <button type="button" onClick={() => setSheet("wait")}>{c.waitReason ? "رفع توقف" : "کار متوقف است"}</button>
-            )}
-            <button type="button" onClick={() => setSheet("note")}>یادداشت</button>
-            {c.trackingCode && <button type="button" onClick={() => setSheet("link")}>لینک مشتری</button>}
-          </div>
+          <button type="button" className="secondary block" onClick={() => setSheet("actions")}>اقدام‌های دیگر</button>
         </div>
       )}
 
       {canSeeMoney && (
         <>
-          <MoneyBar money={c.billing.money} onDetails={scrollToBilling} />
+          <MoneyBar money={c.billing.money} onDetails={openInvoice} />
           {c.stage.key === "delivered" && c.billing.money.balanceRials > 0 && (
             <div className="credit-bar" role="status">
               <span>
                 <strong>نسیه</strong> · مانده <span className="font-num">{tomanFmt(c.billing.money.balanceRials)}</span>
                 {c.creditDueAt && <> · موعد {new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long" }).format(new Date(c.creditDueAt))}</>}
               </span>
-              <button type="button" className="primary" onClick={() => setPaySignal((n) => n + 1)}>ثبت پرداخت</button>
+              <button type="button" className="primary" onClick={() => { openInvoice(); setPaySignal((n) => n + 1); }}>ثبت پرداخت</button>
             </div>
           )}
           {c.creditDueAt && (
@@ -535,95 +530,140 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
         </>
       )}
 
-      {c.survey && <SurveySection caseId={c.id} survey={c.survey} canFollowUp={c.canFollowUp} focus={focusSurvey} onChange={load} />}
+      <div className="case-tabs" role="tablist" aria-label="بخش‌های پرونده">
+        {([
+          ["overview", "نمای کلی"],
+          ["invoice", "صورتحساب"],
+          ["timeline", "تاریخچه"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            id={`case-tab-${key}`}
+            aria-selected={tab === key}
+            aria-controls={`case-panel-${key}`}
+            className={tab === key ? "active" : undefined}
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {/* In review the master looks at the work photos first; otherwise they sit below the bill. */}
-      {c.stage.key === "review" && photoSection}
-      <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal} vehicleKind={c.asset?.kind ?? null}
-        caseAssigneeId={c.assignee?.id} canCompensate={c.canManage}
-        onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
+      {tab === "overview" && (
+        <div className="case-tab-panel" role="tabpanel" id="case-panel-overview" aria-labelledby="case-tab-overview">
+          {c.survey && <SurveySection caseId={c.id} survey={c.survey} canFollowUp={c.canFollowUp} focus={focusSurvey} onChange={load} />}
 
-      {c.stage.key !== "review" && photoSection}
+          <section className="card case-section">
+            <header className="case-section-head">
+              <div>
+                <span className="case-money-kicker">شرح پذیرش</span>
+                <h2 className="case-section-title">درخواست مشتری</h2>
+              </div>
+              {c.canEdit && <button type="button" className="link" onClick={() => setEditing(true)}>ویرایش</button>}
+            </header>
+            <Detail label="نوع درخواست" value={(c.requestTypes?.length ? c.requestTypes.map(requestTypeLabel).join("، ") : "—")} />
+            <Detail label="ایراد اعلامی" value={c.reportedProblems.length > 0 ? c.reportedProblems.join("، ") : "—"} />
+            {c.request && <p className="case-request-text">{c.request}</p>}
+            <Detail label="خدمات درخواستی" value={c.requestedServices.length > 0 ? c.requestedServices.join("، ") : "—"} />
+            <Detail label="عیب‌یابی" value={c.diagnosis ?? "—"} />
+            {canSeeMoney && c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
+          </section>
 
-      {c.billing.canRecordPayments && <CustomerReceipts caseId={c.id} onChange={load} />}
+          <CaseWorkshopSections caseId={c.id} checklist={c.checklist ?? []} findings={c.findings ?? []} motorType={c.motorType ?? null} canEdit={c.canEdit || c.canManage} onChange={load} />
 
-      <CaseWorkshopSections caseId={c.id} checklist={c.checklist ?? []} findings={c.findings ?? []} motorType={c.motorType ?? null} canEdit={c.canEdit || c.canManage} onChange={load} />
+          {photoSection}
 
-      {/* Secondary details, collapsible. */}
-      <Collapsible title="درخواست مشتری" open>
-        <Detail label="نوع درخواست" value={(c.requestTypes?.length ? c.requestTypes.map(requestTypeLabel).join("، ") : "—")} />
-        <Detail label="ایراد اعلامی" value={c.reportedProblems.length > 0 ? c.reportedProblems.join("، ") : "—"} />
-        {c.request && <Detail label="شرح مشتری" value={c.request} />}
-        <Detail label="خدمات درخواستی" value={c.requestedServices.length > 0 ? c.requestedServices.join("، ") : "—"} />
-        <Detail label="عیب‌یابی" value={c.diagnosis ?? "—"} />
-        {canSeeMoney && c.estimatedAmountRials != null && <Detail label="برآورد هزینه" value={toman(c.estimatedAmountRials)} />}
-        {c.canEdit && <button onClick={() => setEditing(true)}>ویرایش درخواست</button>}
-      </Collapsible>
+          <Collapsible title="پذیرش و وضعیت ظاهری">
+            <Detail label="کیلومتر" value={c.odometerKm != null ? `${formatNumber(c.odometerKm)} کیلومتر` : "—"} />
+            <Detail label="میزان سوخت" value={c.fuelLevel != null ? FUEL_LEVELS[c.fuelLevel] : "بررسی نشده"} />
+            <Detail label="وضعیت بدنه" value={c.bodyStatus === "ok" ? "سالم" : c.bodyStatus === "damaged" ? `آسیب: ${c.bodyNotes ?? "—"}` : "بررسی نشده"} />
+            {c.intake && <Detail label="همراه وسیله" value={Object.entries(c.intake).map(([k, v]) => (v === "دارد" ? k : `${k}: ${v}`)).join("، ")} />}
+            <Detail label="محل وسیله" value={c.custodyStatus === "in_shop" ? "در تعمیرگاه" : "دست مشتری"} />
+            {c.asset?.attributes && <VehicleAttributes attributes={c.asset.attributes} />}
+            {c.canManage && (
+              <button onClick={() => act(
+                () => api<CaseDetailView>(`/api/v1/cases/${id}`, { method: "PATCH", body: { custodyStatus: c.custodyStatus === "in_shop" ? "with_customer" : "in_shop" } }),
+                "ذخیره شد", setC)}>
+                {c.custodyStatus === "in_shop" ? "وسیله دست مشتری است" : "وسیله در تعمیرگاه است"}
+              </button>
+            )}
+          </Collapsible>
+
+          {c.canManage && (
+            <button className="link danger delete-case" onClick={() => act(() => api(`/api/v1/cases/${id}`, { method: "DELETE" }), "پرونده حذف شد", () => onDeleted(c.number))}>
+              حذف پرونده
+            </button>
+          )}
+        </div>
+      )}
+
+      {tab === "invoice" && (
+        <div className="case-tab-panel" role="tabpanel" id="case-panel-invoice" aria-labelledby="case-tab-invoice">
+          <BillingSection caseId={c.id} billing={c.billing} canAssignLabor={c.canAssign} paySignal={paySignal} vehicleKind={c.asset?.kind ?? null}
+            caseAssigneeId={c.assignee?.id} canCompensate={c.canManage}
+            onChange={(b) => { setC({ ...c, billing: b }); load(); }} />
+          {c.billing.canRecordPayments && <CustomerReceipts caseId={c.id} onChange={load} />}
+          <CustomerDamageSection caseId={c.id} canManage={c.canManage} caseAssigneeId={c.assignee?.id} onChanged={load} />
+        </div>
+      )}
+
+      {tab === "timeline" && (
+        <div className="case-tab-panel" role="tabpanel" id="case-panel-timeline" aria-labelledby="case-tab-timeline" data-tour="timeline">
+          <section className="card case-section">
+            <header className="case-section-head">
+              <div>
+                <span className="case-money-kicker">رویدادها</span>
+                <h2 className="case-section-title">تاریخچه پرونده</h2>
+              </div>
+            </header>
+            {c.timeline.length === 0 ? (
+              <p className="muted">هنوز رویدادی ثبت نشده.</p>
+            ) : (
+              <ol className="timeline">
+                {c.timeline.map((e) => (
+                  <li key={e.id}>
+                    <span className="timeline-text">{eventText(e.type, e.data)}</span>
+                    <span className="muted small timeline-meta"><strong className="timeline-actor">{actorText(e.type, e.actor)}</strong> · {faDateTime.format(new Date(e.occurredAt))}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+
+          {smsLog.length > 0 && (
+            <Collapsible title={`پیامک‌های مشتری (${formatNumber(smsLog.length)})`} open>
+              <ul className="sms-log">
+                {smsLog.map((e) => (
+                  <li key={e.id} className={e.data?.sent ? "ok" : "bad"}>
+                    <span className="sms-log-main">
+                      <strong>{SMS_KIND[String(e.data?.kind)] ?? "پیامک"}</strong>
+                      <span className="sms-log-state">{e.data?.sent ? "✓ به سرویس‌دهنده سپرده شد" : "! ارسال نشد"}</span>
+                    </span>
+                    <span className="muted small">
+                      {faDateTime.format(new Date(e.occurredAt))}
+                      {!e.data?.sent && ` · ${({
+                        template_not_configured: "الگوی این پیامک روی سرور تنظیم نشده",
+                        skipped_no_credit: "شارژ پیامک کافی نبود",
+                        skipped_license: "پرونده‌های رایگان تمام شده",
+                        outside_sending_hours: "خارج از ساعت ارسال",
+                      } as Record<string, string>)[String(e.data?.error)] ?? "سرویس‌دهنده نپذیرفت"}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Collapsible>
+          )}
+        </div>
+      )}
+
       <BottomSheet open={editing} title="ویرایش درخواست مشتری" onClose={() => setEditing(false)}>
         {editing && <CaseEditForm c={c} onDone={(updated) => { setEditing(false); if (updated) { setC(updated); notify("ذخیره شد"); } }} />}
       </BottomSheet>
 
-      <CustomerDamageSection caseId={c.id} canManage={c.canManage} caseAssigneeId={c.assignee?.id} onChanged={load} />
-
-      <Collapsible title="پذیرش و وضعیت ظاهری">
-        <Detail label="کیلومتر" value={c.odometerKm != null ? `${formatNumber(c.odometerKm)} کیلومتر` : "—"} />
-        <Detail label="میزان سوخت" value={c.fuelLevel != null ? FUEL_LEVELS[c.fuelLevel] : "بررسی نشده"} />
-        <Detail label="وضعیت بدنه" value={c.bodyStatus === "ok" ? "سالم" : c.bodyStatus === "damaged" ? `آسیب: ${c.bodyNotes ?? "—"}` : "بررسی نشده"} />
-        {c.intake && <Detail label="همراه وسیله" value={Object.entries(c.intake).map(([k, v]) => (v === "دارد" ? k : `${k}: ${v}`)).join("، ")} />}
-        <Detail label="محل وسیله" value={c.custodyStatus === "in_shop" ? "در تعمیرگاه" : "دست مشتری"} />
-        {c.asset?.attributes && <VehicleAttributes attributes={c.asset.attributes} />}
-        {c.canManage && (
-          <button onClick={() => act(
-            () => api<CaseDetailView>(`/api/v1/cases/${id}`, { method: "PATCH", body: { custodyStatus: c.custodyStatus === "in_shop" ? "with_customer" : "in_shop" } }),
-            "ذخیره شد", setC)}>
-            {c.custodyStatus === "in_shop" ? "وسیله دست مشتری است" : "وسیله در تعمیرگاه است"}
-          </button>
-        )}
-      </Collapsible>
-
-      {smsLog.length > 0 && (
-        <Collapsible title={`پیامک‌های مشتری (${formatNumber(smsLog.length)})`}>
-          <ul className="sms-log">
-            {smsLog.map((e) => (
-              <li key={e.id} className={e.data?.sent ? "ok" : "bad"}>
-                <span className="sms-log-main">
-                  <strong>{SMS_KIND[String(e.data?.kind)] ?? "پیامک"}</strong>
-                  <span className="sms-log-state">{e.data?.sent ? "✓ به سرویس‌دهنده سپرده شد" : "! ارسال نشد"}</span>
-                </span>
-                <span className="muted small">
-                  {faDateTime.format(new Date(e.occurredAt))}
-                  {!e.data?.sent && ` · ${({
-                    template_not_configured: "الگوی این پیامک روی سرور تنظیم نشده",
-                    skipped_no_credit: "شارژ پیامک کافی نبود",
-                    skipped_license: "پرونده‌های رایگان تمام شده",
-                    outside_sending_hours: "خارج از ساعت ارسال",
-                  } as Record<string, string>)[String(e.data?.error)] ?? "سرویس‌دهنده نپذیرفت"}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Collapsible>
-      )}
-
-      <Collapsible title={`تاریخچه (${formatNumber(c.timeline.length)})`} tour="timeline">
-        <ol className="timeline">
-          {c.timeline.map((e) => (
-            <li key={e.id}>
-              <span className="timeline-text">{eventText(e.type, e.data)}</span>
-              <span className="muted small timeline-meta"><strong className="timeline-actor">{actorText(e.type, e.actor)}</strong> · {faDateTime.format(new Date(e.occurredAt))}</span>
-            </li>
-          ))}
-        </ol>
-      </Collapsible>
-
-      {c.canManage && (
-        <button className="link danger delete-case" onClick={() => act(() => api(`/api/v1/cases/${id}`, { method: "DELETE" }), "پرونده حذف شد", () => onDeleted(c.number))}>
-          حذف پرونده
-        </button>
-      )}
-
       {/* ── sheets ── */}
-      <BottomSheet open={sheet === "actions"} title={pending ? `دلیل «${pending.label}»` : "اقدام‌های دیگر"} onClose={close}>
+      <BottomSheet open={sheet === "actions"} title={pending ? `دلیل «${pending.label}»` : "مدیریت پرونده"} onClose={close}>
         {pending ? (
           <form onSubmit={(e) => { e.preventDefault(); if (reason.trim()) run(pending, { reason: reason.trim() }); }}>
             {pending.label.includes("ضمانت") && c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now() && (
@@ -635,14 +675,31 @@ export function CaseDetail({ id, onBack, onDeleted, focusSurvey = false }: {
             <button className="primary block" disabled={busy || !reason.trim()} aria-busy={busy}>تأیید</button>
           </form>
         ) : (
-          others.map((t) => (
-            <SheetOption key={t.id} label={t.label}
-              hint={t.label.includes("ضمانت") && c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now()
-                ? "ضمانت تمام شده — قابل اجرا نیست"
-                : `مرحله بعد: ${t.toStage.name}`}
-              disabled={busy || (t.label.includes("ضمانت") && !!c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now())}
-              tone={t.toStage.category === "cancelled" ? "danger" : undefined} onClick={() => run(t)} />
-          ))
+          <>
+            {others.map((t) => (
+              <SheetOption key={t.id} label={t.label}
+                hint={t.label.includes("ضمانت") && c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now()
+                  ? "ضمانت تمام شده — قابل اجرا نیست"
+                  : `مرحله بعد: ${t.toStage.name}`}
+                disabled={busy || (t.label.includes("ضمانت") && !!c.warrantyUntil && new Date(c.warrantyUntil).getTime() < Date.now())}
+                tone={t.toStage.category === "cancelled" ? "danger" : undefined} onClick={() => run(t)} />
+            ))}
+            {c.canEdit && !c.stage.isTerminal && (
+              <SheetOption
+                label={c.waitReason ? "رفع توقف" : "توقف موقت کار"}
+                hint={c.waitReason ? "کار دوباره جریان بگیرد" : "ثبت دلیل و زمان پیگیری"}
+                disabled={busy}
+                onClick={() => setSheet("wait")}
+              />
+            )}
+            {c.canAssign && (
+              <SheetOption label="تغییر مسئول" hint="واگذاری به همکار دیگر" disabled={busy} onClick={() => setSheet("assign")} />
+            )}
+            <SheetOption label="افزودن یادداشت" hint="ثبت نکته در تاریخچه" disabled={busy} onClick={() => setSheet("note")} />
+            {c.trackingCode && (
+              <SheetOption label="لینک پیگیری مشتری" hint="باز کردن، پیامک یا اشتراک‌گذاری" disabled={busy} onClick={() => setSheet("link")} />
+            )}
+          </>
         )}
       </BottomSheet>
 
