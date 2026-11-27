@@ -172,11 +172,13 @@ public static class SurveyEndpoints
         var followedBy = i.FollowedUpBy is null ? null
             : await db.Memberships.Where(m => m.UserId == i.FollowedUpBy).Select(m => m.DisplayName ?? m.User!.Mobile).FirstOrDefaultAsync(ct)
               ?? await db.Users.Where(u => u.Id == i.FollowedUpBy).Select(u => u.DisplayName ?? u.Mobile).SingleOrDefaultAsync(ct);
+        var alertBelow = await db.Tenants.AsNoTracking().Where(t => t.Id == c.TenantId).Select(t => t.SurveyAlertBelow).SingleAsync(ct);
+        var isLow = i.Score is { } score && SurveyRules.IsLowScore(score, alertBelow);
         return new
         {
             State = i.AnsweredAt is not null ? "answered" : i.CancelledAt is not null ? "cancelled" : i.SentAt is not null ? "sent"
                 : i.Attempts >= SurveyRules.MaxAttempts ? "failed" : "scheduled",
-            i.DueAt, i.SentAt, i.AnsweredAt, i.ExpiresAt, i.Score, i.IsLow, i.Comment, CustomerName = customer,
+            i.DueAt, i.SentAt, i.AnsweredAt, i.ExpiresAt, i.Score, IsLow = isLow, i.Comment, CustomerName = customer,
             Answers = answers, Responsible = responsible,
             i.FollowedUpAt, FollowedUpBy = followedBy, i.FollowUpNote,
         };
@@ -204,7 +206,9 @@ public static class SurveyEndpoints
             return new { MembershipId = m.Id, Name = m.DisplayName ?? m.User!.Mobile, Responses = mine.Count, Average = Avg(mine), SatisfiedPercent = Satisfied(mine) };
         }).Where(x => x.Responses > 0).OrderByDescending(x => x.Responses).ToList();
 
-        var lowIds = answered.Where(i => i.IsLow).OrderByDescending(i => i.AnsweredAt).Take(10).Select(i => i.CaseId).ToList();
+        var alertBelow = await db.Tenants.AsNoTracking().Where(t => t.Id == tenantId).Select(t => t.SurveyAlertBelow).SingleAsync(ct);
+        var lowIds = answered.Where(i => i.Score is { } s && SurveyRules.IsLowScore(s, alertBelow))
+            .OrderByDescending(i => i.AnsweredAt).Take(10).Select(i => i.CaseId).ToList();
         var low = await (from i in db.SurveyInvites.AsNoTracking()
                          where lowIds.Contains(i.CaseId)
                          join c in db.Cases on i.CaseId equals c.Id
@@ -223,15 +227,16 @@ public static class SurveyEndpoints
         };
     }
 
-    /// <summary>Low-satisfaction cases nobody has followed up yet (home screen, managers).</summary>
+    /// <summary>Low-satisfaction cases nobody has followed up yet (home screen, managers). Uses score vs tenant threshold, not the stored IsLow flag.</summary>
     public static async Task<List<LowCase>> NeedsFollowUpAsync(ArteDbContext db, CancellationToken ct) =>
         await (from i in db.SurveyInvites.AsNoTracking()
-               where i.IsLow && i.AnsweredAt != null && i.FollowedUpAt == null
                join c in db.Cases on i.CaseId equals c.Id
+               join t in db.Tenants on c.TenantId equals t.Id
                join cu in db.Customers.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.CustomerId equals cu.Id
                join a in db.Assets.IgnoreQueryFilters([ArteDbContext.SoftDeleteFilter]) on c.AssetId equals a.Id into aj
                from a in aj.DefaultIfEmpty()
-               where c.DeletedAt == null
+               where i.AnsweredAt != null && i.FollowedUpAt == null && i.Score != null
+                     && i.Score < t.SurveyAlertBelow && c.DeletedAt == null
                orderby i.AnsweredAt descending
                select new LowCase(c.Id, c.Number, cu.FullName, a == null ? null : a.Title, i.Score!.Value, i.Comment, i.AnsweredAt!.Value))
             .Take(20).ToListAsync(ct);

@@ -122,8 +122,9 @@ public sealed class SurveyTests(ArteApiFactory api)
         Assert.Equal(HttpStatusCode.BadRequest, (await customer.PostAsJsonAsync($"/api/v1/track/{code}/survey", partial)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await customer.PostAsJsonAsync($"/api/v1/track/{code}/survey", new { answers = Answers(track, 5, 6, 5) })).StatusCode);
 
+        // Average 2.33 (< default threshold 3) → low; a single weak star with a high average would not.
         Assert.Equal(HttpStatusCode.NoContent,
-            (await customer.PostAsJsonAsync($"/api/v1/track/{code}/survey", new { answers = Answers(track, 2, 4, 5), comment = "دیر تحویل شد" })).StatusCode);
+            (await customer.PostAsJsonAsync($"/api/v1/track/{code}/survey", new { answers = Answers(track, 2, 2, 3), comment = "دیر تحویل شد" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,
             (await customer.PostAsJsonAsync($"/api/v1/track/{code}/survey", new { answers = Answers(track, 5, 5, 5) })).StatusCode);
         track = await Json(await customer.GetAsync($"/api/v1/track/{code}"));
@@ -134,7 +135,7 @@ public sealed class SurveyTests(ArteApiFactory api)
         Assert.Equal("answered", survey.GetProperty("state").GetString());
         Assert.Equal("سیما کریمی", survey.GetProperty("customerName").GetString());
         Assert.True(survey.GetProperty("isLow").GetBoolean());
-        Assert.Equal(3.67m, survey.GetProperty("score").GetDecimal());
+        Assert.Equal(2.33m, survey.GetProperty("score").GetDecimal());
         Assert.Equal("دیر تحویل شد", survey.GetProperty("comment").GetString());
         Assert.Equal(2, survey.GetProperty("answers")[0].GetProperty("rating").GetInt32());
 
@@ -346,13 +347,4 @@ public sealed class SurveyTests(ArteApiFactory api)
     public void Survey_sms_waits_for_sending_hours(string at, string expected) =>
         Assert.Equal(DateTimeOffset.Parse(expected), SurveyRules.IntoSendingHours(DateTimeOffset.Parse(at)));
 
-    [Fact]
-    public void Low_satisfaction_is_any_answer_of_two_or_an_average_under_three()
-    {
-        Assert.True(SurveyRules.IsLow([2, 5, 5]));
-        Assert.True(SurveyRules.IsLow([3, 3, 2]));
-        Assert.False(SurveyRules.IsLow([3, 3, 3]));
-        Assert.False(SurveyRules.IsLow([4, 5, 3]));
-        Assert.True(SurveyRules.IsLow([4, 5, 3], below: 4));
-    }
 }

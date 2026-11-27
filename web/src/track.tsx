@@ -749,30 +749,40 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
             ) : (t.customerDamages?.length ?? 0) === 0 ? (
               <div className="tk-empty-bill"><strong>هنوز کالا یا کاری ثبت نشده</strong><p>بعد از ثبت کالا و اجرت، این‌جا نشان داده می‌شود.</p></div>
             ) : null}
-            {t.money && t.money.totalRials > 0 && (
+            {t.money && t.money.totalRials > 0 && (() => {
+              const damageCredit = (t.customerDamages ?? []).reduce((s, d) => s + d.remainingRials, 0);
+              const balance = t.money!.balanceRials;
+              const dueKind = balance > 0 ? "owe" : damageCredit > 0 ? "credit" : "clear";
+              const dueLabel = balance > 0 ? "مبلغ قابل پرداخت" : damageCredit > 0 ? "بستانکار" : "تسویه شده";
+              const dueAmount = balance > 0 ? balance : damageCredit > 0 ? damageCredit : 0;
+              return (
               <div className="inv-sum">
-                {(t.money.discountRials ?? 0) > 0 && (
+                {(t.money!.discountRials ?? 0) > 0 && (
                   <>
-                    <p><span>جمع قبل از تخفیف</span><strong className="font-num">{toman(t.money.subtotalRials ?? t.money.totalRials)}</strong></p>
-                    <p className="discount"><span>تخفیف</span><strong className="font-num" dir="ltr">−{toman(t.money.discountRials ?? 0)}</strong></p>
+                    <p><span>جمع قبل از تخفیف</span><strong className="font-num">{toman(t.money!.subtotalRials ?? t.money!.totalRials)}</strong></p>
+                    <p className="discount"><span>تخفیف</span><strong className="font-num" dir="ltr">−{toman(t.money!.discountRials ?? 0)}</strong></p>
                   </>
                 )}
-                <p className="total"><span>{(t.money.discountRials ?? 0) > 0 ? "جمع پس از تخفیف" : "جمع کل"}</span><strong className="font-num">{toman(t.money.totalRials)}</strong></p>
-                {(t.money.payments?.length ?? 0) > 0 ? (
+                {damageCredit > 0 && (
+                  <p className="credit"><span>ماندهٔ بستانکاری خسارت</span><strong className="font-num">{toman(damageCredit)}</strong></p>
+                )}
+                <p className="total"><span>{(t.money!.discountRials ?? 0) > 0 ? "جمع پس از تخفیف" : "جمع کل"}</span><strong className="font-num">{toman(t.money!.totalRials)}</strong></p>
+                {(t.money!.payments?.length ?? 0) > 0 ? (
                   <>
-                    {t.money.payments!.map((p, k) => (
+                    {t.money!.payments!.map((p, k) => (
                       <p className="paid" key={k}><span>پرداخت {k + 1}: {PAY_METHOD[p.method] ?? p.method} · {shortDay.format(new Date(p.paidAt))}</span><strong className="font-num">{toman(p.amountRials)}</strong></p>
                     ))}
                   </>
                 ) : (
-                  t.money.paidRials > 0 && <p className="paid"><span>پرداخت‌شده</span><strong className="font-num">{toman(t.money.paidRials)}</strong></p>
+                  t.money!.paidRials > 0 && <p className="paid"><span>پرداخت‌شده</span><strong className="font-num">{toman(t.money!.paidRials)}</strong></p>
                 )}
-                <div className={`inv-due${t.money.balanceRials > 0 ? " owe" : " clear"}`}>
-                  <span>{t.money.balanceRials > 0 ? "مبلغ قابل پرداخت" : "تسویه شده"}</span>
-                  <strong className="font-num">{toman(t.money.balanceRials)}</strong>
+                <div className={`inv-due ${dueKind}`}>
+                  <span>{dueLabel}</span>
+                  <strong className="font-num">{toman(dueAmount)}</strong>
                 </div>
               </div>
-            )}
+              );
+            })()}
           </Section>
         )}
 

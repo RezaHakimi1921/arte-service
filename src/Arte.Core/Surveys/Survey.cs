@@ -77,8 +77,12 @@ public static class SurveyRules
 
     public const int MinAlertBelow = 2, MaxAlertBelow = 5;
 
-    /// <summary>Low satisfaction: the average or any single answer below the business's threshold (default 3 stars).</summary>
-    public static bool IsLow(IReadOnlyCollection<int> ratings, int below = 3) => ratings.Any(r => r < below) || ratings.Average() < below;
+    /// <summary>Low satisfaction: overall average below the business threshold (default 3). Matches settings copy «امتیاز کمتر از …».</summary>
+    public static bool IsLow(IReadOnlyCollection<int> ratings, int below = 3) =>
+        ratings.Count > 0 && (decimal)ratings.Average() < below;
+
+    /// <summary>Same rule for a stored invite score (fixes old rows flagged only because one dimension was low).</summary>
+    public static bool IsLowScore(decimal score, int below = 3) => score < below;
 
     /// <summary>The same moment if it falls in sending hours, otherwise the next 08:00 Tehran time.</summary>
     public static DateTimeOffset IntoSendingHours(DateTimeOffset utc)

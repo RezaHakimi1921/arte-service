@@ -13,10 +13,13 @@ export type CaseSurvey = {
 };
 
 const faDateTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
-const faScore = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1 });
+const faScore = new Intl.NumberFormat("fa-IR", { maximumFractionDigits: 1, minimumFractionDigits: 0 });
+
+/** One decimal, half away from zero — same as SurveyService.Fa (avoids ۲٫۲ vs ۲٫۳). */
+export const roundScore = (score: number) => Math.round(score * 10) / 10;
 
 /** «۴٫۳ از ۵» */
-export const scoreText = (score: number) => `${faScore.format(score)} از ۵`;
+export const scoreText = (score: number) => `${faScore.format(roundScore(score))} از ۵`;
 
 /** Read-only stars: filled up to the rating, with the number spoken for screen readers. */
 export function StarRow({ rating }: { rating: number }) {
