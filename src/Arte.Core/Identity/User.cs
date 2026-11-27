@@ -40,6 +40,10 @@ public sealed class Membership : ITenantOwned
     /// <summary>case_total | labor | labor_plus_parts_profit (see Billing.CommissionBases).</summary>
     public string CommissionBase { get; set; } = "case_total";
     public bool IsActive { get; set; } = true;
+    /// <summary>First calendar day of employment in this branch (Tehran date, inclusive).</summary>
+    public DateOnly EmploymentStartedOn { get; set; }
+    /// <summary>Last calendar day of employment in this branch (Tehran date, inclusive). Null while they still work here.</summary>
+    public DateOnly? EmploymentEndedOn { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     /// <summary>When this member finished or skipped the intro tour; null shows it on next sign-in.</summary>
     public DateTimeOffset? TourDoneAt { get; set; }

@@ -280,6 +280,7 @@ public static class TenantEndpoints
             DisplayName = string.IsNullOrEmpty(ownerName) ? null : ownerName,
             Permissions = Roles.DefaultPermissions(Roles.Owner),
             CreatedAt = clock.UtcNow,
+            EmploymentStartedOn = Jalali.ToTehranDate(clock.UtcNow),
             SurveyNotify = true,
         };
         db.Memberships.Add(owner);

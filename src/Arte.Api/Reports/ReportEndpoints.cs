@@ -2,6 +2,7 @@ using Arte.Api.Billing;
 using Arte.Api.Security;
 using Arte.Core.Billing;
 using Arte.Core.Cases;
+using Arte.Core.Common;
 using Arte.Core.Data;
 using Arte.Core.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -101,7 +102,6 @@ public static class ReportEndpoints
                                select new { c.Id, c.AssigneeId }).ToListAsync(ct);
         var ids = delivered.Select(d => d.Id).ToList();
         var items = await db.CaseItems.AsNoTracking().Where(i => ids.Contains(i.CaseId)).ToListAsync(ct);
-        var byCase = items.ToLookup(i => i.CaseId);
 
         var billable = items.Where(i => i.Billable).ToList();
         var sales = billable.Sum(i => i.LineTotalRials);
@@ -128,21 +128,25 @@ public static class ReportEndpoints
         var allDelivered = await (from c in db.Cases join s in db.Stages on c.StageId equals s.Id where s.Key == "delivered" select c.Id).ToListAsync(ct);
         var receivables = (await BillingEndpoints.Balances(db, allDelivered, ct)).Values.Where(v => v > 0).Sum();
 
-        // Staff pay: commission from delivered cases they were responsible for, plus their fixed monthly salary.
+        // Staff pay comes from the first-delivery grant. FixedMonthlyRials stays the configured monthly amount
+        // (existing reports); fixedSalaryRials is that amount prorated over the selected range.
+        var payRows = (await StaffPayCalculator.BuildAsync(db, from, to, ct)).ToDictionary(r => r.MembershipId);
         var members = await db.Memberships.AsNoTracking().Include(m => m.User).Where(m => m.IsActive).OrderBy(m => m.CreatedAt).ToListAsync(ct);
         var staff = members.Select(m =>
         {
-            var mine = delivered.Where(d => d.AssigneeId == m.Id).Select(d => Commission.For(byCase[d.Id], m)).ToList();
+            payRows.TryGetValue(m.Id, out var row);
             return new
             {
                 MembershipId = m.Id,
                 Name = m.DisplayName ?? m.User!.Mobile,
                 m.Role,
-                Cases = mine.Count,
-                BaseRials = mine.Sum(x => x.BaseRials),
-                CommissionRials = mine.Sum(x => x.CommissionRials),
+                Cases = row?.Cases ?? 0,
+                BaseRials = row?.BaseRials ?? 0,
+                CommissionRials = row?.CommissionRials ?? 0,
                 m.CommissionType, m.CommissionPercent, m.CommissionFixedRials, m.CommissionBase,
                 FixedMonthlyRials = m.FixedMonthlyRials ?? 0,
+                FixedSalaryRials = row?.FixedSalaryRials
+                    ?? Jalali.ProrateFixedMonthly(m.FixedMonthlyRials ?? 0, m.EmploymentStartedOn, m.EmploymentEndedOn, from, to),
             };
         }).ToList();
 

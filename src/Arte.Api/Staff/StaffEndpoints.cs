@@ -19,7 +19,8 @@ public static class StaffEndpoints
     public sealed record UpdateStaff(
         string? Role, string[]? Permissions, bool? IsActive,
         string? PayModel, decimal? CommissionPercent, long? FixedMonthlyRials,
-        string? DisplayName, string? CommissionType, long? CommissionFixedRials, string? CommissionBase, bool? SurveyNotify = null);
+        string? DisplayName, string? CommissionType, long? CommissionFixedRials, string? CommissionBase, bool? SurveyNotify = null,
+        DateOnly? EmploymentStartedOn = null, DateOnly? EmploymentEndedOn = null, bool ClearEmploymentEndedOn = false);
 
     public static void MapStaff(this IEndpointRouteBuilder app)
     {
@@ -34,6 +35,7 @@ public static class StaffEndpoints
                     Permissions = m.Role == Roles.Owner ? Permissions.All.ToArray() : m.Permissions,
                     m.IsActive, m.PayModel, m.CommissionPercent, m.FixedMonthlyRials,
                     m.CommissionType, m.CommissionFixedRials, m.CommissionBase, m.SurveyNotify,
+                    m.EmploymentStartedOn, m.EmploymentEndedOn,
                 })
                 .ToListAsync(ct)));
 
@@ -96,6 +98,7 @@ public static class StaffEndpoints
             var membership = new Membership
             {
                 UserId = user.Id, Role = role, Permissions = granted, CreatedAt = clock.UtcNow, TourDoneAt = clock.UtcNow,
+                EmploymentStartedOn = Jalali.ToTehranDate(clock.UtcNow),
                 // The name is this branch's own: an existing user's name from another branch is never read or reused here.
                 DisplayName = string.IsNullOrEmpty(name) ? null : name,
                 // Supervisors follow customer feedback by default; the manager can switch it per member.
@@ -134,6 +137,16 @@ public static class StaffEndpoints
             if (req.CommissionFixedRials is < 0 or > 100_000_000_000) errors["commissionFixedRials"] = ["مبلغ نامعتبر است."];
             var displayName = req.DisplayName?.Trim();
             if (displayName is { Length: > 80 }) errors["displayName"] = ["نام حداکثر ۸۰ حرف."];
+            if (req.EmploymentStartedOn is { } start && start.Year is < 1921 or > 2121)
+                errors["employmentStartedOn"] = ["تاریخ شروع همکاری نامعتبر است."];
+            if (req.EmploymentEndedOn is { } endDate && endDate.Year is < 1921 or > 2121)
+                errors["employmentEndedOn"] = ["تاریخ پایان همکاری نامعتبر است."];
+            if (req.ClearEmploymentEndedOn && req.EmploymentEndedOn is not null)
+                errors["employmentEndedOn"] = ["پایان همکاری را یا پاک کنید یا تاریخ بدهید."];
+            var effectiveStart = req.EmploymentStartedOn ?? target.EmploymentStartedOn;
+            var effectiveEnd = req.ClearEmploymentEndedOn ? null : req.EmploymentEndedOn ?? target.EmploymentEndedOn;
+            if (effectiveEnd is { } end && end < effectiveStart)
+                errors["employmentEndedOn"] = ["پایان همکاری نمی‌تواند قبل از شروع باشد."];
             if (errors.Count > 0) return Results.ValidationProblem(errors);
 
             var newPermissions = req.Permissions?.Distinct().ToArray()
@@ -161,6 +174,9 @@ public static class StaffEndpoints
             if (req.CommissionBase is not null) target.CommissionBase = req.CommissionBase;
             if (req.SurveyNotify is { } notify) target.SurveyNotify = notify;
             if (displayName is not null) target.DisplayName = displayName.Length == 0 ? null : displayName;
+            if (req.EmploymentStartedOn is { } startedOn) target.EmploymentStartedOn = startedOn;
+            if (req.ClearEmploymentEndedOn) target.EmploymentEndedOn = null;
+            else if (req.EmploymentEndedOn is { } endedOn) target.EmploymentEndedOn = endedOn;
 
             audit.Record("staff.updated", target.TenantId, me.RequiredUserId,
                 $"{target.Id} role={target.Role} active={target.IsActive} perms={string.Join(',', target.Permissions)}");

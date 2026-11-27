@@ -27,6 +27,11 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Membership> Memberships => Set<Membership>();
+    public DbSet<CaseCommissionGrant> CaseCommissionGrants => Set<CaseCommissionGrant>();
+    public DbSet<StaffBonus> StaffBonuses => Set<StaffBonus>();
+    public DbSet<StaffDeduction> StaffDeductions => Set<StaffDeduction>();
+    public DbSet<StaffPayAuditLog> StaffPayAuditLogs => Set<StaffPayAuditLog>();
+    public DbSet<StaffPaySettlement> StaffPaySettlements => Set<StaffPaySettlement>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Arte.Core.Licensing.Plan> Plans => Set<Arte.Core.Licensing.Plan>();
@@ -518,6 +523,47 @@ public sealed class ArteDbContext(DbContextOptions<ArteDbContext> options, ITena
             e.HasIndex(x => new { x.TenantId, x.CaseId });
             e.HasIndex(x => new { x.TenantId, x.CreatedAt });
             e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<CaseCommissionGrant>(e =>
+        {
+            e.Property(x => x.CommissionType).HasMaxLength(20);
+            e.Property(x => x.CommissionBase).HasMaxLength(30);
+            e.Property(x => x.CommissionPercent).HasPrecision(5, 2);
+            e.HasIndex(x => x.CaseId).IsUnique();
+            e.HasIndex(x => new { x.TenantId, x.MembershipId, x.GrantedAt });
+            e.HasOne<Case>().WithMany().HasForeignKey(x => x.CaseId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<StaffBonus>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(200);
+            e.Property(x => x.VoidReason).HasMaxLength(500);
+            e.HasIndex(x => new { x.TenantId, x.MembershipId, x.JalaliYear, x.JalaliMonth });
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<StaffDeduction>(e =>
+        {
+            e.Property(x => x.Category).HasMaxLength(32);
+            e.Property(x => x.VoidReason).HasMaxLength(500);
+            e.HasIndex(x => new { x.TenantId, x.MembershipId, x.JalaliYear, x.JalaliMonth });
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ShopLossReport>().WithMany().HasForeignKey(x => x.ShopLossId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<StaffPayAuditLog>(e =>
+        {
+            e.Property(x => x.EntityType).HasMaxLength(20);
+            e.Property(x => x.Action).HasMaxLength(20);
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.BeforeJson).HasColumnType("text");
+            e.Property(x => x.AfterJson).HasColumnType("text");
+            e.HasIndex(x => new { x.TenantId, x.At });
+            e.HasIndex(x => new { x.EntityType, x.EntityId });
+        });
+        b.Entity<StaffPaySettlement>(e =>
+        {
+            e.HasIndex(x => new { x.TenantId, x.MembershipId, x.JalaliYear, x.JalaliMonth }).IsUnique();
+            e.HasOne<Membership>().WithMany().HasForeignKey(x => x.MembershipId).OnDelete(DeleteBehavior.Restrict);
         });
 
         ApplyTenantFilters(b);
