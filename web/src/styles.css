@@ -1034,6 +1034,76 @@ button.secondary { background: var(--accent-soft); color: var(--accent); border-
 }
 .photos-bare { display: flex; flex-direction: column; gap: 0.65rem; }
 .photos-bare .photo-grid { margin-top: 0.15rem; }
+.photo-add-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.photo-add-row.stacked { flex-direction: column; align-items: stretch; }
+.case-step-card > summary.case-step-head {
+  list-style: none;
+  cursor: pointer;
+  min-height: 48px;
+}
+.case-step-card > summary.case-step-head::-webkit-details-marker { display: none; }
+.case-step-card > summary.case-step-head::after {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  border-inline-end: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  margin-inline-start: 0.25rem;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+  transition: transform var(--dur-fade) var(--ease-out);
+}
+.case-step-card[open] > summary.case-step-head::after {
+  transform: rotate(-135deg);
+  margin-top: 0.55rem;
+}
+.case-check-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.35rem 0.65rem 0.55rem;
+  background: var(--surface-2);
+}
+.case-check-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 44px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.case-check-group > summary::-webkit-details-marker { display: none; }
+.case-history-summary {
+  list-style: none;
+  cursor: pointer;
+  min-height: 48px;
+}
+.case-history-summary::-webkit-details-marker { display: none; }
+.case-history-fold { gap: 0.65rem; }
+.case-tabs-seg button.has-alert { position: relative; }
+.tab-alert-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--danger);
+  flex-shrink: 0;
+}
+.status-pill.receipt-pending { color: var(--stage-orange); background: var(--warn-bg); }
+.tk-receipt-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.tk-receipt-preview img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
 
 .next-actions { margin-bottom: 1rem; }
 .quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; }

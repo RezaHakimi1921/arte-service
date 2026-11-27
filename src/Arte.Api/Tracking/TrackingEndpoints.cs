@@ -115,15 +115,21 @@ public static class TrackingEndpoints
                         i.Kind, i.Title, i.Quantity, i.Status, i.Supplier,
                         LineTotalRials = t.TrackShowAmounts ? i.LineTotalRials : (long?)null,
                         DiscountRials = t.TrackShowAmounts && i.AppliedDiscountRials > 0 ? i.AppliedDiscountRials : (long?)null,
+                        // So the customer link can say «جبران خسارت» instead of «تخفیف» when linked.
+                        CustomerDamageId = t.TrackShowAmounts ? i.CustomerDamageId : null,
                     }).ToList();
                 if (t.TrackShowAmounts)
                 {
                     var payments = await db.Payments.AsNoTracking().Where(p => p.CaseId == c.Id).ToListAsync(ct);
                     var m = CaseMoney.Of(all, payments);
-                    // The discount is shown on its own line so the customer sees what they saved.
+                    var damageCompensationRials = all.Where(i => i.CustomerDamageId != null).Sum(i => i.AppliedDiscountRials);
+                    var manualDiscountRials = Math.Max(0, m.DiscountRials - damageCompensationRials);
+                    // Split so the invoice never calls damage compensation a "discount".
                     money = new
                     {
                         m.TotalRials, m.PaidRials, m.BalanceRials, m.SubtotalRials, m.DiscountRials,
+                        DamageCompensationRials = damageCompensationRials,
+                        ManualDiscountRials = manualDiscountRials,
                         // Every payment step, oldest first, so a part-paid invoice shows how it was settled.
                         Payments = payments.OrderBy(p => p.PaidAt).Select(p => new { p.AmountRials, p.Method, p.PaidAt }).ToList(),
                     };

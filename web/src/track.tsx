@@ -29,8 +29,8 @@ type Track = {
   customerNotice?: { kind: "return_review" | "reopened"; stageName: string | null } | null;
   returnMarked?: boolean;
   stages: { name: string; key: string; state: "done" | "current" | "todo"; at: string | null }[] | null;
-  items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null; discountRials?: number | null; image?: string | null }[] | null;
-  money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number; payments?: { amountRials: number; method: string; paidAt: string }[] } | null;
+  items: { kind: string; title: string; quantity: number; status: string; supplier: string; lineTotalRials: number | null; discountRials?: number | null; customerDamageId?: string | null; image?: string | null }[] | null;
+  money: { totalRials: number; paidRials: number; balanceRials: number; subtotalRials?: number; discountRials?: number; damageCompensationRials?: number; manualDiscountRials?: number; payments?: { amountRials: number; method: string; paidAt: string }[] } | null;
   customerDamages?: { id: string; amountRials: number; remainingRials: number; media?: { id: string; isVideo: boolean }[] | null }[];
 };
 
@@ -78,21 +78,37 @@ function PaySheet({ open, onClose, code, pay, owe, onSent }: { open: boolean; on
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [draft, setDraft] = useState<{ file: File; url: string } | null>(null);
+
+  useEffect(() => () => { if (draft?.url) URL.revokeObjectURL(draft.url); }, [draft?.url]);
 
   async function copy() {
     try { await navigator.clipboard.writeText(pay.card!.cardNumber); setCopied(true); setTimeout(() => setCopied(false), 2000); }
     catch { setMsg({ text: "کپی نشد؛ شماره را به‌صورت دستی بنویسید.", ok: false }); }
   }
 
-  async function send(files: FileList | null) {
+  function pick(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
+    setMsg(null);
+    if (draft?.url) URL.revokeObjectURL(draft.url);
+    setDraft({ file, url: URL.createObjectURL(file) });
+  }
+
+  function cancelDraft() {
+    if (draft?.url) URL.revokeObjectURL(draft.url);
+    setDraft(null);
+  }
+
+  async function confirmSend() {
+    if (!draft || busy) return;
     setBusy(true); setMsg(null);
     try {
-      const blob = await compress(file);
+      const blob = await compress(draft.file);
       const form = new FormData();
       form.append("file", blob, "receipt.jpg");
       await api(`/api/v1/track/${code}/receipts`, { body: form });
+      cancelDraft();
       setMsg({ text: "رسید ارسال شد؛ بعد از بررسی تعمیرگاه، پرداخت شما ثبت می‌شود.", ok: true });
       onSent();
     } catch (err) {
@@ -102,7 +118,7 @@ function PaySheet({ open, onClose, code, pay, owe, onSent }: { open: boolean; on
 
   const label: Record<string, string> = { pending: "در انتظار بررسی", approved: "تأیید شد", rejected: "رد شد" };
   return (
-    <BottomSheet open={open} title="کارت به کارت" onClose={onClose}>
+    <BottomSheet open={open} title="کارت به کارت" onClose={() => { cancelDraft(); onClose(); }}>
       <div className="tk-sheet-body">
         {pay.card && (
           <>
@@ -118,10 +134,21 @@ function PaySheet({ open, onClose, code, pay, owe, onSent }: { open: boolean; on
           </>
         )}
         {owe ? (
-          <label className={`tk-upload${busy ? " busy" : ""}`} aria-busy={busy}>
-            <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { void send(e.target.files); e.target.value = ""; }} />
-            <Icon name="camera" />{busy ? "در حال ارسال رسید…" : "ارسال عکس رسید واریز"}
-          </label>
+          draft ? (
+            <div className="tk-receipt-preview">
+              <img src={draft.url} alt="پیش‌نمایش رسید" />
+              <p className="tk-sheet-note">اگر درست است تأیید کنید؛ در غیر این صورت لغو کنید و دوباره عکس بگیرید.</p>
+              <button type="button" className="primary block" disabled={busy} aria-busy={busy} onClick={() => void confirmSend()}>
+                {busy ? "در حال ارسال…" : "تأیید و ارسال رسید"}
+              </button>
+              <button type="button" className="secondary block" disabled={busy} onClick={cancelDraft}>لغو</button>
+            </div>
+          ) : (
+            <label className={`tk-upload${busy ? " busy" : ""}`} aria-busy={busy}>
+              <input type="file" accept="image/*" hidden disabled={busy} onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
+              <Icon name="camera" />ارسال عکس رسید واریز
+            </label>
+          )
         ) : (
           <p className="tk-sheet-note">صورت‌حساب تسویه شده؛ ارسال رسید تازه لازم نیست.</p>
         )}
@@ -743,7 +770,12 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
                         {i.supplier === "customer" && " · کالای خودتان"}
                         {i.status === "needed" && " · در انتظار تهیه"}
                       </span>
-                      {i.discountRials != null && i.discountRials > 0 && <span className="inv-discount">تخفیف <span dir="ltr" className="neg font-num">−{formatNumber(Math.round(i.discountRials / 10))}</span></span>}
+                      {i.discountRials != null && i.discountRials > 0 && (
+                        <span className="inv-discount">
+                          {i.customerDamageId ? "جبران خسارت" : "تخفیف"}{" "}
+                          <span dir="ltr" className="neg font-num">−{formatNumber(Math.round(i.discountRials / 10))}</span>
+                        </span>
+                      )}
                     </span>
                     <span className="inv-qty font-num">× {formatNumber(i.quantity)}</span>
                     <span className="inv-amount font-num">{i.lineTotalRials != null && i.lineTotalRials > 0 ? formatNumber(Math.round(i.lineTotalRials / 10)) : "—"}</span>
@@ -759,18 +791,28 @@ export function TrackPage({ code, survey: surveyFirst = false }: { code: string;
               const dueKind = balance > 0 ? "owe" : damageCredit > 0 ? "credit" : "clear";
               const dueLabel = balance > 0 ? "مبلغ قابل پرداخت" : damageCredit > 0 ? "بستانکار" : "تسویه شده";
               const dueAmount = balance > 0 ? balance : damageCredit > 0 ? damageCredit : 0;
+              const damageComp = t.money!.damageCompensationRials
+                ?? (t.items ?? []).filter((i) => i.customerDamageId).reduce((s, i) => s + (i.discountRials ?? 0), 0);
+              const manualDisc = t.money!.manualDiscountRials
+                ?? Math.max(0, (t.money!.discountRials ?? 0) - damageComp);
+              const hasCuts = damageComp > 0 || manualDisc > 0;
               return (
               <div className="inv-sum">
-                {(t.money!.discountRials ?? 0) > 0 && (
+                {hasCuts && (
                   <>
-                    <p><span>جمع قبل از تخفیف</span><strong className="font-num">{toman(t.money!.subtotalRials ?? t.money!.totalRials)}</strong></p>
-                    <p className="discount"><span>تخفیف</span><strong className="font-num" dir="ltr">−{toman(t.money!.discountRials ?? 0)}</strong></p>
+                    <p><span>جمع قبل از کسر</span><strong className="font-num">{toman(t.money!.subtotalRials ?? t.money!.totalRials)}</strong></p>
+                    {damageComp > 0 && (
+                      <p className="discount"><span>جبران خسارت</span><strong className="font-num" dir="ltr">−{toman(damageComp)}</strong></p>
+                    )}
+                    {manualDisc > 0 && (
+                      <p className="discount"><span>تخفیف</span><strong className="font-num" dir="ltr">−{toman(manualDisc)}</strong></p>
+                    )}
                   </>
                 )}
                 {damageCredit > 0 && (
                   <p className="credit"><span>ماندهٔ بستانکاری خسارت</span><strong className="font-num">{toman(damageCredit)}</strong></p>
                 )}
-                <p className="total"><span>{(t.money!.discountRials ?? 0) > 0 ? "جمع پس از تخفیف" : "جمع کل"}</span><strong className="font-num">{toman(t.money!.totalRials)}</strong></p>
+                <p className="total"><span>{hasCuts ? "جمع پس از کسر" : "جمع کل"}</span><strong className="font-num">{toman(t.money!.totalRials)}</strong></p>
                 {(t.money!.payments?.length ?? 0) > 0 ? (
                   <>
                     {t.money!.payments!.map((p, k) => (

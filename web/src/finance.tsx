@@ -166,20 +166,45 @@ export function FinancePage({ onBack }: { onBack: () => void }) {
 }
 
 /** On the case: receipts the customer sent from their link. Approving records the payment. */
-export function CustomerReceipts({ caseId, onChange }: { caseId: string; onChange: () => void }) {
+export function CustomerReceipts({ caseId, balanceRials = 0, totalRials = 0, onChange }: {
+  caseId: string; balanceRials?: number; totalRials?: number; onChange: () => void;
+}) {
   const [rows, setRows] = useState<CustomerReceipt[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [img, setImg] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [amountError, setAmountError] = useState<string | null>(null);
   const load = () => api<CustomerReceipt[]>(`/api/v1/cases/${caseId}/customer-receipts`).then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, [caseId]);
   const { busy, act } = useAct(async () => { await load(); onChange(); });
 
+  /** Default: invoice balance when owed; otherwise the invoice total (فاکتور). */
+  function defaultAmountToman(r: CustomerReceipt) {
+    if (r.claimedRials && r.claimedRials > 0) return String(Math.round(r.claimedRials / 10));
+    if (balanceRials > 0) return String(Math.round(balanceRials / 10));
+    if (totalRials > 0) return String(Math.round(totalRials / 10));
+    return "";
+  }
+
   async function show(r: CustomerReceipt) {
     if (open === r.id) { setOpen(null); return; }
-    setOpen(r.id); setImg(null); setNote(""); setAmount(r.claimedRials ? String(Math.round(r.claimedRials / 10)) : "");
+    setOpen(r.id); setImg(null); setNote(""); setAmountError(null); setAmount(defaultAmountToman(r));
     try { setImg(URL.createObjectURL(await apiBlob(`/api/v1/attachments/${r.attachmentId}`))); } catch { /* the buttons still work */ }
+  }
+
+  function approve(r: CustomerReceipt) {
+    const rials = Number(amount) * 10;
+    if (!Number.isFinite(rials) || rials <= 0) {
+      setAmountError("مبلغ پرداخت را وارد کنید.");
+      return;
+    }
+    if (balanceRials > 0 && rials > balanceRials) {
+      setAmountError("مبلغ از ماندهٔ فاکتور بیشتر است.");
+      return;
+    }
+    setAmountError(null);
+    void act(() => api(`/api/v1/customer-receipts/${r.id}/approve`, { body: { amountRials: rials } }), "پرداخت ثبت شد");
   }
 
   const pending = (rows ?? []).filter((r) => r.status === "pending");
@@ -201,7 +226,12 @@ export function CustomerReceipts({ caseId, onChange }: { caseId: string; onChang
                 {img ? <img className="receipt-image" src={img} alt="رسید مشتری" /> : <div className="splash" aria-busy="true" />}
                 {r.status === "pending" && (
                   <>
-                    <Field label="مبلغ واریزی طبق رسید (تومان)"><NumberInput value={amount} onChange={setAmount} max={11} suffix="تومان" /></Field>
+                    <Field label="مبلغ واریزی طبق رسید (تومان)" error={amountError ?? undefined}>
+                      <NumberInput value={amount} onChange={(v) => { setAmount(v); setAmountError(null); }} max={11} suffix="تومان" />
+                    </Field>
+                    {balanceRials > 0 && (
+                      <p className="muted small">ماندهٔ فاکتور: <span className="font-num">{formatNumber(Math.round(balanceRials / 10))}</span> تومان — بیشتر از این قابل ثبت نیست.</p>
+                    )}
                     <p className="muted small">اگر مشتری فقط بخشی از مبلغ را واریز کرده، همان مقدار را بنویسید؛ باقی‌مانده همچنان روی پرونده می‌ماند.</p>
                     <Field label="دلیل رد (فقط اگر رد می‌کنید)"><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} /></Field>
                   </>
@@ -209,7 +239,7 @@ export function CustomerReceipts({ caseId, onChange }: { caseId: string; onChang
                 {r.status === "rejected" && r.reviewNote && <p className="muted small">دلیل رد: {r.reviewNote}</p>}
                 {r.status === "pending" && <div className="row-actions">
                   <button type="button" className="primary" disabled={busy || !amount} aria-busy={busy}
-                    onClick={() => act(() => api(`/api/v1/customer-receipts/${r.id}/approve`, { body: { amountRials: Number(amount) * 10 } }), "پرداخت ثبت شد")}>تأیید و ثبت پرداخت</button>
+                    onClick={() => approve(r)}>تأیید و ثبت پرداخت</button>
                   <button type="button" disabled={busy}
                     onClick={() => act(() => api(`/api/v1/customer-receipts/${r.id}/reject`, { body: { note: note.trim() || undefined } }), "رد شد")}>رد رسید</button>
                 </div>}

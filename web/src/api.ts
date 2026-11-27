@@ -51,7 +51,8 @@ async function parse(res: Response) {
   try { body = text ? JSON.parse(text) : null; } catch { body = null; }
   if (!res.ok) {
     const fields: Record<string, string[]> = body?.errors ?? {};
-    const message = body?.title ?? Object.values(fields)[0]?.[0] ?? "خطا در ارتباط با سرور";
+    // Prefer the Persian field message over ASP.NET's English ValidationProblem title.
+    const message = Object.values(fields)[0]?.[0] ?? body?.detail ?? body?.title ?? "خطا در ارتباط با سرور";
     throw new ApiError(res.status, message, fields, body);
   }
   return body;

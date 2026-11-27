@@ -139,10 +139,10 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                   </span>
                   <span className="muted small">
                     {showMoney
-                      ? <>{formatNumber(i.quantity)} × {toman(i.unitPriceRials)}{i.discountRials > 0 && ` · تخفیف ${toman(i.discountRials)}`}</>
+                      ? <>{formatNumber(i.quantity)} × {toman(i.unitPriceRials)}{i.discountRials > 0 && ` · ${i.customerDamageId ? "جبران خسارت" : "تخفیف"} ${toman(i.discountRials)}`}</>
                       : <>تعداد {formatNumber(i.quantity)}</>}
                     {i.status === "needed" && " · هنوز نصب نشده"}
-                    {i.customerDamageId && " · جبران خسارت"}
+                    {i.customerDamageId && i.discountRials <= 0 && " · جبران خسارت"}
                     {i.performedByName && ` · ${i.performedByName}`}
                     {!!i.warrantyDays && ` · ضمانت ${formatNumber(i.warrantyDays)} روز`}
                   </span>
@@ -165,9 +165,13 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
               {standard && standard.packages.length > 0 && <button onClick={() => setPackages(true)}>+ بسته‌ی آماده</button>}
             </div>
           )}
-          {showMoney && (m.totalRials > 0 || (m.pendingProfitRials ?? 0) > 0) && (
+          {showMoney && (m.totalRials > 0 || (m.pendingProfitRials ?? 0) > 0) && (() => {
+            const damageComp = billing.items.filter((i) => i.customerDamageId).reduce((s, i) => s + (i.discountRials || 0), 0);
+            const manualDisc = Math.max(0, (m.discountRials ?? 0) - damageComp);
+            return (
             <div className="totals">
-              {(m.discountRials ?? 0) > 0 && <span>تخفیف: <span className="font-num">{toman(m.discountRials ?? 0)}</span></span>}
+              {damageComp > 0 && <span>جبران خسارت: <span className="font-num">{toman(damageComp)}</span></span>}
+              {manualDisc > 0 && <span>تخفیف: <span className="font-num">{toman(manualDisc)}</span></span>}
               {m.partsRials > 0 && <span>کالا: <span className="font-num">{toman(m.partsRials)}</span></span>}
               {m.laborRials + m.servicesRials > 0 && <span>اجرت و خدمات: <span className="font-num">{toman(m.laborRials + m.servicesRials)}</span></span>}
               {billing.canSeeCost && m.profitRials != null && <span className="cost-line">سود پرونده: <span className="font-num">{toman(m.profitRials)}</span></span>}
@@ -175,7 +179,8 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
                 <span className="cost-line">سود مورد انتظار قطعه‌های در انتظار: <span className="font-num">{toman(m.pendingProfitRials ?? 0)}</span></span>
               )}
             </div>
-          )}
+            );
+          })()}
         </div>
       </details>
 
