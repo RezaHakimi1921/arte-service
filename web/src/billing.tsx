@@ -79,6 +79,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
 }) {
   const [standard, setStandard] = useState<Standard | null>(null);
   const [packages, setPackages] = useState(false);
+  const [multi, setMulti] = useState(false);
   // The starter list for this vehicle, with remembered prices; reloaded after every save so prices stay current.
   const loadStandard = useCallback(() => {
     api<Standard>(`/api/v1/catalog/standard${vehicleKind ? `?vehicleKind=${vehicleKind}` : ""}`).then(setStandard).catch(() => {});
@@ -162,6 +163,7 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
             <div className="quick-actions">
               <button onClick={() => setEditing({ kind: "part" })}>+ کالای مصرف‌شده</button>
               <button onClick={() => setEditing({ kind: "labor" })}>+ اجرت و خدمات</button>
+              <button onClick={() => setMulti(true)}>+ چند کالا با هم</button>
               {standard && standard.packages.length > 0 && <button onClick={() => setPackages(true)}>+ بسته‌ی آماده</button>}
             </div>
           )}
@@ -239,6 +241,13 @@ export function BillingSection({ caseId, billing, onChange, canAssignLabor, payS
           setPackages(false);
           return b;
         }, `«${title}» به پرونده اضافه شد`)} />
+
+      <MultiCatalogSheet open={multi} canSeeCost={billing.canSeeCost} busy={busy} onClose={() => setMulti(false)}
+        onAdd={(lines) => run(async () => {
+          const b = await api<Billing>(`/api/v1/cases/${caseId}/items/batch`, { body: { lines } });
+          setMulti(false);
+          return b;
+        }, `${formatNumber(lines.length)} قلم به پرونده اضافه شد`)} />
 
       <BottomSheet open={!!receiptUrl} title="رسید پرداخت" onClose={() => { if (receiptUrl) URL.revokeObjectURL(receiptUrl); setReceiptUrl(null); }}>
         {receiptUrl && <img className="receipt-image" src={receiptUrl} alt="رسید پرداخت" />}
@@ -357,6 +366,180 @@ function PackageSheet({ open, packages, canSeeCost, busy, onClose, onAdd }: {
   );
 }
 
+
+/**
+ * Pick several shop-catalog lines at once (docs/21 item ۱۲ / docs/22 batch add): search, tick, set qty/price, one save.
+ * Ready-made packages stay separate — this is for independent catalog items, not a named package.
+ */
+function MultiCatalogSheet({ open, canSeeCost, busy, onClose, onAdd }: {
+  open: boolean; canSeeCost: boolean; busy: boolean; onClose: () => void;
+  onAdd: (lines: Record<string, unknown>[]) => void;
+}) {
+  type PickRow = { item: CatalogRow; qty: string; price: string; cost: string };
+  const [q, setQ] = useState("");
+  const [kindFilter, setKindFilter] = useState<"all" | "part" | "work">("all");
+  const [catalog, setCatalog] = useState<CatalogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [picked, setPicked] = useState<Record<string, PickRow>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) { setQ(""); setKindFilter("all"); setPicked({}); setError(null); setCatalog([]); return; }
+    const term = q.trim();
+    const t = setTimeout(() => {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (term.length >= 1) params.set("q", term);
+      if (kindFilter === "part") params.set("kind", "part");
+      // Labor and legacy «service» share one filter: omit kind and filter client-side.
+      const qs = params.toString();
+      api<CatalogRow[]>(`/api/v1/catalog${qs ? `?${qs}` : ""}`)
+        .then((rows) => {
+          if (kindFilter === "work") setCatalog(rows.filter((r) => r.kind !== "part"));
+          else setCatalog(rows);
+        })
+        .catch(() => setCatalog([]))
+        .finally(() => setLoading(false));
+    }, term ? 200 : 0);
+    return () => clearTimeout(t);
+  }, [open, q, kindFilter]);
+
+  function toggle(row: CatalogRow) {
+    setError(null);
+    setPicked((prev) => {
+      if (prev[row.id]) {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      }
+      if (Object.keys(prev).length >= 30) {
+        setError("حداکثر ۳۰ قلم در یک نوبت.");
+        return prev;
+      }
+      return {
+        ...prev,
+        [row.id]: {
+          item: row,
+          qty: "1",
+          price: toTomanDigits(row.defaultPriceRials),
+          cost: toTomanDigits(row.defaultCostRials),
+        },
+      };
+    });
+  }
+
+  const setField = (id: string, patch: Partial<PickRow>) =>
+    setPicked((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev));
+
+  const selected = Object.values(picked);
+  const total = selected.reduce((sum, r) => sum + toRials(r.price) * (Number(r.qty) || 0), 0);
+
+  // Keep ticked rows visible even when they fall out of the current search/filter list.
+  const listedIds = new Set(catalog.map((c) => c.id));
+  const orphanPicks = selected.filter((r) => !listedIds.has(r.item.id));
+
+  function add() {
+    if (selected.length === 0) { setError("دست‌کم یک قلم را انتخاب کنید."); return; }
+    if (selected.some((r) => !(Number(r.qty) > 0))) { setError("تعداد هر ردیف را بنویسید."); return; }
+    if (selected.some((r) => canSeeCost && r.item.kind === "part" && r.cost && r.price && toRials(r.cost) > toRials(r.price))) {
+      setError("قیمت فروش هیچ ردیفی نباید از قیمت خریدش کمتر باشد."); return;
+    }
+    onAdd(selected.map((r) => {
+      const line: Record<string, unknown> = {
+        catalogItemId: r.item.id,
+        quantity: r.item.kind === "part" ? Number(r.qty) : 1,
+        unitPriceRials: toRials(r.price),
+      };
+      if (canSeeCost && r.item.kind === "part" && r.cost) line.unitCostRials = toRials(r.cost);
+      return line;
+    }));
+  }
+
+  return (
+    <BottomSheet open={open} title="چند کالا با هم" onClose={onClose}>
+      <p className="muted small">از لیست فروشگاه چند قلم را یک‌جا انتخاب کنید؛ تعداد و قیمت را چک کنید و همه را با هم به پرونده بزنید.</p>
+      <div className="segmented wide" role="group" aria-label="نوع قلم">
+        <button type="button" className={kindFilter === "all" ? "on" : ""} onClick={() => setKindFilter("all")}>همه</button>
+        <button type="button" className={kindFilter === "part" ? "on" : ""} onClick={() => setKindFilter("part")}>کالا</button>
+        <button type="button" className={kindFilter === "work" ? "on" : ""} onClick={() => setKindFilter("work")}>اجرت</button>
+      </div>
+      <Field label="جستجو">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="نام کالا یا اجرت…"
+          autoComplete="off"
+          enterKeyHint="search"
+        />
+      </Field>
+      {loading && catalog.length === 0 && <p className="muted splash" aria-busy="true">در حال بارگذاری…</p>}
+      {!loading && catalog.length === 0 && selected.length === 0 && (
+        <p className="muted">هنوز قلمی در لیست فروشگاه نیست. اول از تنظیمات → فروش یک کالا یا اجرت اضافه کنید، یا همین‌جا تکی ثبت کنید.</p>
+      )}
+      <ul className="package-lines multi-catalog-lines">
+        {orphanPicks.map((r) => (
+          <li key={`sel-${r.item.id}`}>
+            <label className="check">
+              <input type="checkbox" checked onChange={() => toggle(r.item)} />
+              <span>{r.item.title} <span className="muted small">({KIND_LABELS[r.item.kind] ?? r.item.kind})</span></span>
+            </label>
+            <div className={`package-fields${canSeeCost && r.item.kind === "part" ? " with-cost" : ""}`}>
+              {r.item.kind === "part" && (
+                <Field label="تعداد">
+                  <input inputMode="decimal" dir="ltr" className="font-num" value={r.qty}
+                    onChange={(e) => setField(r.item.id, { qty: toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 6) })} />
+                </Field>
+              )}
+              {canSeeCost && r.item.kind === "part" && (
+                <Field label="خرید هر عدد"><NumberInput value={r.cost} onChange={(v) => setField(r.item.id, { cost: v })} max={11} suffix="تومان" /></Field>
+              )}
+              <Field label={r.item.kind === "part" ? "فروش هر عدد" : "اجرت"}>
+                <NumberInput value={r.price} onChange={(v) => setField(r.item.id, { price: v })} max={11} suffix="تومان" />
+              </Field>
+            </div>
+          </li>
+        ))}
+        {catalog.map((row) => {
+          const r = picked[row.id];
+          const on = !!r;
+          return (
+            <li key={row.id} className={on ? "" : "off"}>
+              <label className="check">
+                <input type="checkbox" checked={on} onChange={() => toggle(row)} />
+                <span>{row.title} <span className="muted small">({KIND_LABELS[row.kind] ?? row.kind})</span></span>
+              </label>
+              {on && r && (
+                <div className={`package-fields${canSeeCost && row.kind === "part" ? " with-cost" : ""}`}>
+                  {row.kind === "part" && (
+                    <Field label="تعداد">
+                      <input inputMode="decimal" dir="ltr" className="font-num" value={r.qty}
+                        onChange={(e) => setField(row.id, { qty: toLatinDigits(e.target.value).replace(/[٫،,]/g, ".").replace(/[^\d.]/g, "").slice(0, 6) })} />
+                    </Field>
+                  )}
+                  {canSeeCost && row.kind === "part" && (
+                    <Field label="خرید هر عدد"><NumberInput value={r.cost} onChange={(v) => setField(row.id, { cost: v })} max={11} suffix="تومان" /></Field>
+                  )}
+                  <Field label={row.kind === "part" ? "فروش هر عدد" : "اجرت"}>
+                    <NumberInput value={r.price} onChange={(v) => setField(row.id, { price: v })} max={11} suffix="تومان" />
+                  </Field>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {selected.length > 0 && (
+        <p className="package-total">
+          {formatNumber(selected.length)} قلم · جمع: <strong className="font-num">{toman(total)}</strong>
+        </p>
+      )}
+      {error && <span className="error" role="alert">{error}</span>}
+      <button type="button" className="primary block" disabled={busy || selected.length === 0} aria-busy={busy} onClick={add}>
+        {busy ? "در حال افزودن…" : selected.length === 0 ? "افزودن به پرونده" : `افزودن ${formatNumber(selected.length)} قلم به پرونده`}
+      </button>
+    </BottomSheet>
+  );
+}
 
 function ItemSheet({ open, kind: initialKind, item, canSeeCost, canAssignLabor, caseId, canCompensate, caseAssigneeId, standard, busy, onClose, onSave, onDelete }: {
   open: boolean; kind: string; item?: Item; canSeeCost: boolean; canAssignLabor: boolean; caseId: string; canCompensate: boolean;
