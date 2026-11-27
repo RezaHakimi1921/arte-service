@@ -222,4 +222,27 @@ public sealed class DamageTests(ArteApiFactory api)
         Assert.Equal("reopened", track.GetProperty("customerNotice").GetProperty("kind").GetString());
         Assert.False(string.IsNullOrEmpty(track.GetProperty("customerNotice").GetProperty("stageName").GetString()));
     }
+
+    [Fact]
+    public async Task Case_shop_loss_create_list_and_other_tenant_404()
+    {
+        var (owner, _) = await api.NewBusinessAsync();
+        var (other, _) = await api.NewBusinessAsync();
+        var (id, _) = await OpenCase(owner);
+        var assignable = await Json(await owner.GetAsync("/api/v1/staff/assignable"));
+        var membershipId = assignable.EnumerateArray().First().GetProperty("id").GetGuid();
+
+        var created = await Json(await owner.PostAsJsonAsync("/api/v1/shop-losses", new
+        {
+            amountRials = 1_500_000, internalNote = "ابزار شکست", responsibleUserId = membershipId, caseId = id,
+        }));
+        Assert.Equal(1_500_000, created.GetProperty("amountRials").GetInt64());
+        Assert.Equal(id, created.GetProperty("caseId").GetGuid());
+
+        var list = await Json(await owner.GetAsync($"/api/v1/cases/{id}/shop-losses"));
+        Assert.Single(list.EnumerateArray());
+        Assert.Equal(1_500_000, list[0].GetProperty("amountRials").GetInt64());
+
+        Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync($"/api/v1/cases/{id}/shop-losses")).StatusCode);
+    }
 }

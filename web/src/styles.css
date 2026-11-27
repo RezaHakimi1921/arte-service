@@ -2043,7 +2043,8 @@ a.lg-text { display: inline-flex; align-items: center; text-decoration: none; }
   display: flex; flex-direction: column; gap: 0.35rem;
   padding: 0.75rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2);
 }
-.damage-card .chip { font-size: 0.8rem; }
+.damage-card.loss { border-color: color-mix(in srgb, var(--stage-orange) 35%, var(--border)); }
+.damage-card .chip { font-size: 0.8rem; font-weight: 600; }
 .btn-file {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: 44px; padding: 0 0.85rem; border: 1px solid var(--border); border-radius: 10px;
